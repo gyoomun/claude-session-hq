@@ -41,10 +41,12 @@ body { background: var(--mantine-color-body); overflow: hidden; }
   --hq-wood-a: #d9b98e; --hq-wood-b: #d2b185; --hq-wood-line: #b8956a;
   --hq-carpet-a: #b9c9e6; --hq-carpet-b: #b2c3e2;
 }
-.hq-office { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 14px; align-items: start; }
-.hq-room { border: 3px solid var(--hq-wall-edge); border-radius: 6px; overflow: hidden; background: var(--hq-wall-edge); }
+/* 회사 하나를 바깥벽으로 두르고, 방 사이 틈(4px)이 칸막이벽이 된다. 마지막 줄의 방은 늘어나 빈 칸이 생기지 않는다 */
+.hq-office { display: flex; flex-wrap: wrap; gap: 4px; border: 4px solid var(--hq-wall-edge); border-radius: 8px; overflow: hidden; background: var(--hq-wall-edge); }
+.hq-room { flex: 1 1 460px; min-width: min(100%, 460px); display: flex; flex-direction: column; }
+.hq-room.lobby { flex-basis: 100%; }
 .hq-wall { background: var(--hq-wall); padding: 10px 12px; border-bottom: 4px solid var(--hq-wall-edge); }
-.hq-floor { position: relative; min-height: 160px; transition: outline-color .15s;
+.hq-floor { position: relative; flex: 1 0 auto; min-height: 160px; transition: outline-color .15s;
   background: repeating-linear-gradient(0deg, var(--hq-wood-line) 0 2px, transparent 2px 34px),
               repeating-linear-gradient(90deg, var(--hq-wood-a) 0 48px, var(--hq-wood-b) 48px 96px); }
 .hq-room.lobby .hq-floor { background: repeating-conic-gradient(var(--hq-carpet-a) 0 25%, var(--hq-carpet-b) 0 50%) 0 0 / 28px 28px; }

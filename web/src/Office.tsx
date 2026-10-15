@@ -1,4 +1,4 @@
-// 업무별 보기를 가상 사무실로 그린다. 업무 하나 = 방 하나, 미배치 = 로비, 세션 하나 = 책상과 사람.
+// 업무별 보기를 회사 하나(가상 사무실)로 그린다. 업무 하나 = 칸막이로 나눈 방 하나, 미배치 = 로비, 배치된 세션 = 책상과 사람, 미배치 세션 = 서 있는 사람.
 // 책상은 끌어서 방 안에서 자리를 옮기거나 다른 방(업무)으로 옮긴다. 누르면 작업 보기에서 그 세션을 연다.
 import { useEffect, useRef, useState } from 'react'
 import { Box, Group, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core'
@@ -8,7 +8,9 @@ import { pick, setUI } from './ui'
 import type { Session, Snapshot, Task } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, lastOf, sessOf, stale, taskStatus, tname, waiting } from './util'
 import { StatePill } from './parts'
-import { deskSvg } from './Desk'
+import { deskSvg, standSvg } from './Desk'
+
+const spriteSvg = (s: Session) => s.task ? deskSvg(s) : standSvg(s)
 
 const SLOT_W = 150, SLOT_H = 136 // 책상 한 칸 크기(px)
 
@@ -50,7 +52,7 @@ function DeskSprite({ s, x, y, ghost, onDown }: { s: Session; x: number; y: numb
     <Box className={'hq-desk' + (s.state === 'idle' ? ' idle' : '')} onPointerDown={e => onDown(e, s)}
       style={{ left: `${x * 100}%`, top: `${y * 100}%`, opacity: ghost ? 0.3 : 1, zIndex: Math.round(y * 100) }}>
       <Bubble s={s} />
-      <svg viewBox="0 0 34 32" width={72} height={68} shapeRendering="crispEdges" aria-hidden="true" dangerouslySetInnerHTML={{ __html: deskSvg(s) }} />
+      <svg viewBox="0 0 34 32" width={72} height={68} shapeRendering="crispEdges" aria-hidden="true" dangerouslySetInnerHTML={{ __html: spriteSvg(s) }} />
       <Text size="xs" fw={600} ta="center" lh={1.3} className="hq-wrap" maw={SLOT_W - 14}>{s.title}</Text>
       <Text fz={11} ta="center" c="dimmed"><Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} /></Text>
     </Box>
@@ -65,7 +67,7 @@ function Room({ S, t, ss, over, drag, onDown }: {
   const { pos, rows } = place(ss, S.layout, cols)
   const st = t ? taskStatus(S, t) : (ss.some(waiting) ? 'myturn' : 'idle')
   const lobby = !t
-  return <Box className={'hq-room' + (lobby ? ' lobby' : '')} style={lobby ? { gridColumn: '1 / -1' } : undefined}>
+  return <Box className={'hq-room' + (lobby ? ' lobby' : '')}>
     {/* 벽: 방 이름표, 상태, 사람 대기 메모 */}
     <Group className="hq-wall" gap="sm" wrap="nowrap" align="flex-start">
       <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
@@ -134,7 +136,7 @@ export function Office({ S }: { S: Snapshot }) {
     {S.tasks.map(t => <Room key={t.id} S={S} t={t} ss={sessOf(S, t)} over={over === t.id} drag={drag?.moved ? drag.s.sid : ''} onDown={onDown} />)}
     <Room S={S} t={null} ss={S.sessions.filter(s => !s.task).sort(bySt)} over={over === ''} drag={drag?.moved ? drag.s.sid : ''} onDown={onDown} />
     {drag?.moved && <Box className="hq-desk dragging" style={{ position: 'fixed', left: drag.x - drag.dx, top: drag.y - drag.dy }}>
-      <svg viewBox="0 0 34 32" width={72} height={68} shapeRendering="crispEdges" aria-hidden="true" dangerouslySetInnerHTML={{ __html: deskSvg(drag.s) }} />
+      <svg viewBox="0 0 34 32" width={72} height={68} shapeRendering="crispEdges" aria-hidden="true" dangerouslySetInnerHTML={{ __html: spriteSvg(drag.s) }} />
       <Text size="xs" fw={600} ta="center" maw={SLOT_W - 14} className="hq-wrap">{drag.s.title}</Text>
     </Box>}
   </Box>
