@@ -51,6 +51,7 @@ export interface Snapshot {
   focus: { name: string; at: number } | null
   access: Access
   layout: Record<string, { x: number; y: number }> // 가상 사무실의 책상 위치(방 안 0~1 비율)
+  rooms: Record<string, Rect> // 가상 사무실의 방 자리·크기(칸 단위). 키는 업무 id 또는 'lobby'
   btw: Record<string, BtwItem[]> // 세션별 곁가지 질문
   memos: Record<string, { title: string; items: Memo[] }> // 세션(대화 ID)별 메모
   closed: Closed[] // 최근 닫힌 세션(웹에서 다시 열 수 있음)
@@ -61,3 +62,5 @@ export interface Snapshot {
 export interface Closed { sid: string; title: string; dir: string; cwd: string; args: string[]; host: string; closedAt: number }
 
 export interface BtwItem { id: string; q: string; a: string; state: 'asking' | 'done' | 'error'; at: number; doneAt?: number }
+
+export interface Rect { x: number; y: number; w: number; h: number }

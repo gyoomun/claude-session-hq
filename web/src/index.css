@@ -35,20 +35,25 @@ body { background: var(--mantine-color-body); overflow: hidden; }
   --hq-wood-a: #5a4332; --hq-wood-b: #523c2d; --hq-wood-line: #3f2e22;
   --hq-carpet-a: #2b4269; --hq-carpet-b: #284066;
   --hq-note: #f3e2a0; --hq-note-text: #3b3216;
+  --hq-hall: #141a28; --hq-hall-line: rgba(255,255,255,.035);
 }
 [data-mantine-color-scheme="light"] {
   --hq-wall: #e3e7f0; --hq-wall-edge: #c4cbd9;
   --hq-wood-a: #d9b98e; --hq-wood-b: #d2b185; --hq-wood-line: #b8956a;
   --hq-carpet-a: #b9c9e6; --hq-carpet-b: #b2c3e2;
+  --hq-hall: #d3d9e5; --hq-hall-line: rgba(0,0,0,.05);
 }
-/* 회사 하나를 바깥벽으로 두르고, 방 사이 틈(4px)이 칸막이벽이 된다. 마지막 줄의 방은 늘어나 빈 칸이 생기지 않는다 */
-.hq-office { display: flex; flex-wrap: wrap; gap: 4px; border: 4px solid var(--hq-wall-edge); border-radius: 8px; overflow: hidden; background: var(--hq-wall-edge); }
-.hq-room { flex: 1 1 460px; min-width: min(100%, 460px); display: flex; flex-direction: column; }
-.hq-room.lobby { flex-basis: 100%; }
-.hq-wall { background: var(--hq-wall); padding: 10px 12px; border-bottom: 4px solid var(--hq-wall-edge); }
-.hq-floor { position: relative; flex: 1 0 auto; min-height: 160px; transition: outline-color .15s;
+.hq-office { position: relative; border: 4px solid var(--hq-wall-edge); border-radius: 8px; overflow: hidden; box-sizing: content-box;
+  background: linear-gradient(var(--hq-hall-line) 1px, transparent 1px) 0 0 / 24px 24px, linear-gradient(90deg, var(--hq-hall-line) 1px, transparent 1px) 0 0 / 24px 24px, var(--hq-hall); }
+.hq-room { position: absolute; display: flex; flex-direction: column; border: 3px solid var(--hq-wall-edge); border-radius: 4px; overflow: hidden; background: var(--hq-wall-edge); }
+.hq-room.editing { outline: 2px dashed var(--mantine-color-indigo-4); box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.hq-wall { background: var(--hq-wall); padding: 10px 12px; border-bottom: 4px solid var(--hq-wall-edge); cursor: move; touch-action: none; flex: none; }
+.hq-floor { position: relative; flex: 1; min-height: 0; transition: outline-color .15s;
   background: repeating-linear-gradient(0deg, var(--hq-wood-line) 0 2px, transparent 2px 34px),
               repeating-linear-gradient(90deg, var(--hq-wood-a) 0 48px, var(--hq-wood-b) 48px 96px); }
+.hq-grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; touch-action: none; z-index: 200; opacity: .55;
+  background: linear-gradient(135deg, transparent 55%, var(--mantine-color-indigo-4) 55%); }
+.hq-grip:hover, .hq-room.editing .hq-grip { opacity: 1; }
 .hq-room.lobby .hq-floor { background: repeating-conic-gradient(var(--hq-carpet-a) 0 25%, var(--hq-carpet-b) 0 50%) 0 0 / 28px 28px; }
 .hq-floor.over { outline: 3px dashed var(--mantine-color-indigo-4); outline-offset: -6px; }
 .hq-plant { position: absolute; pointer-events: none; }

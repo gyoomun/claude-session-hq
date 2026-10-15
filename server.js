@@ -34,7 +34,7 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 // 서버가 꺼지면서 끊긴 곁가지 질문은 실패로 표시한다
 for (const list of Object.values(db.btw || {})) for (const it of list) if (it.state === 'asking') { it.state = 'error'; it.a = '서버가 다시 시작돼 답을 받지 못했습니다.'; }
@@ -344,7 +344,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -498,6 +498,7 @@ const routes = {
   'task/delete': b => {
     db.tasks = db.tasks.filter(t => t.id !== b.id);
     for (const [sid, tid] of Object.entries(db.assign)) if (tid === b.id) delete db.assign[sid];
+    delete db.rooms[b.id];
   },
   'assign': b => {
     if (b.task && !task(b.task)) throw new Error('없는 업무입니다');
@@ -511,6 +512,15 @@ const routes = {
     if (b.reset) { delete db.layout[b.sid]; return; } // 자동 배치로 되돌리기
     if ('task' in b) routes.assign({ sid: b.sid, task: b.task || '' });
     db.layout[b.sid] = { x: n(b.x), y: n(b.y) };
+  },
+  // 가상 사무실의 방(업무 id 또는 'lobby') 자리와 크기. 칸(24px) 단위. 하나를 옮겨도 나머지가 밀리지 않게 화면에 보이는 방 전부를 한꺼번에 받는다
+  'rooms': b => {
+    if (b.reset) { db.rooms = {}; return; } // 자동 배치로 되돌리기
+    const i = (v, lo) => Math.min(400, Math.max(lo, Math.round(Number(v) || 0)));
+    for (const [id, r] of Object.entries(b.rooms || {})) {
+      if (id !== 'lobby' && !task(id)) continue;
+      db.rooms[id] = { x: i(r.x, 0), y: i(r.y, 0), w: i(r.w, 10), h: i(r.h, 6) };
+    }
   },
   'wait/add': b => {
     const t = task(b.task); const who = str(b.who, 60), what = str(b.what);
