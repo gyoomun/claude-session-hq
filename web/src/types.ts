@@ -50,6 +50,7 @@ export interface Snapshot {
   btw: Record<string, BtwItem[]> // 세션별 곁가지 질문
   closed: Closed[] // 최근 닫힌 세션(웹에서 다시 열 수 있음)
   migrating: boolean // Orca 세션을 웹으로 옮기는 중
+  build: number // 서버가 내주는 화면의 빌드 시각
 }
 
 export interface Closed { sid: string; title: string; dir: string; cwd: string; args: string[]; host: string; closedAt: number }
