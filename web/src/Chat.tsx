@@ -46,7 +46,8 @@ function useTranscript(sid: string) {
         if (r.status === 401) { location.href = '/login'; return }
         const d = await r.json()
         if (stop || d.error) return
-        if (d.missing) { setMissing(true); return }
+        setMissing(!!d.missing) // 새 세션은 첫 말을 보낸 뒤에야 기록 파일이 생긴다
+        if (d.missing) return
         next = d.next
         // 너무 길어지면 오래된 것부터 버린다(기록 파일에는 다 남아 있다)
         if (d.reset) setItems(d.items.slice(-800))
@@ -60,17 +61,16 @@ function useTranscript(sid: string) {
   return { items, missing }
 }
 
-interface Img { path: string; url: string }
-// 붙여넣거나 끌어다 놓은 이미지를 서버에 올리고, 보낼 때 그 경로를 Claude에 붙여넣는다
-async function uploadImages(files: File[], add: (i: Img) => void) {
-  for (const f of files.filter(f => f.type.startsWith('image/'))) {
-    try {
-      const r = await fetch('/api/upload', { method: 'POST', headers: { 'x-hq': '1', 'Content-Type': f.type }, body: f })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error || '이미지를 올리지 못했습니다')
-      add({ path: d.path, url: URL.createObjectURL(f) })
-    } catch (e) { toast((e as Error).message, 'red') }
-  }
+interface Img { n: number; path: string; url: string }
+// 입력칸에 이미지를 붙인 자리 표시. 보낼 때 이 자리에 이미지가 들어가고, Claude 쪽에서는 [Image #N]이 된다
+const tok = (n: number) => `[이미지 ${n}]`
+const TOK = /(\[이미지 \d+\])/
+
+async function upload(f: File) {
+  const r = await fetch('/api/upload', { method: 'POST', headers: { 'x-hq': '1', 'Content-Type': f.type }, body: f })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.error || '이미지를 올리지 못했습니다')
+  return d.path as string
 }
 
 // 보내기 전의 글은 세션마다 남긴다. 다른 세션·보기를 다녀오거나 새로고침해도 이어 쓴다. 붙인 이미지는 이 화면이 열려 있는 동안만
@@ -79,14 +79,48 @@ const loadDraft = (sid: string) => { try { return localStorage.getItem(draftKey(
 const saveDraft = (sid: string, v: string) => { try { if (v) localStorage.setItem(draftKey(sid), v); else localStorage.removeItem(draftKey(sid)) } catch { /* 무시 */ } }
 const draftImgs = new Map<string, Img[]>()
 
-function Composer({ s, imgs, setImgs }: { s: Session; imgs: Img[]; setImgs: React.Dispatch<React.SetStateAction<Img[]>> }) {
-  const [text, setTextState] = useState(() => loadDraft(s.sid))
-  const setText = (v: string) => { setTextState(v); saveDraft(s.sid, v) }
+// 입력칸의 글과 붙인 이미지. 끌어다 놓기는 대화 화면 전체에서 받으므로 ChatView가 만들어 Composer에 넘긴다
+function useDraft(sid: string) {
+  const [text, setTextState] = useState(() => loadDraft(sid))
+  const setText = (v: string | ((p: string) => string)) => setTextState(p => { const x = typeof v === 'function' ? v(p) : v; saveDraft(sid, x); return x })
+  const [imgs, setImgs] = useState<Img[]>(() => draftImgs.get(sid) || [])
+  useEffect(() => { draftImgs.set(sid, imgs) }, [sid, imgs])
+  const [uploading, setUploading] = useState(0)
+  // 이미지를 [이미지 N] 표시로 붙인 자리(at, 없으면 끝)에 넣고 올린다. 넣은 표시의 길이를 돌려준다(커서를 그 뒤로 옮기려고)
+  const attach = (files: File[], at?: [number, number]) => {
+    const list = files.filter(f => f.type.startsWith('image/'))
+    if (!list.length) return 0
+    let n = Math.max(0, ...imgs.map(i => i.n), ...text.split(TOK).filter((_, i) => i % 2).map(t => +t.replace(/\D/g, '')))
+    const items = list.map(f => ({ f, n: ++n }))
+    const ins = items.map(x => tok(x.n)).join(' ')
+    setText(p => at ? p.slice(0, at[0]) + ins + p.slice(at[1]) : p + (p && !/\s$/.test(p) ? ' ' : '') + ins)
+    for (const { f, n } of items) {
+      setUploading(u => u + 1)
+      upload(f).then(path => setImgs(p => [...p, { n, path, url: URL.createObjectURL(f) }]))
+        .catch(e => { toast((e as Error).message, 'red'); setText(p => p.replace(tok(n), '')) })
+        .finally(() => setUploading(u => u - 1))
+    }
+    return ins.length
+  }
+  return { text, setText, imgs, setImgs, uploading, attach }
+}
+type Draft = ReturnType<typeof useDraft>
+
+function Composer({ s, d }: { s: Session; d: Draft }) {
+  const { text, setText, imgs, setImgs, uploading, attach } = d
   const [busy, setBusy] = useState(false)
+  const box = useRef<HTMLTextAreaElement>(null)
+  const shown = imgs.filter(i => text.includes(tok(i.n))) // 표시를 지운 이미지는 보내지 않는다
   const send = async () => {
-    if ((!text.trim() && !imgs.length) || busy) return
+    if (!text.trim() || busy || uploading) return
+    // 글과 이미지를 쓴 순서대로 나눈다. 올린 이미지가 없는 표시(새로고침으로 사라진 것 등)는 뺀다
+    const parts = text.split(TOK).flatMap((x, i): { text?: string; image?: string }[] => {
+      if (!(i % 2)) return x ? [{ text: x }] : []
+      const img = imgs.find(m => tok(m.n) === x)
+      return img ? [{ image: img.path }] : []
+    })
     setBusy(true)
-    const ok = await api('term/send', { pid: s.pid, text, images: imgs.map(i => i.path) })
+    const ok = await api('term/send', { pid: s.pid, parts })
     setBusy(false)
     if (ok) { setText(''); setImgs([]) }
   }
@@ -99,14 +133,19 @@ function Composer({ s, imgs, setImgs }: { s: Session; imgs: Img[]; setImgs: Reac
         <Button size="xs" variant="default" onClick={() => key('2')}>2 · 이번 세션 동안 허용</Button>
         <Button size="xs" variant="outline" color="red" onClick={() => key('3')}>3 · 거부</Button>
       </Group>}
-      {imgs.length > 0 && <Group gap={6}>{imgs.map(i => <Box key={i.path} pos="relative">
-        <img src={i.url} alt="붙일 이미지" style={{ height: 64, borderRadius: 6, display: 'block', border: '1px solid var(--mantine-color-default-border)' }} />
-        <CloseButton size="xs" variant="filled" pos="absolute" top={2} right={2} aria-label="이미지 빼기" onClick={() => setImgs(p => p.filter(x => x !== i))} />
+      {shown.length > 0 && <Group gap={6}>{shown.map(i => <Box key={i.n} pos="relative">
+        <img src={i.url} alt={tok(i.n)} style={{ height: 64, borderRadius: 6, display: 'block', border: '1px solid var(--mantine-color-default-border)' }} />
+        <Text fz={10} pos="absolute" bottom={2} left={4} px={4} style={{ background: 'rgba(0,0,0,.6)', color: '#fff', borderRadius: 4 }}>{tok(i.n)}</Text>
+        <CloseButton size="xs" variant="filled" pos="absolute" top={2} right={2} aria-label="이미지 빼기" onClick={() => setText(p => p.replace(tok(i.n), ''))} />
       </Box>)}</Group>}
-      <Textarea autosize minRows={2} maxRows={10} value={text} onChange={e => setText(e.currentTarget.value)}
+      <Textarea ref={box} autosize minRows={2} maxRows={10} value={text} onChange={e => setText(e.currentTarget.value)}
         onPaste={e => {
           const files = [...e.clipboardData.files].filter(f => f.type.startsWith('image/'))
-          if (files.length) { e.preventDefault(); uploadImages(files, i => setImgs(p => [...p, i])) }
+          if (!files.length) return
+          e.preventDefault()
+          const el = e.currentTarget, at = el.selectionStart
+          const len = attach(files, [at, el.selectionEnd])
+          requestAnimationFrame(() => box.current?.setSelectionRange(at + len, at + len))
         }}
         placeholder={`${s.title}에게 말하기`} aria-label="보낼 말"
         onKeyDown={e => {
@@ -117,7 +156,7 @@ function Composer({ s, imgs, setImgs }: { s: Session; imgs: Img[]; setImgs: Reac
         <Text size="xs" c="dimmed"><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
         <Group gap={6}>
           {(s.state === 'working' || s.state === 'approval') && <Button size="xs" variant="default" onClick={() => key('esc')}>중단 (Esc)</Button>}
-          <Button size="xs" loading={busy} onClick={send}>보내기</Button>
+          <Button size="xs" loading={busy || uploading > 0} onClick={send}>보내기</Button>
         </Group>
       </Group>
     </Stack>
@@ -165,8 +204,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   useLayoutEffect(() => { if (stick.current && view.current) view.current.scrollTop = view.current.scrollHeight }, [items, s.state])
   useEffect(() => { stick.current = true }, [s.sid])
   const results = new Map(items.filter(i => i.t === 'result').map(i => [i.toolId, i]))
-  const [imgs, setImgs] = useState<Img[]>(() => draftImgs.get(s.sid) || [])
-  useEffect(() => { draftImgs.set(s.sid, imgs) }, [s.sid, imgs])
+  const draft = useDraft(s.sid)
   const [dropOver, setDropOver] = useState(false)
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
   return <Stack gap={8} style={{ flex: 1, minHeight: 0, position: 'relative' }}
@@ -175,7 +213,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
     onDrop={e => {
       if (!s.host || !hasFiles(e)) return
       e.preventDefault(); setDropOver(false)
-      uploadImages([...e.dataTransfer.files], i => setImgs(p => [...p, i]))
+      draft.attach([...e.dataTransfer.files])
     }}>
     {dropOver && <Box className="hq-dropzone"><Text fw={600}>여기에 놓으면 이미지를 붙입니다</Text></Box>}
     <Paper withBorder style={{ flex: 1, minHeight: 0, display: 'flex' }}>
@@ -195,6 +233,6 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
         </Stack>
       </ScrollArea>
     </Paper>
-    {s.host ? <Composer s={s} imgs={imgs} setImgs={setImgs} /> : <NoInput s={s} />}
+    {s.host ? <Composer s={s} d={draft} /> : <NoInput s={s} />}
   </Stack>
 }

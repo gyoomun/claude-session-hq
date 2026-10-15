@@ -621,9 +621,16 @@ const routes = {
   },
   'term/switch': b => orca(b.pid, ['terminal', 'switch']),
   'term/send': async b => {
-    const text = String(b.text ?? '').replace(/\r\n?/g, '\n').trim().slice(0, 20000);
-    const images = (Array.isArray(b.images) ? b.images : []).filter(isUpload).slice(0, 10);
-    if (!text && !images.length) throw new Error('보낼 내용이 없습니다');
+    // 글과 이미지를 쓴 순서대로 받는다: [{ text }, { image: 올린 파일 경로 }, …]. 이미지를 붙인 자리가 Claude에게도 그대로 간다
+    const parts = (Array.isArray(b.parts) ? b.parts : [{ text: b.text }]).slice(0, 60)
+      .map(x => isUpload(x && x.image) ? { image: x.image } : { text: String((x && x.text) ?? '').replace(/\r\n?/g, '\n').slice(0, 20000) });
+    const first = parts[0], last = parts[parts.length - 1];
+    if (first && 'text' in first) first.text = first.text.trimStart();
+    if (last && 'text' in last) last.text = last.text.trimEnd();
+    const list = parts.filter(x => x.image || x.text);
+    if (!list.length) throw new Error('보낼 내용이 없습니다');
+    if (list.filter(x => x.image).length > 10) throw new Error('이미지는 한 번에 10장까지 보낼 수 있습니다');
+    const text = list.length === 1 && list[0].text;
     const where = handles.get(+b.pid) || {};
     if (!where.tmux && !where.orca) throw new Error('이 세션에는 입력을 넣을 수 없습니다');
     // 붙여넣기로 넣는다: 여러 줄의 중간 줄바꿈이 Enter로 처리되지 않고, 이미지 경로는 이미지로 붙는다
@@ -634,8 +641,7 @@ const routes = {
       } else await orca(b.pid, ['terminal', 'send', '--text', '\x1b[200~' + t + '\x1b[201~']);
       await sleep(150);
     };
-    for (const f of images) await paste(f);
-    if (text.includes('\n') || images.length) { if (text) await paste((images.length ? ' ' : '') + text); }
+    if (!text || text.includes('\n')) { for (const x of list) await paste(x.image || x.text); }
     else if (where.tmux) await tmux(['send-keys', '-t', where.tmux, '-l', text]);
     else return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']);
     await sleep(120);
