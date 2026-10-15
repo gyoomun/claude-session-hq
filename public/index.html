@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Session HQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Orbit&family=Silkscreen&display=swap">
+<style>
+/* layout: 상단 카운터 → 보기 전환(업무별/세션 전체) → 왼쪽 업무 카드 + 미배치 / 오른쪽 '내 차례' 큐와 이벤트. 좁으면 큐가 맨 위 */
+:root{
+  --bg:#0c111d; --panel:#131a2a; --panel-2:#1a2337; --line:#26314b; --fg:#e7ebf5; --muted:#8f99b4; --accent:#a3b6ff;
+  --working:#4fd1a5; --myturn:#ffb547; --approval:#ff7a59; --human:#c39cff; --idle:#5f6a86; --stale:#ff6b8a;
+  --desk:#5c4837; --desk-edge:#3d3027; --mon:#2c3349; --screen-off:#1a2032; --chair:#2f3852; --floor:#0f1626;
+  --f-display:"Orbit","IBM Plex Sans KR",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --f-pixel:"Silkscreen","IBM Plex Mono",monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#eef1f7; --panel:#ffffff; --panel-2:#f4f6fb; --line:#d9dfec; --fg:#141a2b; --muted:#5e6885; --accent:#3d58d6;
+  --working:#0f8f67; --myturn:#b56a00; --approval:#cf4426; --human:#7646d4; --idle:#98a1b7; --stale:#cc2f57;
+  --desk:#c9a57a; --desk-edge:#a7845c; --mon:#3a4259; --screen-off:#59617a; --chair:#c3cadb; --floor:#e8ecf5;
+  color-scheme:light;
+}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5;padding:16px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px))}
+[hidden]{display:none!important}
+button,select{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[data-sess]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1600px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand h1{font-family:var(--f-display);font-size:24px;font-weight:400;margin:0;letter-spacing:.02em}
+.brand .sub{color:var(--muted);font-size:12.5px}
+.top-r{display:flex;align-items:center;gap:10px}
+.clock{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.btn{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 11px;font-size:13px;line-height:1.3}
+.btn:hover{border-color:color-mix(in srgb,var(--fg) 30%,var(--line))}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600}
+.btn.ghost{background:transparent;color:var(--muted)}
+.btn.danger{color:var(--approval);border-color:color-mix(in srgb,var(--approval) 45%,var(--line));background:transparent}
+.banner{background:color-mix(in srgb,var(--approval) 14%,var(--panel));border:1px solid color-mix(in srgb,var(--approval) 50%,var(--line));border-radius:10px;padding:10px 14px;font-size:13px}
+
+.counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(122px,1fr));gap:10px}
+.ctr{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.ctr.hot{border-color:color-mix(in srgb,var(--c) 60%,var(--line));background:color-mix(in srgb,var(--c) 8%,var(--panel))}
+.ctr.total{background:var(--panel-2)}
+.ctr .k{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:12.5px;color:var(--muted)}
+.ctr .k i{font-style:normal;font-family:var(--f-pixel);font-size:9px;letter-spacing:.08em}
+.ctr .v{font-family:var(--f-display);font-size:30px;line-height:1.1;color:var(--c);font-variant-numeric:tabular-nums}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:transparent;padding:7px 14px;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--fg);font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)}
+.inline-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+input,textarea{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--fg);font:inherit;font-size:13px;min-width:0}
+.inline-form input{flex:1 1 180px}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;grid-template-areas:"tasks queue" "tasks feed";gap:16px;align-items:start}
+.tasks{grid-area:tasks;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,390px),1fr));gap:14px;min-width:0}
+.queue{grid-area:queue;min-width:0}
+.feed{grid-area:feed;min-width:0}
+@media (max-width:1100px){.layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"queue" "tasks" "feed"}}
+.wide{grid-column:1/-1}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.panel h2{font-size:14px;margin:0;display:flex;align-items:center;gap:8px}
+.panel h2 .n{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-weight:400}
+.px{font-family:var(--f-pixel);font-size:9.5px;letter-spacing:.1em;color:var(--muted)}
+.empty{color:var(--muted);font-size:13px;padding:6px 0}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.card.over,.group.over{outline:2px dashed var(--accent);outline-offset:-2px}
+.card.unassigned{border-style:dashed}
+.card-h{padding:12px 14px 10px;background:color-mix(in srgb,var(--c) 9%,var(--panel));border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{font-family:var(--f-pixel);font-size:9.5px;letter-spacing:.1em;color:var(--muted)}
+.pill{margin-left:auto;font-size:12px;font-weight:600;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 55%,transparent);background:color-mix(in srgb,var(--c) 12%,transparent);border-radius:999px;padding:1px 9px;white-space:nowrap}
+.chip{font-size:11.5px;border-radius:5px;padding:0 6px;white-space:nowrap}
+.chip.stale{color:var(--stale);background:color-mix(in srgb,var(--stale) 14%,transparent)}
+.chip.warn{color:var(--approval);background:color-mix(in srgb,var(--approval) 14%,transparent)}
+.title{all:unset;cursor:pointer;font-size:17px;font-weight:600;line-height:1.35;text-wrap:balance;overflow-wrap:anywhere}
+.title:hover{text-decoration:underline;text-underline-offset:3px}
+.title:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.h-plain{font-size:17px;font-weight:600;line-height:1.35}
+.meta{color:var(--muted);font-size:12.5px;overflow-wrap:anywhere}
+.card-b{padding:12px 14px 14px;display:flex;flex-direction:column;gap:12px}
+.desks-h{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted)}
+.desks{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:8px;margin-top:6px}
+.desk{background:var(--floor);border:1px solid var(--line);border-radius:9px;padding:8px 8px 9px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;text-align:center;cursor:grab}
+.desk:hover{border-color:color-mix(in srgb,var(--fg) 25%,var(--line))}
+.desk.hot{border-color:color-mix(in srgb,var(--c) 65%,var(--line))}
+.desk.dragging{opacity:.4}
+.desk svg{display:block}
+.dn{font-size:12px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dst{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.dst b{color:var(--c);font-weight:600}
+.dp{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act{font-family:var(--f-mono);font-size:10.5px;color:var(--working);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ttag{font-size:11px;color:var(--accent);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ttag.none{color:var(--muted)}
+.assign{width:100%;margin-top:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:3px 4px;font-size:11.5px;color:var(--fg)}
+.drop-hint{grid-column:1/-1;border:1px dashed var(--line);border-radius:9px;padding:18px;text-align:center;color:var(--muted);font-size:12.5px}
+.wait{display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--human) 9%,var(--panel-2));font-size:13px}
+.wait svg{flex:none;margin-top:3px}
+.wait .wm{color:var(--muted);font-size:12px}
+.wait .end{margin-left:auto;display:flex;gap:6px;align-items:center;flex:none}
+.next{font-size:13px;display:flex;gap:8px}
+.next .lbl{flex:none;font-size:11.5px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 6px;height:fit-content;margin-top:1px}
+
+.group{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px 14px;grid-column:1/-1}
+.group h3{margin:0;font-size:14px;display:flex;align-items:center;gap:8px}
+.group h3 .dot{width:8px;height:8px;border-radius:2px;background:var(--c)}
+.group h3 .n{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-weight:400}
+
+.q{border:1px solid color-mix(in srgb,var(--c) 45%,var(--line));background:color-mix(in srgb,var(--c) 6%,var(--panel-2));border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.q-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);min-width:0}
+.q-top .pill{margin-left:0}
+.q-top .tn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.q-age{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
+.q-name{all:unset;cursor:pointer;font-weight:600;font-size:13.5px;overflow-wrap:anywhere}
+.q-name:hover{text-decoration:underline}
+.msg{margin:0;font-size:12.5px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;color:color-mix(in srgb,var(--fg) 85%,var(--muted))}
+.q-act{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}
+.reply{display:flex;gap:6px;width:100%}
+.reply input{flex:1}
+.sep{height:1px;background:var(--line);margin:4px 0}
+.wl{display:flex;flex-direction:column;gap:6px;min-width:0}
+.wl .wait{background:var(--panel-2)}
+
+.feed ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;max-height:380px;overflow:auto}
+.feed li{display:grid;grid-template-columns:44px auto minmax(0,1fr);gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.feed li:last-child{border-bottom:0}
+.feed time{font-family:var(--f-mono);color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.feed li span:last-child{overflow-wrap:anywhere}
+.hook{font-size:11px;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 45%,transparent);border-radius:4px;padding:0 5px;white-space:nowrap}
+
+.scrim{position:fixed;inset:0;background:color-mix(in srgb,#000 45%,transparent);z-index:10}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(600px,100%);background:var(--panel);border-left:1px solid var(--line);z-index:11;overflow:auto;padding:16px 18px 24px;display:flex;flex-direction:column;gap:14px}
+.drawer h2{margin:0;font-size:19px;text-wrap:balance;overflow-wrap:anywhere}
+.dh{display:flex;align-items:flex-start;gap:10px}
+.dh .btn{margin-left:auto;flex:none}
+.box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2);display:flex;flex-direction:column;gap:6px}
+.box pre{margin:0;font-family:var(--f-body);font-size:13px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto}
+.sess-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel-2);cursor:pointer}
+.sess-row:hover{border-color:color-mix(in srgb,var(--fg) 25%,var(--line))}
+.fields{display:flex;flex-direction:column;gap:8px}
+.fields label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.fields textarea{resize:vertical;min-height:60px}
+.addw{display:flex;gap:6px;flex-wrap:wrap}
+.addw input{flex:1 1 140px}
+.note{font-size:12.5px;color:var(--muted);margin:0}
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,calc(100% - 32px));max-height:calc(100% - 64px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;z-index:11;padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.modal h2{margin:0;font-size:17px;display:flex;align-items:center;gap:10px}
+.modal h2 .btn{margin-left:auto}
+.brief p{margin:0;font-size:14px;line-height:1.65}
+.brief ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.brief .k{color:var(--muted);font-size:12px;margin-top:6px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:13px;z-index:20;max-width:calc(100% - 32px)}
+
+.code{animation:blink 1.1s steps(2) infinite}
+.arm{animation:wave 1.2s steps(2) infinite}
+@keyframes blink{50%{opacity:.25}}
+@keyframes wave{50%{transform:translateY(1px)}}
+@media (prefers-reduced-motion:reduce){.code,.arm{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect width="8" height="8" fill="var(--panel-2)"/><rect x="1" y="1" width="2" height="2" fill="var(--working)"/><rect x="5" y="1" width="2" height="2" fill="var(--myturn)"/><rect x="1" y="5" width="2" height="2" fill="var(--human)"/><rect x="5" y="5" width="2" height="2" fill="var(--idle)"/><rect x="3" y="3" width="2" height="2" fill="var(--accent)"/></svg>
+      <div>
+        <h1>Claude Session HQ</h1>
+        <div class="sub" id="sub">불러오는 중…</div>
+      </div>
+    </div>
+    <div class="top-r">
+      <span class="clock" id="clock"></span>
+      <button class="btn primary" id="brief-btn" type="button">지금 상황 브리핑</button>
+    </div>
+  </header>
+
+  <div class="banner" id="offline" hidden>서버에 연결할 수 없습니다. <code>node server.js</code>가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</div>
+
+  <section class="counters" id="counters" aria-label="전체 상태"></section>
+
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="보기">
+      <button type="button" data-mode="task">업무별</button>
+      <button type="button" data-mode="all">세션 전체</button>
+    </div>
+    <button class="btn" type="button" id="add-btn">+ 업무 추가</button>
+  </div>
+  <form class="inline-form" id="addtask" hidden>
+    <input id="t-name" placeholder="업무 이름 (예: VPN 장비 교체)" autocomplete="off" maxlength="120">
+    <input id="t-memo" placeholder="관련 사람·메모 (선택)" autocomplete="off" maxlength="300">
+    <button class="btn primary" type="submit">추가</button>
+    <button class="btn ghost" type="button" id="add-cancel">취소</button>
+  </form>
+
+  <div class="layout">
+    <section class="tasks" id="tasks" aria-label="업무"></section>
+    <aside class="queue panel" aria-label="내 차례">
+      <h2>지금 내 차례 <span class="n" id="qn"></span></h2>
+      <div id="queue" class="wl"></div>
+      <div class="sep"></div>
+      <h2>남 기다리는 중 <span class="n" id="wn"></span></h2>
+      <div id="waits" class="wl"></div>
+    </aside>
+    <aside class="feed panel" aria-label="이벤트">
+      <h2>이벤트 <span class="n">서버가 켜진 뒤 상태가 바뀐 순서</span></h2>
+      <ol id="feed"></ol>
+    </aside>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="자세히"></aside>
+<section class="modal" id="brief" hidden aria-label="브리핑"></section>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const M=6e4,H=36e5,D=864e5;
+const LABEL={working:'작업중',myturn:'내 차례',approval:'승인 필요',idle:'쉼',human:'남 기다림',empty:'세션 없음',open:'열림',closed:'닫힘'};
+const COLOR={working:'var(--working)',myturn:'var(--myturn)',approval:'var(--approval)',idle:'var(--idle)',human:'var(--human)',empty:'var(--idle)',open:'var(--accent)',closed:'var(--idle)'};
+const RANK={approval:0,myturn:1,working:2,idle:3};
+
+let S={sessions:[],tasks:[],feed:[],orca:false},lastJSON='',offline=false;
+let openTask=null,openSess=null,dragging=null,pending=false,confirmDel=null;
+let mode='task';try{mode=localStorage.getItem('hq-mode')||'task'}catch(e){}
+const drafts=new Map();
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const taskOf=id=>S.tasks.find(t=>t.id===id);
+const tname=id=>taskOf(id)?.name||'미배치';
+const sessOf=t=>S.sessions.filter(s=>s.task===t.id).sort(bySt);
+const sessById=sid=>S.sessions.find(s=>s.sid===sid);
+const bySt=(a,b)=>RANK[a.state]-RANK[b.state]||(a.state==='idle'?b.since-a.since:a.since-b.since);
+const waiting=s=>s.state==='myturn'||s.state==='approval';
+const base=p=>String(p||'').split('/').pop()||p;
+function fmt(ms){ms=Math.max(0,ms);const m=Math.floor(ms/M);if(m<1)return'<1분';if(m<60)return m+'분';const h=Math.floor(m/60);if(h<24)return h+'시간'+(m%60?' '+m%60+'분':'');const d=Math.floor(h/24);return d+'일'+(h%24?' '+h%24+'시간':'')}
+const since=(t,suf='')=>`<span data-since="${t}" data-suf="${suf}"></span>`;
+const hhmm=t=>new Date(t).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});
+const overdue=w=>Date.now()-w.since>4*H;
+const lastOf=t=>Math.max(t.updatedAt||0,...sessOf(t).map(s=>s.since));
+const stale=t=>Date.now()-lastOf(t)>D&&!sessOf(t).some(s=>s.state==='working');
+function taskStatus(t){const ss=sessOf(t);
+ if(ss.some(s=>s.state==='approval'))return'approval';
+ if(ss.some(s=>s.state==='myturn'))return'myturn';
+ if(t.waits.length)return'human';
+ if(ss.some(s=>s.state==='working'))return'working';
+ return ss.length?'idle':'empty'}
+
+/* 서버 */
+async function poll(){
+ try{const r=await fetch('/api/state',{cache:'no-store'});const t=await r.text();
+  if(offline){offline=false;$('offline').hidden=true}
+  if(t!==lastJSON){lastJSON=t;S=JSON.parse(t);render()}}
+ catch(e){if(!offline){offline=true;$('offline').hidden=false}}}
+async function api(p,body){
+ try{const r=await fetch('/api/'+p,{method:'POST',headers:{'Content-Type':'application/json','x-hq':'1'},body:JSON.stringify(body||{})});
+  const d=await r.json();if(!r.ok)throw new Error(d.error||'요청이 실패했습니다');
+  lastJSON=JSON.stringify(d);S=d;render(true);return true}
+ catch(e){toast(e.message);return false}}
+
+/* 픽셀 책상 */
+const SKIN=['#f2c9a1','#d8a073','#a96c47','#7b4b2f'],HAIR=['#2a1c15','#5b3b22','#1d2433','#8b5b2c','#c9c2b8'],SHIRT=['#5b82f0','#df6f59','#3fb48a','#ae7be0','#e0ae3b','#4cb3c9'];
+const hash=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return h};
+function glyph(kind){const r=(x,y,w=1,h=1)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="var(--bg)"/>`;
+ return {bang:r(3,1,1,2)+r(3,4),lock:r(2,1,3)+r(2,2)+r(4,2)+r(1,3,5,2),z:r(2,1,3)+r(4,2)+r(3,3)+r(2,4,3)}[kind]}
+function desk(s){const st=s.state,k=hash(s.sid),sk=SKIN[k%4],hr=HAIR[(k>>3)%5],sh=SHIRT[(k>>6)%6];
+ const scr={working:'var(--working)',myturn:'var(--myturn)',approval:'var(--approval)'}[st]||'var(--screen-off)';
+ let g=`<rect x="21" y="9" width="9" height="7" fill="var(--chair)"/>`;
+ if(st!=='idle'){g+=`<rect x="22" y="11" width="7" height="5" fill="${sh}"/><rect x="23" y="5" width="5" height="6" fill="${sk}"/><rect x="23" y="4" width="5" height="2" fill="${hr}"/><rect x="22" y="5" width="1" height="3" fill="${hr}"/>`;
+  if(waiting(s))g+=`<g class="arm"><rect x="29" y="4" width="2" height="8" fill="${sh}"/><rect x="29" y="2" width="2" height="2" fill="${sk}"/></g>`}
+ g+=`<rect x="6" y="4" width="13" height="10" fill="var(--mon)"/><rect x="7" y="5" width="11" height="8" fill="${scr}"/>`;
+ if(st==='working')g+=`<g class="code"><rect x="8" y="6" width="6" height="1" fill="var(--bg)"/><rect x="8" y="8" width="8" height="1" fill="var(--bg)"/><rect x="10" y="10" width="5" height="1" fill="var(--bg)"/></g>`;
+ g+=`<rect x="11" y="14" width="3" height="2" fill="var(--mon)"/><rect x="2" y="16" width="30" height="3" fill="var(--desk)"/><rect x="2" y="19" width="30" height="1" fill="var(--desk-edge)"/><rect x="4" y="20" width="2" height="5" fill="var(--desk-edge)"/><rect x="28" y="20" width="2" height="5" fill="var(--desk-edge)"/>`;
+ const b={myturn:['var(--myturn)','bang'],approval:['var(--approval)','lock'],idle:['var(--idle)','z']}[st];
+ const bub=b?`<g transform="translate(13 0)"><rect width="7" height="6" fill="${b[0]}"/><rect x="2" y="6" width="1" height="1" fill="${b[0]}"/>${glyph(b[1])}</g>`:'';
+ return `<svg viewBox="0 0 34 32" width="68" height="64" shape-rendering="crispEdges" aria-hidden="true">${bub}<g transform="translate(0 6)">${g}</g></svg>`}
+const person=`<svg width="12" height="14" viewBox="0 0 6 7" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="0" width="2" height="2" fill="var(--human)"/><rect x="1" y="3" width="4" height="4" fill="var(--human)"/></svg>`;
+
+/* 화면 조각 */
+const assignSel=(s,id='')=>`<select class="assign" ${id?`id="${id}"`:''} data-assign="${s.sid}" aria-label="${esc(s.title)} 업무 배치"><option value="">미배치</option>${S.tasks.map(t=>`<option value="${t.id}" ${s.task===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>`;
+function deskTile(s,{sel=false,showTask=false}={}){
+ return `<div class="desk ${waiting(s)?'hot':''}" style="--c:${COLOR[s.state]}" draggable="true" data-sid="${s.sid}" data-sess="${s.sid}" tabindex="0" role="button" aria-label="${esc(s.title)} 자세히">
+  ${desk(s)}<div class="dn" title="${esc(s.title)}">${esc(s.title)}</div><div class="dst"><b>${LABEL[s.state]}</b> ${since(s.since,'째')}</div>
+  ${s.act?`<div class="act" title="${esc(s.act)}">${esc(s.act)}</div>`:`<div class="dp" title="${esc(s.cwd)}">${esc(base(s.cwd))}</div>`}
+  ${showTask?`<div class="ttag ${s.task?'':'none'}">${esc(tname(s.task))}</div>`:''}${sel?assignSel(s):''}</div>`}
+function counters(){
+ const c=st=>S.sessions.filter(s=>s.state===st).length;
+ const waits=S.tasks.flatMap(t=>t.waits),un=S.sessions.filter(s=>!s.task).length;
+ const items=[['열린 세션','SESSIONS',S.sessions.length,'var(--accent)','total'],['내 차례','MY TURN',c('myturn'),'var(--myturn)','hot'],
+  ['승인 필요','APPROVE',c('approval'),'var(--approval)','hot'],['남 기다림','WAITING',waits.length,'var(--human)',''],
+  ['작업중','WORKING',c('working'),'var(--working)',''],['쉼','IDLE',c('idle'),'var(--idle)',''],['정체 업무','STALLED',S.tasks.filter(stale).length,'var(--stale)','hot']];
+ $('counters').innerHTML=items.map(([k,e,v,col,cls])=>`<div class="ctr ${cls==='hot'?(v?'hot':''):cls}" style="--c:${col}"><div class="k">${k}<i>${e}</i></div><div class="v">${String(v).padStart(2,'0')}</div></div>`).join('');
+ $('sub').textContent=`업무 ${S.tasks.length} · 열린 세션 ${S.sessions.length} (미배치 ${un}) · 사람 대기 ${waits.length}`;
+ document.title=(c('myturn')+c('approval')?`(${c('myturn')+c('approval')}) `:'')+'Claude Session HQ';
+}
+function waitRow(t,w,withTask){
+ return `<div class="wait">${person}<div style="min-width:0"><b>${esc(w.who)}</b> · ${esc(w.what)}${withTask?` <span class="wm">(${esc(t.name)})</span>`:''}
+  <div class="wm">${since(w.since,'째')}</div></div><div class="end">${overdue(w)?'<span class="chip warn">재촉 필요</span>':''}<button class="btn" type="button" data-wdone="${t.id}|${w.id}">답 받음</button></div></div>`}
+function card(t){const st=taskStatus(t),ss=sessOf(t);
+ return `<article class="card" style="--c:${COLOR[st]}" data-drop="${t.id}">
+  <header class="card-h"><div class="row"><span class="tag">TASK</span>${stale(t)?`<span class="chip stale">정체 ${since(lastOf(t))}</span>`:''}<span class="pill" style="--c:${COLOR[st]}">${LABEL[st]}</span></div>
+   <button class="title" type="button" data-open="${t.id}">${esc(t.name)}</button>
+   <div class="meta">${t.memo?esc(t.memo)+' · ':''}마지막 진행 ${since(lastOf(t),' 전')}</div></header>
+  <div class="card-b">
+   <div><div class="desks-h"><span class="px">LIVE DESKS</span><span>세션 ${ss.length} · 작업중 ${ss.filter(s=>s.state==='working').length}</span></div>
+    <div class="desks">${ss.map(s=>deskTile(s)).join('')||'<div class="drop-hint">미배치 칸에서 세션을 끌어다 놓거나, 세션의 메뉴에서 이 업무를 고르세요.</div>'}</div></div>
+   ${t.waits.map(w=>waitRow(t,w,false)).join('')}
+   ${t.next?`<div class="next"><span class="lbl">다음</span><span>${esc(t.next)}</span></div>`:''}
+  </div></article>`}
+function unassignedCard(){const ss=S.sessions.filter(s=>!s.task).sort(bySt),w=ss.filter(waiting).length;
+ return `<article class="card unassigned wide" style="--c:var(--idle)" data-drop="">
+  <header class="card-h"><div class="row"><span class="tag">UNASSIGNED</span><span class="pill" style="--c:${w?'var(--myturn)':'var(--idle)'}">${ss.length}세션${w?` · 내 차례 ${w}`:''}</span></div>
+   <div class="h-plain">미배치 세션</div>
+   <div class="meta">업무에 묶지 않은 세션입니다. 업무 카드로 끌어다 놓거나 메뉴에서 업무를 고르세요.</div></header>
+  <div class="card-b"><div class="desks">${ss.map(s=>deskTile(s,{sel:true})).join('')||'<div class="drop-hint">모든 세션이 업무에 배치됐습니다.</div>'}</div></div></article>`}
+function allView(){
+ if(!S.sessions.length)return '<div class="group"><div class="empty">열린 Claude 세션이 없습니다.</div></div>';
+ return [['approval','승인 필요'],['myturn','내 차례'],['working','작업중'],['idle','쉼']].map(([k,label])=>{
+  const ss=S.sessions.filter(s=>s.state===k).sort(bySt);if(!ss.length)return'';
+  return `<section class="group" style="--c:${COLOR[k]}"><h3><span class="dot"></span>${label} <span class="n">${ss.length}</span></h3>
+   <div class="desks">${ss.map(s=>deskTile(s,{sel:true,showTask:true})).join('')}</div></section>`}).join('')}
+const termBtns=s=>s.term?`<button class="btn" type="button" data-term="${s.pid}">터미널 열기</button>`:'';
+const replyForm=s=>s.term?`<form class="reply" data-reply="${s.pid}" data-rsid="${s.sid}"><input name="text" placeholder="이 세션에 답 보내기" autocomplete="off" value="${esc(drafts.get(s.sid)||'')}" data-draft="${s.sid}"><button class="btn primary" type="submit">보내기</button></form>`:'';
+function queue(){
+ const items=S.sessions.filter(waiting).sort(bySt);
+ $('qn').textContent=items.length+'건';
+ $('queue').innerHTML=items.length?items.map(s=>`<article class="q" style="--c:${COLOR[s.state]}">
+  <div class="q-top"><span class="pill" style="--c:${COLOR[s.state]}">${LABEL[s.state]}</span><span class="tn">${esc(tname(s.task))}</span><span class="q-age">${since(s.since,'째')}</span></div>
+  <button class="q-name" type="button" data-sess="${s.sid}">${esc(s.title)}</button>
+  ${s.msg?`<p class="msg">${esc(s.msg)}</p>`:''}
+  ${replyForm(s)}
+  <div class="q-act">${termBtns(s)}${s.state==='myturn'?`<button class="btn ghost" type="button" data-seen="${s.sid}">확인함 · 쉼으로</button>`:''}</div></article>`).join('')
+  :'<div class="empty">나를 기다리는 세션이 없습니다.</div>';
+ const ws=S.tasks.flatMap(t=>t.waits.map(w=>({t,w}))).sort((a,b)=>a.w.since-b.w.since);
+ $('wn').textContent=ws.length+'건';
+ $('waits').innerHTML=ws.length?ws.map(x=>waitRow(x.t,x.w,true)).join(''):'<div class="empty">기다리는 사람이 없습니다. 업무를 열어 추가할 수 있습니다.</div>';
+}
+const feedRow=(e,showTask=true)=>`<li><time>${hhmm(e.at)}</time><span class="hook" style="--c:${COLOR[e.to]||'var(--muted)'}">${LABEL[e.to]||e.to}</span><span>${esc(e.title)}${showTask&&e.task?` <span class="meta">· ${esc(tname(e.task))}</span>`:''}</span></li>`;
+function feed(){$('feed').innerHTML=S.feed.map(e=>feedRow(e)).join('')||'<li><span></span><span></span><span class="empty">아직 바뀐 상태가 없습니다.</span></li>'}
+
+function drawerSess(s){
+ return `<div class="dh"><div><span class="tag">SESSION · ${esc(s.name)}</span><h2>${esc(s.title)}</h2><div class="meta">${esc(s.cwd)} · pid ${s.pid} · 연 지 ${since(s.startedAt)}</div></div><button class="btn" type="button" data-close>닫기</button></div>
+  <div class="row"><span class="pill" style="margin-left:0;--c:${COLOR[s.state]}">${LABEL[s.state]}</span><span class="meta">${since(s.since,'째')}</span>${s.act?`<span class="act">${esc(s.act)}</span>`:''}</div>
+  <div class="fields"><label for="ds-assign">업무 배치${assignSel(s,'ds-assign')}</label></div>
+  <div class="q-act">${termBtns(s)}${s.state==='myturn'?`<button class="btn ghost" type="button" data-seen="${s.sid}">확인함 · 쉼으로</button>`:''}${s.task?`<button class="btn ghost" type="button" data-open="${s.task}">업무 보기</button>`:''}</div>
+  ${replyForm(s)}
+  ${s.prompt?`<div class="box"><span class="px">LAST ORDER</span><pre>${esc(s.prompt)}</pre></div>`:''}
+  ${s.msg?`<div class="box"><span class="px">LAST REPLY</span><pre>${esc(s.msg)}</pre></div>`:''}
+  <span class="px">EVENTS</span><div class="feed" style="padding:0"><ol>${S.feed.filter(e=>e.sid===s.sid).map(e=>feedRow(e,false)).join('')||'<li><span></span><span></span><span class="empty">서버가 켜진 뒤 바뀐 상태가 없습니다.</span></li>'}</ol></div>`}
+function drawerTask(t){const st=taskStatus(t),ss=sessOf(t);
+ return `<div class="dh"><div><span class="tag">TASK</span><h2>${esc(t.name)}</h2><div class="meta">마지막 진행 ${since(lastOf(t),' 전')}</div></div><button class="btn" type="button" data-close>닫기</button></div>
+  <div class="row"><span class="pill" style="margin-left:0;--c:${COLOR[st]}">${LABEL[st]}</span>${stale(t)?`<span class="chip stale">정체 ${since(lastOf(t))}</span>`:''}</div>
+  <form class="fields" id="taskform" data-tid="${t.id}">
+   <label>업무 이름<input id="tf-name" value="${esc(t.name)}" maxlength="120" autocomplete="off"></label>
+   <label>관련 사람·메모<input id="tf-memo" value="${esc(t.memo)}" maxlength="500" autocomplete="off"></label>
+   <label>다음 할 일<textarea id="tf-next" maxlength="500">${esc(t.next)}</textarea></label>
+   <div class="row"><button class="btn primary" type="submit">저장</button>
+    <button class="btn danger" type="button" data-del="${t.id}" style="margin-left:auto">${confirmDel===t.id?'한 번 더 누르면 삭제':'업무 삭제'}</button></div>
+  </form>
+  <span class="px">SESSIONS · ${ss.length}</span>
+  ${ss.map(s=>`<div class="sess-row" data-sess="${s.sid}" tabindex="0" role="button" style="--c:${COLOR[s.state]}">${desk(s)}<div style="min-width:0"><b>${esc(s.title)}</b><div class="dst"><b>${LABEL[s.state]}</b> ${since(s.since,'째')}</div>${s.msg?`<p class="msg" style="-webkit-line-clamp:2">${esc(s.msg)}</p>`:''}</div></div>`).join('')||'<div class="empty">배치된 세션이 없습니다. 미배치 칸에서 끌어다 놓으세요.</div>'}
+  <span class="px">PEOPLE</span>
+  ${t.waits.map(w=>waitRow(t,w,false)).join('')||'<div class="empty">이 업무에서 기다리는 사람은 없습니다.</div>'}
+  <form class="addw" id="addwait" data-tid="${t.id}"><input id="w-who" placeholder="누구 (예: 박과장)" autocomplete="off" maxlength="60"><input id="w-what" placeholder="무엇을 기다리나 (예: 테스트 결과 회신)" autocomplete="off" maxlength="300"><button class="btn" type="submit">대기 추가</button></form>
+  <span class="px">EVENTS</span><div class="feed" style="padding:0"><ol>${S.feed.filter(e=>e.task===t.id).map(e=>feedRow(e,false)).join('')||'<li><span></span><span></span><span class="empty">서버가 켜진 뒤 바뀐 상태가 없습니다.</span></li>'}</ol></div>`}
+function drawer(){
+ const d=$('drawer');
+ if(openSess&&!sessById(openSess))openSess=null;
+ if(openTask&&!taskOf(openTask))openTask=null;
+ if(!openTask&&!openSess){d.hidden=true;$('scrim').hidden=$('brief').hidden;return}
+ d.innerHTML=openSess?drawerSess(sessById(openSess)):drawerTask(taskOf(openTask));
+ d.hidden=false;$('scrim').hidden=false}
+
+function typing(){const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)}
+function render(force){
+ if(dragging||(!force&&typing())){pending=true;return}pending=false;
+ counters();
+ document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
+ $('tasks').innerHTML=mode==='task'?S.tasks.map(card).join('')+unassignedCard():allView();
+ queue();feed();if(openTask||openSess)drawer();tick()}
+function tick(){const n=Date.now();
+ document.querySelectorAll('[data-since]').forEach(el=>{el.textContent=fmt(n-+el.dataset.since)+(el.dataset.suf||'')});
+ $('clock').textContent=new Date(n).toLocaleTimeString('ko-KR',{hour12:false})}
+function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,3500)}
+function closeAll(){openTask=openSess=null;confirmDel=null;$('brief').hidden=true;drawer()}
+
+/* 이벤트 */
+document.addEventListener('click',async e=>{
+ if(e.target.closest('select,input,textarea'))return;
+ if(e.target.closest('[data-closebrief]')){$('brief').hidden=true;$('scrim').hidden=!(openTask||openSess);return}
+ const b=e.target.closest('button,[data-sess]');if(!b)return;const ds=b.dataset;
+ if(ds.mode){mode=ds.mode;try{localStorage.setItem('hq-mode',mode)}catch(_){}render(true);return}
+ if(ds.open){openTask=ds.open;openSess=null;confirmDel=null;drawer();tick();return}
+ if(ds.sess){openSess=ds.sess;openTask=null;drawer();tick();return}
+ if('close' in ds){closeAll();return}
+ if(ds.seen){api('seen',{sid:ds.seen});return}
+ if(ds.term){if(await api('term/switch',{pid:+ds.term}))toast('Orca에서 그 터미널로 옮겼습니다.');return}
+ if(ds.wdone){const [task,id]=ds.wdone.split('|');api('wait/done',{task,id});return}
+ if(ds.del){if(confirmDel!==ds.del){confirmDel=ds.del;drawer();return}confirmDel=null;openTask=null;if(await api('task/delete',{id:ds.del}))toast('업무를 삭제했습니다. 배치됐던 세션은 미배치로 돌아갑니다.');return}
+ if(b.id==='brief-btn'){brief();return}
+ if(b.id==='add-btn'){$('addtask').hidden=false;$('t-name').focus();return}
+ if(b.id==='add-cancel'){$('addtask').hidden=true;return}
+});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'){closeAll();return}
+ const d=e.target.closest?.('[data-sess]');if(d&&e.target===d&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openSess=d.dataset.sess;openTask=null;drawer();tick()}});
+document.addEventListener('input',e=>{if(e.target.dataset.draft)drafts.set(e.target.dataset.draft,e.target.value)});
+document.addEventListener('change',e=>{const sel=e.target.closest('[data-assign]');if(!sel)return;const sid=sel.dataset.assign,task=sel.value;sel.blur();
+ api('assign',{sid,task}).then(ok=>ok&&toast(task?`"${tname(task)}"에 배치했습니다.`:'미배치로 돌렸습니다.'))});
+document.addEventListener('focusout',()=>{if(pending)setTimeout(()=>{if(!typing())render()})});
+document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target;
+ if(f.dataset.reply){const input=f.querySelector('input'),text=input.value.trim();if(!text)return;
+  if(await api('term/send',{pid:+f.dataset.reply,text})){drafts.delete(f.dataset.rsid);input.value='';input.blur();toast('보냈습니다.')}return}
+ if(f.id==='addtask'){const name=$('t-name').value.trim();if(!name){toast('업무 이름을 적어 주세요.');return}
+  if(await api('task/add',{name,memo:$('t-memo').value})){$('t-name').value='';$('t-memo').value='';$('addtask').hidden=true;mode='task';render(true);toast(`"${name}" 업무를 만들었습니다. 미배치 세션을 끌어다 놓으세요.`)}return}
+ if(f.id==='taskform'){if(await api('task/update',{id:f.dataset.tid,name:$('tf-name').value,memo:$('tf-memo').value,next:$('tf-next').value}))toast('저장했습니다.');return}
+ if(f.id==='addwait'){const who=$('w-who').value.trim(),what=$('w-what').value.trim();if(!who||!what){toast('누구와 무엇을 둘 다 적어 주세요.');return}
+  api('wait/add',{task:f.dataset.tid,who,what})}});
+$('scrim').addEventListener('click',closeAll);
+
+/* 끌어다 놓기: 책상을 업무 카드나 미배치 칸에 놓는다 */
+document.addEventListener('dragstart',e=>{const d=e.target.closest?.('[data-sid]');if(!d)return;dragging=d.dataset.sid;e.dataTransfer.setData('text/plain',dragging);e.dataTransfer.effectAllowed='move';d.classList.add('dragging')});
+document.addEventListener('dragover',e=>{const z=e.target.closest?.('[data-drop]');if(!z||!dragging)return;e.preventDefault();
+ document.querySelectorAll('.over').forEach(x=>x!==z&&x.classList.remove('over'));z.classList.add('over')});
+document.addEventListener('drop',e=>{const z=e.target.closest?.('[data-drop]');if(!z||!dragging)return;e.preventDefault();const sid=dragging,task=z.dataset.drop;dragging=null;
+ if(sessById(sid)?.task===task){render(true);return}
+ api('assign',{sid,task}).then(ok=>ok&&toast(task?`"${tname(task)}"에 배치했습니다.`:'미배치로 돌렸습니다.'))});
+document.addEventListener('dragend',()=>{dragging=null;document.querySelectorAll('.over,.dragging').forEach(x=>x.classList.remove('over','dragging'));if(pending)render()});
+
+function brief(){const n=Date.now(),ss=S.sessions;
+ const appr=ss.filter(s=>s.state==='approval').sort(bySt),mine=ss.filter(s=>s.state==='myturn').sort(bySt);
+ const over=S.tasks.flatMap(t=>t.waits.filter(overdue).map(w=>({t,w})));
+ const st=S.tasks.filter(stale),working=ss.filter(s=>s.state==='working'),un=ss.filter(s=>!s.task);
+ const todo=[...appr.map(s=>`<b>승인</b> ${esc(s.title)} <span class="meta">(${esc(tname(s.task))}, ${fmt(n-s.since)}째)</span>`),
+  ...mine.map(s=>`<b>답하기</b> ${esc(s.title)} <span class="meta">(${esc(tname(s.task))}, ${fmt(n-s.since)}째)</span>`),
+  ...over.map(x=>`<b>재촉</b> ${esc(x.w.who)}에게 "${esc(x.w.what)}" <span class="meta">(${esc(x.t.name)}, ${fmt(n-x.w.since)}째)</span>`),
+  ...st.map(t=>`<b>정체 점검</b> ${esc(t.name)} <span class="meta">(${fmt(n-lastOf(t))}째 진행 없음)</span>`)];
+ const oldIdle=un.filter(s=>s.state==='idle'&&n-s.since>D);
+ $('brief').innerHTML=`<h2>지금 상황 브리핑 <button class="btn" type="button" data-closebrief>닫기</button></h2><div class="brief">
+  <p>열린 Claude 세션 ${ss.length}개 중 <b style="color:var(--working)">${working.length}개가 일하는 중</b>이고, <b style="color:var(--myturn)">${appr.length+mine.length}개가 나를 기다립니다.</b> 사람 쪽으로는 ${over.length}건이 4시간 넘게 답이 없습니다.</p>
+  ${todo.length?`<div class="k">이 순서로 처리하면 됩니다</div><ol>${todo.map(x=>`<li>${x}</li>`).join('')}</ol>`:'<p>지금 내가 처리할 일은 없습니다.</p>'}
+  ${working.length?`<div class="k">맡겨 둔 일 (손댈 필요 없음)</div><ol>${working.map(s=>`<li>${esc(s.title)} — <span class="act" style="display:inline">${esc(s.act)}</span></li>`).join('')}</ol>`:''}
+  ${un.length?`<div class="k">정리할 것</div><ol><li>미배치 세션 ${un.length}개 중 ${un.filter(waiting).length}개가 나를 기다립니다. 업무에 배치하면 업무 카드에서 함께 보입니다.</li>${oldIdle.length?`<li>하루 넘게 쉬는 미배치 세션 ${oldIdle.length}개: ${oldIdle.map(s=>esc(s.title)).join(', ')}. 닫아도 되는지 보세요.</li>`:''}</ol>`:''}
+ </div>`;
+ $('brief').hidden=false;$('scrim').hidden=false}
+
+setInterval(poll,2000);setInterval(tick,1000);poll();
+</script>
+</body>
+</html>
