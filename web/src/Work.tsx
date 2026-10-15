@@ -8,6 +8,7 @@ import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
 import { ChatView } from './Chat'
+import { BtwPanel } from './Btw'
 
 function Item({ s, on }: { s: Session; on: boolean }) {
   return <UnstyledButton onClick={() => pick(s.sid)} p="7px 8px" w="100%"
@@ -23,7 +24,7 @@ function Item({ s, on }: { s: Session; on: boolean }) {
   </UnstyledButton>
 }
 
-function Head({ S, s }: { S: Snapshot; s: Session }) {
+function Head({ S, s, btw, onBtw }: { S: Snapshot; s: Session; btw: boolean; onBtw: () => void }) {
   const [confirm, setConfirm] = useState(false)
   return <Paper withBorder p="10px 12px">
     <Group gap="sm" wrap="wrap">
@@ -35,6 +36,7 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
         {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함</Button>}
+        <Button size="xs" variant={btw ? 'light' : 'subtle'} color={btw ? 'indigo' : 'gray'} onClick={onBtw}>곁가지 질문{(S.btw?.[s.sid] || []).some(x => x.state === 'asking') ? ' …' : ''}</Button>
         <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
         {s.host === 'web' && <Button size="xs" variant="outline" color="red" onBlur={() => setConfirm(false)} onClick={async () => {
           if (!confirm) { setConfirm(true); return }
@@ -53,6 +55,8 @@ export function WorkView({ S }: { S: Snapshot }) {
   const s = S.sessions.find(x => x.sid === ui.sel)
   // 기본은 웹 대화 화면. 웹 세션은 터미널 화면으로도 볼 수 있다(Claude Code의 화면이 그대로 필요할 때)
   const [view, setView] = useState(() => { try { return localStorage.getItem('hq-view') || 'chat' } catch { return 'chat' } })
+  const [btw, setBtw] = useState(() => { try { return localStorage.getItem('hq-btw') === '1' } catch { return false } })
+  const toggleBtw = () => setBtw(v => { try { localStorage.setItem('hq-btw', v ? '0' : '1') } catch { /* 무시 */ } return !v })
   return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(0, 1fr)', gap: 12, height: 'calc(100vh - 250px)', minHeight: 460 }}>
     <Paper withBorder p={6} style={{ minHeight: 0, display: 'flex' }}>
       <ScrollArea style={{ flex: 1 }}>
@@ -74,10 +78,15 @@ export function WorkView({ S }: { S: Snapshot }) {
           {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
         </Stack>
       </Paper> : <>
-        <Head S={S} s={s} />
+        <Head S={S} s={s} btw={btw} onBtw={toggleBtw} />
         {s.host === 'web' && <SegmentedControl size="xs" value={view} onChange={v => { setView(v); try { localStorage.setItem('hq-view', v) } catch { /* 무시 */ } }}
           data={[{ label: '대화', value: 'chat' }, { label: '터미널', value: 'term' }]} style={{ alignSelf: 'flex-start' }} />}
-        {s.host === 'web' && view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.sid} s={s} />}
+        <Box style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: btw ? 'minmax(0, 1fr) 340px' : 'minmax(0, 1fr)', gap: 8 }}>
+          <Box style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            {s.host === 'web' && view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.sid} s={s} />}
+          </Box>
+          {btw && <BtwPanel S={S} s={s} onClose={toggleBtw} />}
+        </Box>
       </>}
     </Stack>
   </Box>

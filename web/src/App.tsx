@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { Alert, Box, Button, Center, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { Alert, Box, Button, Center, Code, CopyButton, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
 import { serverNow, useNow, useOffline, useSnapshot } from './store'
 import { type Mode, pickNew, rememberSel, setMode, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
@@ -19,6 +20,23 @@ function Clock() {
   return <Text ff="monospace" size="sm" c="dimmed">server time {new Date(serverNow()).toLocaleTimeString('en-GB', { hour12: false })}</Text>
 }
 
+// 사내망에서 들어올 주소. 맥의 네트워크(와이파이·유선)가 바뀌면 서버가 다음 갱신(2초) 때 새 주소를 주고, 바뀌었다고 알린다
+function LanAddress({ S }: { S: Snapshot }) {
+  const a = S.access, primary = a.addresses[0] || ''
+  const prev = useRef(primary)
+  useEffect(() => {
+    if (a.lan && prev.current && primary && prev.current !== primary)
+      notifications.show({ title: '맥의 주소가 바뀌었습니다', message: `사내망에서는 이제 ${primary} 로 들어옵니다`, color: 'orange', autoClose: 15000 })
+    prev.current = primary
+  }, [primary, a.lan])
+  if (!a.lan) return <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ access: true })}>사내망 접속 꺼짐</Button>
+  return <Group gap={6} wrap="nowrap">
+    <Text size="xs" c="dimmed">사내망 주소</Text>
+    <Code fz="sm">{primary || '네트워크 없음'}</Code>
+    {primary && <CopyButton value={primary}>{({ copied, copy }) => <Button size="compact-xs" variant="subtle" onClick={copy}>{copied ? '복사됨' : '복사'}</Button>}</CopyButton>}
+  </Group>
+}
+
 function Header({ S }: { S: Snapshot }) {
   const un = S.sessions.filter(s => !s.task).length, waits = S.tasks.flatMap(t => t.waits).length
   const mine = S.sessions.filter(s => s.state === 'myturn' || s.state === 'approval').length
@@ -32,6 +50,7 @@ function Header({ S }: { S: Snapshot }) {
       </div>
     </Group>
     <Group gap="xs">
+      <LanAddress S={S} />
       <Clock />
       <Button variant="default" onClick={() => setUI({ access: true })}>접속</Button>
       <Button onClick={() => setUI({ brief: true })}>지금 상황 브리핑</Button>

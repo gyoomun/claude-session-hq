@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const pty = require('node-pty');
 
 const HOME = os.homedir();
@@ -34,8 +34,10 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, btw: {}, claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
+// 서버가 꺼지면서 끊긴 곁가지 질문은 실패로 표시한다
+for (const list of Object.values(db.btw || {})) for (const it of list) if (it.state === 'asking') { it.state = 'error'; it.a = '서버가 다시 시작돼 답을 받지 못했습니다.'; }
 function save() {
   fs.mkdirSync(BOARD_DIR, { recursive: true });
   fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db, null, 1));
@@ -245,7 +247,7 @@ let firstScan = true;
 function pushFeed(e) { feed.unshift(e); if (feed.length > 300) feed.length = 300; }
 function scan() {
   const now = Date.now();
-  const live = liveSessions();
+  const live = liveSessions().filter(s => !btwPids.has(s.pid));
   loadHandles(live.map(s => s.pid));
   loadOrcaTitles(now);
   loadWorktrees(now);
@@ -305,7 +307,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout };
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, btw: db.btw };
 }
 
 /* 대화 화면: 대화 기록(jsonl)을 웹에서 그릴 수 있는 메시지로 바꾼다. 처음엔 끝부분만, 이후엔 늘어난 만큼만 읽는다 */
@@ -381,6 +383,38 @@ function upload(req, res) {
   });
 }
 const isUpload = f => typeof f === 'string' && path.resolve(f).startsWith(UPLOAD_DIR + path.sep) && fs.existsSync(f);
+
+/* 곁가지 질문(btw): 세션의 대화를 복사(--fork-session)해 질문 하나에만 답하게 한다.
+   원래 대화에는 아무것도 남지 않고, 기본 권한 모드라 파일을 고치지 못한다. 답을 받으면 복사본 기록은 지운다 */
+let btwRunning = 0;
+// 곁가지 질문용으로 띄운 claude(복사본)의 pid. 세션 목록에 다른 세션처럼 나타나지 않게 뺀다(exec라 셸 pid = claude pid)
+const btwPids = new Set();
+function lastResult(out) {
+  // 로그인 셸이 앞뒤로 찍는 잡음 사이에서 type=result인 JSON 객체를 찾는다
+  for (let i = out.lastIndexOf('{'); i >= 0; i = out.lastIndexOf('{', i - 1)) {
+    try { const o = JSON.parse(out.slice(i).trim()); if (o && o.type === 'result') return o; } catch {}
+  }
+  return null;
+}
+function askBtw(sid, cwd, item) {
+  const prompt = '(곁가지 질문입니다. 하던 작업은 이어 하지 말고, 파일도 고치지 말고, 아래 질문에만 짧게 답하세요.)\n\n' + item.q;
+  const args = ['-p', '--resume', sid, '--fork-session', '--output-format', 'json', '--permission-mode', 'default', prompt];
+  const p = spawn(SHELL, ['-lic', 'exec claude ' + args.map(q).join(' ')], { cwd, env: TERM_ENV });
+  btwRunning++;
+  btwPids.add(p.pid);
+  let out = '';
+  p.stdout.on('data', d => { out += d; });
+  const timer = setTimeout(() => p.kill(), 10 * 60e3);
+  p.on('close', () => {
+    btwRunning--; clearTimeout(timer); btwPids.delete(p.pid);
+    const r = lastResult(out);
+    item.state = r && !r.is_error ? 'done' : 'error';
+    item.a = r ? String(r.result || '').slice(0, 20000) : '답을 받지 못했습니다(시간 초과 또는 실행 오류).';
+    item.doneAt = Date.now();
+    if (r && r.session_id) try { const f = findTranscript({ cwd, sessionId: r.session_id }); if (f) fs.unlinkSync(f); } catch {}
+    save(); scan();
+  });
+}
 
 /* 화면에서 오는 요청 */
 const task = id => db.tasks.find(t => t.id === id);
@@ -473,6 +507,18 @@ const routes = {
     focusReq = { name, at: Date.now() };
     return name;
   },
+  'btw/ask': b => {
+    const question = str(b.question, 4000);
+    if (!question) throw new Error('질문을 적어 주세요');
+    if (btwRunning >= 3) throw new Error('곁가지 질문은 동시에 3개까지 됩니다. 앞의 답을 기다려 주세요');
+    const live = liveSessions().find(x => x.sessionId === b.sid);
+    if (!live) throw new Error('열려 있는 세션에만 물을 수 있습니다');
+    const list = db.btw[b.sid] = (db.btw[b.sid] || []).slice(-19);
+    const item = { id: crypto.randomBytes(4).toString('hex'), q: question, a: '', state: 'asking', at: Date.now() };
+    list.push(item);
+    askBtw(b.sid, live.cwd, item);
+  },
+  'btw/clear': b => { delete db.btw[b.sid]; },
   'session/close': async b => {
     const w = db.web.find(x => x.name === b.name);
     if (!w) throw new Error('웹에서 연 세션만 여기서 닫을 수 있습니다');

@@ -152,9 +152,17 @@ module.exports = function createAuth({ db, save, mailFile, ipNamesFile, port }) 
     res.setHeader('Set-Cookie', `hq_login=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${LOGIN_IDLE_TTL / 1000}`);
   }
 
+  // 맥의 주소: 기본 경로(인터넷으로 나가는 네트워크)의 주소를 맨 앞에 둔다. 와이파이·유선이 바뀌면 다음 요청부터 바로 바뀐다
+  let routeIf = '', routeAt = 0;
   function addresses() {
-    return Object.values(os.networkInterfaces()).flat()
-      .filter(a => a && a.family === 'IPv4' && !a.internal).map(a => `http://${a.address}:${port}`);
+    if (Date.now() - routeAt > 10e3) {
+      routeAt = Date.now();
+      try { routeIf = (require('child_process').execFileSync('/sbin/route', ['-n', 'get', 'default'], { timeout: 2000 }).toString().match(/interface:\s*(\S+)/) || [])[1] || ''; } catch { routeIf = ''; }
+    }
+    const list = Object.entries(os.networkInterfaces()).flatMap(([name, xs]) => (xs || [])
+      .filter(a => a.family === 'IPv4' && !a.internal).map(a => ({ name, url: `http://${a.address}:${port}` })));
+    list.sort((a, b) => (b.name === routeIf) - (a.name === routeIf));
+    return list.map(a => a.url);
   }
   // 화면에 보여 줄 접속 상태
   function status(who) {

@@ -47,4 +47,7 @@ export interface Snapshot {
   focus: { name: string; at: number } | null
   access: Access
   layout: Record<string, { x: number; y: number }> // 가상 사무실의 책상 위치(방 안 0~1 비율)
+  btw: Record<string, BtwItem[]> // 세션별 곁가지 질문
 }
+
+export interface BtwItem { id: string; q: string; a: string; state: 'asking' | 'done' | 'error'; at: number; doneAt?: number }
