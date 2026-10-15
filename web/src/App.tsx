@@ -74,6 +74,18 @@ function Notices({ S }: { S: Snapshot }) {
   </>
 }
 
+// 웹 세션을 모두 끄고 같은 대화로 다시 띄운다(전역 CLAUDE.md·.zshrc를 바꾼 뒤). 일하는 중이어도 끊으므로 두 번 눌러야 한다
+function RestartAll({ S }: { S: Snapshot }) {
+  const [confirm, setConfirm] = useState(false)
+  const n = S.sessions.filter(s => s.host === 'web').length
+  return <Button variant="default" color={confirm ? 'red' : undefined} disabled={!n} onBlur={() => setConfirm(false)} onClick={async () => {
+    if (!confirm) { setConfirm(true); return }
+    setConfirm(false)
+    const r = await api<number>('session/restart')
+    if (r) toast(`웹 세션 ${r.result}개를 다시 띄웁니다. 대화는 그대로 이어집니다.`)
+  }}>{confirm ? `한 번 더 누르면 ${n}개 재시작` : '모두 재시작'}</Button>
+}
+
 function Header({ S }: { S: Snapshot }) {
   const un = S.sessions.filter(s => !s.task).length, waits = S.tasks.flatMap(t => t.waits).length
   const mine = S.sessions.filter(s => s.state === 'myturn' || s.state === 'approval').length
@@ -89,6 +101,7 @@ function Header({ S }: { S: Snapshot }) {
     <Group gap="xs">
       <LanAddress S={S} />
       <Clock />
+      <RestartAll S={S} />
       <Button variant="default" onClick={() => setUI({ access: true })}>접속</Button>
       <Button onClick={() => setUI({ brief: true })}>지금 상황 브리핑</Button>
     </Group>

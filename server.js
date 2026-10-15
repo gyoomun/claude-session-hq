@@ -322,7 +322,7 @@ function scan() {
     const was = snapshot.sessions.find(x => x.sid === sid);
     pushFeed({ at: now, sid, title: was?.title || sid, task: db.assign[sid] || '', from: st, to: 'closed' });
     // 최근 닫힌 세션: Orca가 꺼지는 등으로 한꺼번에 사라져도 웹에서 같은 명령으로 다시 열 수 있게 남긴다
-    if (was) {
+    if (was && !restarting.has(sid)) {
       db.closed = [{ sid, title: was.title, dir: was.dir, cwd: was.cwd, args: argsByPid.get(was.pid) || [], host: was.host, state: was.state, closedAt: now },
         ...db.closed.filter(c => c.sid !== sid)].slice(0, 60);
       dirty = true;
@@ -449,6 +449,7 @@ function askBtw(sid, cwd, item) {
 }
 
 let migrating = false;
+const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '최근 닫힌 세션'에 넣지 않는다
 async function migrateOne(pid) {
   // Orca 세션을 웹으로: Orca 쪽 claude를 /exit로 끝내고, 원래 옵션 그대로 --resume으로 이어 띄운다
   const s = snapshot.sessions.find(x => x.pid === pid);
@@ -590,6 +591,28 @@ const routes = {
     askBtw(b.sid, live.cwd, item);
   },
   'btw/clear': b => { delete db.btw[b.sid]; },
+  // 웹 세션 다시 띄우기(전역 CLAUDE.md·.zshrc를 바꾼 뒤 등): 일하는 중이어도 바로 끄고, 같은 tmux 이름·옵션으로 --resume 해서 이어 띄운다.
+  // 응답부터 보내고 뒤에서 한다. 이 요청을 보낸 세션(웹 안의 Claude)도 같이 다시 뜬다
+  'session/restart': b => {
+    const list = db.web.filter(w => !Array.isArray(b.names) || b.names.includes(w.name))
+      .map(w => ({ w, s: snapshot.sessions.find(x => x.tmux === w.name) })).filter(x => x.s);
+    if (!list.length) throw new Error('다시 띄울 웹 세션이 없습니다');
+    (async () => {
+      for (const { w, s } of list) {
+        restarting.add(s.sid);
+        w.sid = s.sid; w.createdAt = Date.now(); // 끈 사이에 목록에서 빠지지 않게
+        if (s.state !== 'myturn' && s.state !== 'approval') db.seen[s.sid] = Date.now() + 30e3;
+        try {
+          await tmux(['kill-session', '-t', w.name]).catch(() => {});
+          for (let i = 0; i < 20 && alive(s.pid); i++) await sleep(250);
+          await startTmux(w.name, w.cwd, [...w.args, '--resume', s.sid]);
+        } catch (e) { console.error('다시 띄우기 실패:', w.name, e.message); }
+      }
+      save();
+      setTimeout(() => list.forEach(({ s }) => restarting.delete(s.sid)), 30e3);
+    })();
+    return list.length;
+  },
   'session/close': async b => {
     const w = db.web.find(x => x.name === b.name);
     if (!w) throw new Error('웹에서 연 세션만 여기서 닫을 수 있습니다');
