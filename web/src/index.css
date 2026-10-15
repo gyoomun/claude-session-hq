@@ -81,7 +81,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-md table { border-collapse: collapse; display: block; overflow-x: auto; font-size: 13px; }
 .hq-md th, .hq-md td { border: 1px solid var(--mantine-color-default-border); padding: 4px 8px; text-align: left; }
 .hq-md blockquote { margin: .4em 0; padding-left: 10px; border-left: 3px solid var(--mantine-color-default-border); color: var(--mantine-color-dimmed); }
-.hq-md a { color: var(--mantine-color-indigo-4); }
+.hq-md a, .hq-link { color: var(--mantine-color-indigo-4); }
 .hq-tool { font-size: 12.5px; border-left: 2px solid var(--mantine-color-teal-8); padding-left: 8px; }
 .hq-tool.err { border-left-color: var(--mantine-color-red-7); }
 .hq-tool summary { cursor: pointer; color: var(--mantine-color-dimmed); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; list-style: none; }

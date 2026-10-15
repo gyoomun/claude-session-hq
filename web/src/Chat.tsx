@@ -10,7 +10,11 @@ import type { Session } from './types'
 
 interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'result'; text: string; name?: string; toolId?: string; error?: boolean }
 
-const Md = ({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown></div>
+// 링크는 새 탭에서 연다(이 화면을 떠나지 않게)
+const NewTab = (p: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...p} target="_blank" rel="noopener noreferrer" />
+const Md = ({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab }}>{text}</ReactMarkdown></div>
+// 내 말풍선은 마크다운이 아니라 그대로 보이되, 주소만 링크로
+const Linkify = ({ text }: { text: string }) => <>{text.split(/(https?:\/\/[^\s<>"')\]]*[^\s<>"')\].,])/).map((x, i) => i % 2 ? <NewTab key={i} href={x} className="hq-link">{x}</NewTab> : x)}</>
 
 function Tool({ it, result }: { it: Item; result?: Item }) {
   return <details className={'hq-tool' + (result?.error ? ' err' : '')}>
@@ -152,7 +156,7 @@ export function ChatView({ s }: { s: Session }) {
         <Stack gap={10} p="md" maw={980} mx="auto">
           {missing && <Text c="dimmed">이 세션의 대화 기록을 찾지 못했습니다.</Text>}
           {!missing && !items.length && <Group gap={8}><Loader size="xs" /><Text c="dimmed" size="sm">대화를 불러오는 중입니다…</Text></Group>}
-          {items.map(it => it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{it.text}</Text></Box>
+          {items.map(it => it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><Linkify text={it.text} /></Text></Box>
             : it.t === 'assistant' ? <Box key={it.id} className="hq-say"><Md text={it.text} /></Box>
             : it.t === 'tool' ? <Tool key={it.id} it={it} result={results.get(it.toolId)} />
             : null)}
