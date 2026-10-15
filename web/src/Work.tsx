@@ -8,15 +8,16 @@ import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
 import { ChatView } from './Chat'
-import { BtwPanel } from './Btw'
+import { SidePanel, hasMemo } from './Memo'
+import { IconPinFilled } from '@tabler/icons-react'
 
-function Item({ s, on }: { s: Session; on: boolean }) {
+function Item({ s, on, memo }: { s: Session; on: boolean; memo: boolean }) {
   return <UnstyledButton onClick={() => pick(s.sid)} p="7px 8px" w="100%"
     style={{ borderRadius: 8, background: on ? 'var(--mantine-color-indigo-light)' : undefined, boxShadow: on ? 'inset 0 0 0 1px var(--mantine-color-indigo-5)' : undefined }}>
     <Group gap={8} wrap="nowrap" align="flex-start">
       <Box w={8} h={8} mt={6} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} />
       <Stack gap={0} style={{ minWidth: 0 }}>
-        <Text size="sm" fw={600} className="hq-wrap" lh={1.35}>{s.title}</Text>
+        <Text size="sm" fw={600} className="hq-wrap" lh={1.35}>{s.title}{memo && <IconPinFilled size={12} style={{ marginLeft: 4, verticalAlign: -1, color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}</Text>
         <Text size="xs" c="dimmed"><Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
           {s.host !== 'web' && <Badge size="xs" variant="outline" color="gray" ml={6}>{s.host === 'orca' ? 'Orca' : '외부'}</Badge>}</Text>
       </Stack>
@@ -36,7 +37,7 @@ function Head({ S, s, btw, onBtw }: { S: Snapshot; s: Session; btw: boolean; onB
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
         {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함</Button>}
-        <Button size="xs" variant={btw ? 'light' : 'subtle'} color={btw ? 'indigo' : 'gray'} onClick={onBtw}>곁가지 질문{(S.btw?.[s.sid] || []).some(x => x.state === 'asking') ? ' …' : ''}</Button>
+        <Button size="xs" variant={btw ? 'light' : 'subtle'} color={btw ? 'indigo' : 'gray'} onClick={onBtw}>핀·메모·질문{(S.btw?.[s.sid] || []).some(x => x.state === 'asking') ? ' …' : ''}</Button>
         <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
         {s.host === 'web' && <Button size="xs" variant="outline" color="red" onBlur={() => setConfirm(false)} onClick={async () => {
           if (!confirm) { setConfirm(true); return }
@@ -91,7 +92,7 @@ export function WorkView({ S }: { S: Snapshot }) {
             <UnstyledButton px={8} onClick={g.id ? () => setUI({ openTask: g.id }) : undefined} style={{ cursor: g.id ? 'pointer' : 'default' }}>
               <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{g.name}</Text><Text size="xs" c="dimmed">{g.ss.length}</Text></Group>
             </UnstyledButton>
-            {g.ss.map(x => <Item key={x.pid} s={x} on={x.sid === ui.sel} />)}
+            {g.ss.map(x => <Item key={x.pid} s={x} on={x.sid === ui.sel} memo={hasMemo(S, x.sid)} />)}
             {!g.ss.length && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
           </Stack>)}
           <ClosedList S={S} />
@@ -112,11 +113,11 @@ export function WorkView({ S }: { S: Snapshot }) {
           {(s.host !== 'web' || view === 'chat') && <Switch size="xs" label="작업 과정 자세히" checked={detail}
             onChange={e => { const v = e.currentTarget.checked; setDetail(v); try { localStorage.setItem('hq-detail', v ? '1' : '0') } catch { /* 무시 */ } }} />}
         </Group>
-        <Box style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: btw ? 'minmax(0, 1fr) 340px' : 'minmax(0, 1fr)', gap: 8 }}>
+        <Box style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: btw ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)', gap: 8 }}>
           <Box style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             {s.host === 'web' && view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={detail} />}
           </Box>
-          {btw && <BtwPanel S={S} s={s} onClose={toggleBtw} />}
+          {btw && <SidePanel S={S} s={s} onClose={toggleBtw} />}
         </Box>
       </>}
     </Stack>

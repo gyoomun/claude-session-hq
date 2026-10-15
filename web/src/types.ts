@@ -17,7 +17,11 @@ export interface Session {
   task: string
   host: 'web' | 'orca' | ''
   tmux: string
+  pin: PinItem[] // Claude 핀보드(대화 기록의 마지막 상태)
 }
+
+export interface PinItem { id: string; mark: ' ' | '>' | 'x' | '?'; text: string }
+export interface Memo { id: string; text: string; by: 'me' | 'claude'; done: boolean; at: number }
 
 export interface Wait { id: string; who: string; what: string; since: number }
 
@@ -48,6 +52,7 @@ export interface Snapshot {
   access: Access
   layout: Record<string, { x: number; y: number }> // 가상 사무실의 책상 위치(방 안 0~1 비율)
   btw: Record<string, BtwItem[]> // 세션별 곁가지 질문
+  memos: Record<string, { title: string; items: Memo[] }> // 세션(대화 ID)별 메모
   closed: Closed[] // 최근 닫힌 세션(웹에서 다시 열 수 있음)
   migrating: boolean // Orca 세션을 웹으로 옮기는 중
   build: number // 서버가 내주는 화면의 빌드 시각

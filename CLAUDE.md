@@ -23,6 +23,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - `public/login.html`: 다른 PC가 처음 들어올 때 보는 로그인 화면
 - `skills/hq-open`: 웹 안의 Claude가 지난 대화를 기록에서 찾아 `/api/session/resume`으로 다시 여는 스킬. install.js가 `~/.claude/skills`에 링크한다
 - `skills/hq-restart`: "웹 재시작"이라고 하면 Claude가 `/api/session/restart`를 불러 웹 세션을 모두 다시 띄운다(Orca의 "오르카 재시작" 대신). 화면 상단 "모두 재시작" 버튼도 같은 API다. 일하는 중이어도 바로 끄는 것은 사용자가 정한 것이다
+- `skills/hq-memo`: 사용자가 시킬 때만 Claude가 세션 메모를 적고 읽고 고친다(`/api/memo/*`, `by: claude`)
 - `skills/hq-task`: 세션 안의 Claude가 자기 대화 ID(`~/.claude/sessions/$CLAUDE_PID.json`)로 `/api/assign`·`/api/task/*`를 불러 업무를 만들고·바꾸고·지우고, 자기나 다른 세션을 업무에 넣고 뺀다. 업무를 지우면 그 안의 세션은 미배치로 간다
 - `scripts/install.js`: settings.json 훅 등록 + 스킬 링크 + launchd plist
 
@@ -34,6 +35,10 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 최근 닫힌 세션(`db.closed`, 7일·60개): 세션이 사라지면 대화 ID·폴더·원래 옵션(ps로 미리 읽어 둔 `argsByPid`)·상태를 남긴다. 화면에서 '다시 열기'/'모두 웹에서 다시 열기'(`session/reopen`)로 같은 옵션의 `--resume`으로 웹에 띄운다. 30분 안에 2개 이상 닫히면 위에 경고를 띄운다. 다시 열린 대화는 닫히기 전 상태를 따른다(재시작만으로 '내 차례'가 되지 않게)
 - 복구: 서버가 켜질 때 `db.web`에 있는데 tmux에 없는 세션을 `claude <args> --resume <sid>`로 다시 띄운다. 단, 그 대화가 이미 다른 곳(Orca 등)에서 열려 있으면 띄우지 않는다(실제로 같은 대화가 둘로 돈 적이 있다). 스스로 끝난 세션은 scan이 `db.web`에서 빼서 다시 띄우지 않는다
 - 상태 판정(`stateOf`): 승인 요청 훅 → 승인 필요, AskUserQuestion → 내 차례, busy → 작업중, idle이면서 `statusUpdatedAt > seen` → 내 차례, 아니면 쉼. 단 마지막 훅이 PreCompact면(Claude Code가 쉬는 동안 스스로 대화를 압축함) 상태 시각만 바뀐 것이라 압축 전 상태로 되돌린다(압축 전 상태는 메모리에만 있어 서버를 그 사이에 재시작하면 내 차례로 보일 수 있다)
+- 대화 옆 패널 탭 3개(`Memo.tsx`의 SidePanel)
+  - 핀: Claude 핀보드 플러그인의 할 일·결정할 것. 플러그인은 보드를 Claude 프로세스 메모리에만 두므로, 대화 기록에 남는 도구 결과("Pinboard now: …")의 마지막 것을 읽는다. 다시 띄운 세션은 보드가 비므로 그 프로세스가 뜬 뒤(`startedAt` 이후)의 기록만 쓴다. 링크 칸은 기록에 없어 못 보인다. 읽기만 한다
+  - 메모: 내 것. 내가 적거나 내가 시킬 때만 Claude가 적는다(핀보드와 역할이 다르다: Claude가 알 수 없는 사정을 적는 곳). `db.memos[대화ID]`에 있어 닫았다 다시 열어도 남는다. 끝나지 않은 메모가 있으면 세션 목록에 핀 표시(개수는 붙이지 않는다). F4는 메모 있는 세션을 모아 본다
+  - 곁가지 질문(btw)
 - `seen[sessionId]`: 확인함을 누른 시각. 처음 보는 세션이 30분 넘게 쉬던 중이면 쉼으로 시작. 복구한 세션은 꺼지기 전 상태가 내 차례가 아니었으면 쉼으로 시작
 - 업무 배치는 sessionId 기준(`db.assign`). 폴더(cwd)로 묶지 않는다. 사용자가 폴더 단위 묶음을 짐으로 느껴서 일부러 뺐다
 - 대화(파일)와 세션(돌고 있는 claude 프로그램)은 다르다. Orca든 웹이든 같은 `~/.claude` 기록을 쓰고, 웹에서 키보드를 꽂을 수 있는 건 웹 tmux에서 돈 프로그램뿐이다. 그래서 지난 대화는 옮기지 않고 `--resume`으로 다시 띄운다
@@ -63,7 +68,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 기기 이름: 주인이 붙인 이름(`db.deviceNames`, IP별) → `~/.claude/board/ip-names.json`(회사 IP 목록 `04note/work/engsoft/handover/trilium/network/office-lan/attachments/engsoft-ip-list.xlsx`의 '내부' 시트에서 사용 중인 IP·이름·부서를 뽑아 만든 것. 동료 이름이 들어 있어 저장소에 넣지 않는다) → NetBIOS PC 이름 → 기기 종류. 엑셀이 바뀌면 파일을 다시 뽑는다
 - 화면 규칙: 페이지 자체는 스크롤하지 않는다(body overflow hidden, 앱이 100dvh). 머리·카운터·보기 전환은 고정이고, 내용 영역의 각 칸(`.hq-pane`, ScrollArea)이 자기 안에서 스크롤한다. 새 화면을 만들 때도 지킨다
 - 같은 대화(sid)가 두 프로세스로 돌 수 있으므로 화면 목록의 key와 사무실 자리 표는 pid 기준이다
-- 보기 전환 단축키 F1·F2·F3(작업·업무별·세션 전체). 입력칸·터미널에 커서가 있어도 먹게 `App.tsx`에서 capture 단계로 가로채고 브라우저 기본 동작(도움말·찾기)을 막는다
+- 보기 전환 단축키 F1~F4(작업·업무별·세션 전체·메모). 입력칸·터미널에 커서가 있어도 먹게 `App.tsx`에서 capture 단계로 가로채고 브라우저 기본 동작(도움말·찾기)을 막는다
 - 보기 전환은 주소 끝(`#work`·`#task`·`#all`)에 남겨 브라우저·마우스 뒤로가기로 돌아간다. 보기를 바꿀 때는 `ui.ts`의 `setMode()`/`pick()`을 쓴다
 - 인증번호·로그인 토큰은 해시로만 `hq.json`에 저장한다. 메일 설정(`~/.claude/board/mail.env`)은 사용자가 직접 만든다(비밀번호가 들어가므로 Claude가 쓰지 않는다)
 - 시험할 때는 `HQ_MAIL_FILE`로 메일 설정 파일을 바꾸고, `SMTP_SECURE=0`이면 TLS 없이 붙는다(가짜 SMTP로 시험하려고 둔 것)

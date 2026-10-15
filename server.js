@@ -34,7 +34,7 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, btw: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 // 서버가 꺼지면서 끊긴 곁가지 질문은 실패로 표시한다
 for (const list of Object.values(db.btw || {})) for (const it of list) if (it.state === 'asking') { it.state = 'error'; it.a = '서버가 다시 시작돼 답을 받지 못했습니다.'; }
@@ -78,6 +78,8 @@ function readTail(file, size, bytes) {
     return len < size ? s.slice(s.indexOf('\n') + 1) : s;
   } finally { fs.closeSync(fd); }
 }
+// "t1 [>] 할 일" / "d1 [?] 결정할 것" 줄을 항목으로. 표시: ' ' 할 일, '>' 하는 중, 'x' 끝남, '?' 결정할 것
+const pinItems = text => text.split('\n').map(l => l.match(/^(\w+) \[(.)\] (.*)$/)).filter(Boolean).map(m => ({ id: m[1], mark: m[2], text: m[3] }));
 const textOf = c => typeof c === 'string' ? c : Array.isArray(c) ? c.filter(x => x.type === 'text').map(x => x.text).join('\n') : '';
 function scanLines(text, info) {
   for (const line of text.split('\n')) {
@@ -88,6 +90,11 @@ function scanLines(text, info) {
     else if (d.isSidechain || d.isMeta) continue;
     else if (d.type === 'assistant') { const t = textOf(d.message?.content).trim(); if (t) info.lastText = t; }
     else if (d.type === 'user') {
+      // 핀보드 플러그인은 바꿀 때마다 보드 전체를 도구 결과로 남긴다("Pinboard now: …"). 그 마지막 것이 지금 보드다
+      for (const x of Array.isArray(d.message?.content) ? d.message.content : []) {
+        const r = x.type === 'tool_result' ? textOf(x.content) : '';
+        if (/^Pinboard (now:|is empty\.)/.test(r)) info.pin = { text: r, at: Date.parse(d.timestamp) || 0 };
+      }
       const t = textOf(d.message?.content).trim();
       if (t && !t.startsWith('<') && !t.startsWith('[Request interrupted')) info.lastPrompt = t;
     }
@@ -302,6 +309,8 @@ function scan() {
       cwd: s.cwd.replace(HOME, '~'), dir: s.cwd, state, since, startedAt: s.startedAt,
       act: state === 'working' ? (toolNow ? toolLine(h) : h && h.event === 'PreCompact' && h.at >= (s.statusUpdatedAt || 0) - 2000 ? '대화 압축 중' : '생각 중') : '',
       msg, prompt: clip(t.lastPrompt, 400), task: db.assign[s.sessionId] || '',
+      // 핀보드는 Claude 프로세스 메모리에만 있어 다시 띄우면 비워진다. 이 프로세스가 뜬 뒤의 기록만 믿는다
+      pin: t.pin && t.pin.at >= s.startedAt ? pinItems(t.pin.text) : [],
       host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '',
     };
   });
@@ -335,7 +344,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, btw: db.btw, closed: db.closed, migrating,
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -591,6 +600,27 @@ const routes = {
     askBtw(b.sid, live.cwd, item);
   },
   'btw/clear': b => { delete db.btw[b.sid]; },
+  // 세션 메모: 내가 적거나, 내가 시킬 때 Claude가 적는다(skills/hq-memo). 대화 ID에 붙어 있어 닫았다 다시 열어도 남는다
+  'memo/add': b => {
+    const text = str(b.text, 2000); if (!text) throw new Error('메모 내용을 적어 주세요');
+    if (!/^[0-9a-f-]{36}$/.test(String(b.sid))) throw new Error('대화 ID 형식이 아닙니다');
+    const live = snapshot.sessions.find(x => x.sid === b.sid), c = db.closed.find(x => x.sid === b.sid);
+    const m = db.memos[b.sid] = db.memos[b.sid] || { title: '', items: [] };
+    m.title = live?.title || c?.title || m.title || b.sid.slice(0, 8);
+    const id = crypto.randomBytes(4).toString('hex');
+    m.items.push({ id, text, by: b.by === 'claude' ? 'claude' : 'me', done: false, at: Date.now() });
+    return id;
+  },
+  'memo/update': b => {
+    const it = db.memos[b.sid]?.items.find(x => x.id === b.id); if (!it) throw new Error('없는 메모입니다');
+    if ('text' in b) { const t = str(b.text, 2000); if (!t) throw new Error('메모 내용을 적어 주세요'); it.text = t; }
+    if ('done' in b) it.done = !!b.done;
+  },
+  'memo/delete': b => {
+    const m = db.memos[b.sid]; if (!m) return;
+    m.items = m.items.filter(x => x.id !== b.id);
+    if (!m.items.length) delete db.memos[b.sid];
+  },
   // 웹 세션 다시 띄우기(전역 CLAUDE.md·.zshrc를 바꾼 뒤 등): 일하는 중이어도 바로 끄고, 같은 tmux 이름·옵션으로 --resume 해서 이어 띄운다.
   // 응답부터 보내고 뒤에서 한다. 이 요청을 보낸 세션(웹 안의 Claude)도 같이 다시 뜬다
   'session/restart': b => {

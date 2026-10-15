@@ -1,8 +1,8 @@
 // 화면 상태(보기, 고른 세션, 열린 서랍·창). 보기는 주소 끝(#work 등)에 남겨 브라우저·마우스 뒤로가기로 돌아간다
 import { useSyncExternalStore } from 'react'
 
-export type Mode = 'work' | 'task' | 'all'
-const MODES: Mode[] = ['work', 'task', 'all']
+export type Mode = 'work' | 'task' | 'all' | 'memo'
+const MODES: Mode[] = ['work', 'task', 'all', 'memo']
 const get = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
 const set = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* 저장 못 해도 화면은 돈다 */ } }
 const hashMode = () => (MODES as string[]).includes(location.hash.slice(1)) ? location.hash.slice(1) as Mode : null

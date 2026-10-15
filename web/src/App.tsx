@@ -7,6 +7,7 @@ import type { Snapshot } from './types'
 import { stale } from './util'
 import { WorkView } from './Work'
 import { BoardView } from './Board'
+import { MemoView } from './Memo'
 import { SessionDrawer, TaskDrawer } from './Drawers'
 import { AccessModal, AddTaskModal, BriefModal, NewSessionModal } from './Modals'
 
@@ -143,9 +144,9 @@ export function App() {
     if (s) { rememberSel(s.sid); setUI({ sel: s.sid, pendingSel: '' }) }
   }, [S, ui.pendingSel])
 
-  // F1·F2·F3으로 보기 전환. 터미널에 글을 쓰는 중에도 먹도록 가장 먼저(capture) 가로채고, 브라우저 기본 동작(도움말·찾기)은 막는다
+  // F1~F4로 보기 전환. 터미널에 글을 쓰는 중에도 먹도록 가장 먼저(capture) 가로채고, 브라우저 기본 동작(도움말·찾기)은 막는다
   useEffect(() => {
-    const keys: Record<string, Mode> = { F1: 'work', F2: 'task', F3: 'all' }
+    const keys: Record<string, Mode> = { F1: 'work', F2: 'task', F3: 'all', F4: 'memo' }
     const onKey = (e: KeyboardEvent) => {
       const m = keys[e.key]
       if (!m || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
@@ -166,7 +167,7 @@ export function App() {
       <Counters S={S} />
       <Group justify="space-between">
         <SegmentedControl value={ui.mode} onChange={v => setMode(v as Mode)}
-          data={[['작업', 'work', 'F1'], ['업무별', 'task', 'F2'], ['세션 전체', 'all', 'F3']].map(([label, value, key]) => ({
+          data={[['작업', 'work', 'F1'], ['업무별', 'task', 'F2'], ['세션 전체', 'all', 'F3'], ['메모', 'memo', 'F4']].map(([label, value, key]) => ({
             value, label: <Group gap={6} wrap="nowrap">{label}<Kbd size="xs">{key}</Kbd></Group>,
           }))} />
         <Group gap="xs">
@@ -175,7 +176,7 @@ export function App() {
         </Group>
       </Group>
       <Box style={{ flex: 1, minHeight: 0 }}>
-        {ui.mode === 'work' ? <WorkView S={S} /> : <BoardView S={S} mode={ui.mode} />}
+        {ui.mode === 'work' ? <WorkView S={S} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
       </Box>
     </Stack>
     <SessionDrawer S={S} />

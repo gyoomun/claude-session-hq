@@ -2,12 +2,13 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Box, Button, CloseButton, Group, Loader, Paper, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
+import { Box, Button, Group, Loader, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
 import { api } from './store'
 import type { Session, Snapshot } from './types'
 import { Since } from './util'
 
-export function BtwPanel({ S, s, onClose }: { S: Snapshot; s: Session; onClose: () => void }) {
+// 대화 옆 패널의 한 탭(Memo.tsx의 SidePanel)
+export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
   const list = S.btw?.[s.sid] || []
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -19,14 +20,10 @@ export function BtwPanel({ S, s, onClose }: { S: Snapshot; s: Session; onClose: 
     if (await api('btw/ask', { sid: s.sid, question: q })) setQ('')
     setBusy(false)
   }
-  return <Paper withBorder style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
-    <Group justify="space-between" p="8px 10px" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
-      <div><Text fw={600} size="sm">곁가지 질문 <Text span c="dimmed" size="xs">btw</Text></Text>
-        <Text size="xs" c="dimmed">이 세션의 맥락으로 답하고, 원래 대화에는 남지 않습니다</Text></div>
-      <Group gap={4}>
-        {list.length > 0 && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('btw/clear', { sid: s.sid })}>비우기</Button>}
-        <CloseButton size="sm" onClick={onClose} aria-label="곁가지 질문 닫기" />
-      </Group>
+  return <>
+    <Group justify="space-between" p="6px 10px" gap={4} wrap="nowrap">
+      <Text size="xs" c="dimmed">이 세션의 맥락으로 답하고, 원래 대화에는 남지 않습니다</Text>
+      {list.length > 0 && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('btw/clear', { sid: s.sid })}>비우기</Button>}
     </Group>
     <ScrollArea viewportRef={view} style={{ flex: 1 }}>
       <Stack gap="sm" p="sm">
@@ -44,5 +41,5 @@ export function BtwPanel({ S, s, onClose }: { S: Snapshot; s: Session; onClose: 
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask() } }} />
       <Group justify="flex-end" mt={6}><Button size="xs" variant="light" loading={busy} onClick={ask}>묻기</Button></Group>
     </Box>
-  </Paper>
+  </>
 }
