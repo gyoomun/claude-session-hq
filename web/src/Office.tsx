@@ -120,11 +120,14 @@ function Room({ S, t, ss, r, editing, over, drag, onDown, onEdit }: {
 
 export function Office({ S }: { S: Snapshot }) {
   const { ref: canvas, width } = useElementSize()
-  const cols = Math.max(MIN_W + 2, Math.floor((width || 1200) / CELL))
+  // useElementSize는 테두리까지 잰다. 바깥벽(.hq-office 테두리 4px × 2)을 빼야 오른쪽 끝에 붙인 방이 넘치지 않는다
+  const cols = Math.max(MIN_W + 2, Math.floor(((width || 1200) - 8) / CELL))
   const [edit, setEdit] = useState<{ id: string; kind: 'move' | 'size'; sx: number; sy: number; orig: Rect; r: Rect; moved: boolean } | null>(null)
   const editRef = useRef(edit)
   editRef.current = edit
-  const rects = arrange(S, cols)
+  // 놓은 뒤 서버 상태에 반영될 때까지는 놓은 자리를 그대로 보인다(안 그러면 옛 자리로 한 번 튀었다 돌아온다)
+  const [pending, setPending] = useState<Record<string, Rect> | null>(null)
+  const rects = { ...arrange(S, cols), ...pending }
   if (edit) rects[edit.id] = edit.r
   const moved = useRef(false) // 방을 끈 직후의 클릭(이름표 누르기)은 무시한다
   const onEdit = (id: string) => (e: React.PointerEvent, kind: 'move' | 'size') => {
@@ -147,7 +150,9 @@ export function Office({ S }: { S: Snapshot }) {
       setEdit(null)
       if (!d.moved) return
       moved.current = true; setTimeout(() => { moved.current = false }, 0)
-      api('rooms', { rooms: { ...rects, [d.id]: d.r } })
+      const next = { ...rects, [d.id]: d.r }
+      setPending(next)
+      api('rooms', { rooms: next }).then(() => setPending(null)) // api가 새 상태를 먼저 넣고 끝난다
     }
     addEventListener('pointermove', move)
     addEventListener('pointerup', up, { once: true })
