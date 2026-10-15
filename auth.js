@@ -159,3 +159,5 @@ module.exports = function createAuth({ db, save, mailFile, port }) {
   }
   return { identify, requestCode, verifyCode, status, revoke };
 };
+module.exports.sendMail = sendMail;
+module.exports.readMailConfig = readMailConfig;
