@@ -34,7 +34,7 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, btw: {}, claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, btw: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 // 서버가 꺼지면서 끊긴 곁가지 질문은 실패로 표시한다
 for (const list of Object.values(db.btw || {})) for (const it of list) if (it.state === 'asking') { it.state = 'error'; it.a = '서버가 다시 시작돼 답을 받지 못했습니다.'; }
@@ -137,10 +137,17 @@ function stateOf(s, h, now) {
 
 /* 세션이 어디서 돌고 있나: claude 프로세스의 환경 변수로 안다. 웹 세션은 HQ_TMUX, Orca는 ORCA_TERMINAL_HANDLE. 프로세스마다 한 번만 읽는다. */
 const handles = new Map(); // pid -> { tmux, orca }
+const argsByPid = new Map(); // pid -> 다시 띄울 때 쓸 원래 옵션(--dangerously-skip-permissions 등)
 function loadHandles(pids) {
   const need = pids.filter(p => !handles.has(p));
   if (!need.length) return;
   need.forEach(p => handles.set(p, {}));
+  execFile('/bin/ps', ['-ww', '-o', 'pid=,command=', '-p', need.join(',')], (err, out) => {
+    for (const line of (out || '').split('\n')) {
+      const m = line.match(/^\s*(\d+)\s+(.*)$/);
+      if (m) argsByPid.set(+m[1], keepFlags(m[2].trim().split(/\s+/).slice(1)));
+    }
+  });
   execFile('/bin/ps', ['-E', '-ww', '-o', 'pid=,command=', '-p', need.join(',')], { maxBuffer: 64e6 }, (err, out) => {
     for (const line of (out || '').split('\n')) {
       const m = line.match(/^\s*(\d+)\s/);
@@ -269,7 +276,10 @@ function scan() {
     }
     if (!(s.sessionId in db.seen)) {
       const at = s.statusUpdatedAt || s.startedAt || now;
-      db.seen[s.sessionId] = s.status === 'idle' && now - at > SEEN_GRACE_MS ? at : 0;
+      // 닫혔다가 다시 열린 대화는 닫히기 전 상태를 따른다(다시 띄운 것만으로 '내 차례'가 되지 않게)
+      const c = db.closed.find(x => x.sid === s.sessionId);
+      db.seen[s.sessionId] = c ? (c.state === 'myturn' || c.state === 'approval' ? 0 : now + 30e3)
+        : s.status === 'idle' && now - at > SEEN_GRACE_MS ? at : 0;
       dirty = true;
     }
     const h = hookInfo(s);
@@ -304,13 +314,23 @@ function scan() {
   }
   for (const [sid, st] of prev) if (!ids.has(sid)) {
     prev.delete(sid);
-    pushFeed({ at: now, sid, title: snapshot.sessions.find(x => x.sid === sid)?.title || sid, task: db.assign[sid] || '', from: st, to: 'closed' });
+    const was = snapshot.sessions.find(x => x.sid === sid);
+    pushFeed({ at: now, sid, title: was?.title || sid, task: db.assign[sid] || '', from: st, to: 'closed' });
+    // 최근 닫힌 세션: Orca가 꺼지는 등으로 한꺼번에 사라져도 웹에서 같은 명령으로 다시 열 수 있게 남긴다
+    if (was) {
+      db.closed = [{ sid, title: was.title, dir: was.dir, cwd: was.cwd, args: argsByPid.get(was.pid) || [], host: was.host, state: was.state, closedAt: now },
+        ...db.closed.filter(c => c.sid !== sid)].slice(0, 60);
+      dirty = true;
+    }
   }
+  // 다시 열린 대화와 7일 지난 기록은 목록에서 뺀다
+  const keep = db.closed.filter(c => !ids.has(c.sid) && now - c.closedAt < 7 * 864e5);
+  if (keep.length !== db.closed.length) { db.closed = keep; dirty = true; }
   // 닫힌 세션의 확인 기록은 지운다. 웹 세션은 다시 뜨는 중일 수 있으니 남긴다
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, btw: db.btw };
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, btw: db.btw, closed: db.closed, migrating };
 }
 
 /* 대화 화면: 대화 기록(jsonl)을 웹에서 그릴 수 있는 메시지로 바꾼다. 처음엔 끝부분만, 이후엔 늘어난 만큼만 읽는다 */
@@ -419,6 +439,26 @@ function askBtw(sid, cwd, item) {
   });
 }
 
+let migrating = false;
+async function migrateOne(pid) {
+  // Orca 세션을 웹으로: Orca 쪽 claude를 /exit로 끝내고, 원래 옵션 그대로 --resume으로 이어 띄운다
+  const s = snapshot.sessions.find(x => x.pid === pid);
+  const where = handles.get(pid) || {};
+  if (!s || !where.orca) throw new Error('Orca에서 도는 세션만 옮길 수 있습니다');
+  if (s.state === 'working' || s.state === 'approval') throw new Error('일하는 중에는 옮길 수 없습니다. 끝난 뒤에 옮겨 주세요');
+  const args = argsByPid.get(pid) || keepFlags((await run('/bin/ps', ['-o', 'command=', '-p', String(pid)])).trim().split(/\s+/).slice(1));
+  await run(ORCA, ['terminal', 'send', '--terminal', where.orca, '--text', '/exit', '--enter', '--json']);
+  for (let i = 0; i < 40 && alive(pid); i++) await sleep(500);
+  if (alive(pid)) throw new Error('Orca 쪽 Claude가 끝나지 않았습니다. Orca에서 직접 /exit 해 주세요');
+  const name = newName();
+  await startTmux(name, s.dir, [...args, '--resume', s.sid]);
+  db.web.push({ name, cwd: s.dir, args, sid: s.sid, createdAt: Date.now() });
+  if (db.assign[s.sid]) pendingAssign.set(name, db.assign[s.sid]);
+  db.closed = db.closed.filter(x => x.sid !== s.sid);
+  run(ORCA, ['terminal', 'close', '--terminal', where.orca, '--json']).catch(() => {});
+  return name;
+}
+
 /* 화면에서 오는 요청 */
 const task = id => db.tasks.find(t => t.id === id);
 const str = (v, n = 300) => String(v ?? '').trim().slice(0, n);
@@ -473,23 +513,40 @@ const routes = {
     if (b.task) pendingAssign.set(name, b.task);
     return name;
   },
-  'session/migrate': async b => {
-    // Orca 세션을 웹으로: Orca 쪽 claude를 /exit로 끝내고, 원래 옵션 그대로 --resume으로 이어 띄운다
-    const s = snapshot.sessions.find(x => x.pid === +b.pid);
-    const where = handles.get(+b.pid) || {};
-    if (!s || !where.orca) throw new Error('Orca에서 도는 세션만 옮길 수 있습니다');
-    if (s.state === 'working' || s.state === 'approval') throw new Error('일하는 중에는 옮길 수 없습니다. 끝난 뒤에 옮겨 주세요');
-    const args = keepFlags((await run('/bin/ps', ['-o', 'command=', '-p', String(s.pid)])).trim().split(/\s+/).slice(1));
-    await run(ORCA, ['terminal', 'send', '--terminal', where.orca, '--text', '/exit', '--enter', '--json']);
-    for (let i = 0; i < 40 && alive(s.pid); i++) await sleep(500);
-    if (alive(s.pid)) throw new Error('Orca 쪽 Claude가 끝나지 않았습니다. Orca에서 직접 /exit 해 주세요');
-    const name = newName();
-    await startTmux(name, s.dir, [...args, '--resume', s.sid]);
-    db.web.push({ name, cwd: s.dir, args, sid: s.sid, createdAt: Date.now() });
-    if (db.assign[s.sid]) pendingAssign.set(name, db.assign[s.sid]);
-    run(ORCA, ['terminal', 'close', '--terminal', where.orca, '--json']).catch(() => {});
-    return name;
+  'session/migrate': b => migrateOne(+b.pid),
+  // Orca에서 도는 세션을 모두 웹(tmux)으로 옮긴다. 일하는 중인 것은 건너뛴다. 오래 걸리므로 뒤에서 하나씩 한다
+  'session/migrate-all': () => {
+    if (migrating) throw new Error('이미 옮기는 중입니다');
+    const list = snapshot.sessions.filter(x => x.host === 'orca' && x.state !== 'working' && x.state !== 'approval');
+    if (!list.length) throw new Error('지금 옮길 수 있는 Orca 세션이 없습니다(일하는 중인 것은 끝난 뒤에 옮깁니다)');
+    migrating = true;
+    (async () => {
+      for (const x of list) { try { await migrateOne(x.pid); } catch (e) { console.error('옮기기 실패:', x.title, e.message); } }
+      migrating = false; save(); scan();
+    })();
+    return list.length;
   },
+  // 최근 닫힌 세션을 웹에서 같은 옵션으로 다시 연다(하나 또는 여러 개)
+  'session/reopen': async b => {
+    const sids = Array.isArray(b.sids) ? b.sids : [b.sid];
+    const names = [];
+    for (const sid of sids) {
+      const c = db.closed.find(x => x.sid === sid);
+      if (!c) continue;
+      if (snapshot.sessions.some(x => x.sid === sid)) { db.closed = db.closed.filter(x => x !== c); continue; }
+      const cwd = fs.existsSync(c.dir) ? c.dir : HOME;
+      const args = c.args.length ? c.args : db.claudeArgs;
+      const name = newName();
+      await startTmux(name, cwd, [...args, '--resume', sid]);
+      db.web.push({ name, cwd, args, sid, createdAt: Date.now() });
+      db.closed = db.closed.filter(x => x !== c);
+      names.push(name);
+    }
+    if (!names.length) throw new Error('다시 열 세션이 없습니다');
+    if (names.length === 1) focusReq = { name: names[0], at: Date.now() };
+    return names;
+  },
+  'session/forget-closed': b => { db.closed = b.sid ? db.closed.filter(x => x.sid !== b.sid) : []; },
   'session/resume': async b => {
     // 닫힌 대화를 웹에서 다시 연다. 보통 웹 안의 Claude가 대화 기록을 뒤져 찾은 뒤 이 API를 부른다(skills/hq-open)
     const sid = String(b.sid || '');

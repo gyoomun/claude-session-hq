@@ -27,6 +27,8 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 열린 세션의 기준은 `~/.claude/sessions/<pid>.json` 중 프로세스가 살아 있고 `kind`가 interactive인 것. `status`는 `busy`/`idle`
 - 세션이 어디서 도는지(`host`)는 claude 프로세스 환경 변수로 안다(`ps -E`). `HQ_TMUX=hq-…`면 웹, `ORCA_TERMINAL_HANDLE`이면 Orca
 - 웹 세션 = 전용 tmux 세션 하나. `$SHELL -lic 'exec claude …'`로 띄워서 claude가 끝나면 tmux 세션도 끝난다. `db.web`에 이름·폴더·옵션·대화 ID·마지막 상태를 남긴다
+- **Orca 의존**: Orca에서 띄운 세션은 Claude 프로세스가 Orca 터미널 안에 산다. 웹은 그 세션에 `orca terminal send`로 입력만 넣으므로, Orca를 끄면 그 세션들은 같이 꺼진다(실제로 Orca 강제 종료 때 전부 사라졌다). 웹(tmux)에서 띄운 세션만 Orca와 무관하다. 그래서 화면 위에 'Orca 안에서 도는 세션 N개' 안내와 '모두 웹으로 옮기기'(`session/migrate-all`, 일하는 중인 것은 건너뜀)를 둔다
+- 최근 닫힌 세션(`db.closed`, 7일·60개): 세션이 사라지면 대화 ID·폴더·원래 옵션(ps로 미리 읽어 둔 `argsByPid`)·상태를 남긴다. 화면에서 '다시 열기'/'모두 웹에서 다시 열기'(`session/reopen`)로 같은 옵션의 `--resume`으로 웹에 띄운다. 30분 안에 2개 이상 닫히면 위에 경고를 띄운다. 다시 열린 대화는 닫히기 전 상태를 따른다(재시작만으로 '내 차례'가 되지 않게)
 - 복구: 서버가 켜질 때 `db.web`에 있는데 tmux에 없는 세션을 `claude <args> --resume <sid>`로 다시 띄운다. 단, 그 대화가 이미 다른 곳(Orca 등)에서 열려 있으면 띄우지 않는다(실제로 같은 대화가 둘로 돈 적이 있다). 스스로 끝난 세션은 scan이 `db.web`에서 빼서 다시 띄우지 않는다
 - 상태 판정(`stateOf`): 승인 요청 훅 → 승인 필요, AskUserQuestion → 내 차례, busy → 작업중, idle이면서 `statusUpdatedAt > seen` → 내 차례, 아니면 쉼
 - `seen[sessionId]`: 확인함을 누른 시각. 처음 보는 세션이 30분 넘게 쉬던 중이면 쉼으로 시작. 복구한 세션은 꺼지기 전 상태가 내 차례가 아니었으면 쉼으로 시작

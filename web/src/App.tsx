@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, Box, Button, Center, Code, CopyButton, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { serverNow, useNow, useOffline, useSnapshot } from './store'
+import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
 import { type Mode, pickNew, rememberSel, setMode, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
 import { stale } from './util'
@@ -35,6 +35,36 @@ function LanAddress({ S }: { S: Snapshot }) {
     <Code fz="sm">{primary || '네트워크 없음'}</Code>
     {primary && <CopyButton value={primary}>{({ copied, copy }) => <Button size="compact-xs" variant="subtle" onClick={copy}>{copied ? '복사됨' : '복사'}</Button>}</CopyButton>}
   </Group>
+}
+
+// 세션이 어디에 기대고 있는지 드러낸다: Orca에서 도는 세션은 Orca를 끄면 같이 꺼지고, 방금 한꺼번에 닫힌 세션은 웹에서 다시 연다
+function Notices({ S }: { S: Snapshot }) {
+  const orca = S.sessions.filter(s => s.host === 'orca')
+  const movable = orca.filter(s => s.state !== 'working' && s.state !== 'approval').length
+  const recent = S.closed.filter(c => Date.now() - c.closedAt < 30 * 60e3)
+  const [busy, setBusy] = useState(false)
+  return <>
+    {orca.length > 0 && <Alert color="yellow" variant="light" p="xs">
+      <Group justify="space-between" gap="sm">
+        <Text size="sm">Orca 안에서 도는 세션이 {orca.length}개 있습니다. <b>Orca를 끄면 이 세션들도 같이 꺼집니다.</b> 웹으로 옮기면 Orca와 상관없이 계속 돕니다.{S.migrating && ' 옮기는 중…'}</Text>
+        <Button size="xs" color="yellow" variant="filled" loading={S.migrating} disabled={!movable} title={!movable ? '일하는 중인 세션은 끝난 뒤에 옮깁니다' : undefined}
+          onClick={async () => { const r = await api<number>('session/migrate-all'); if (r) toast(`${r.result}개를 차례로 옮깁니다. 일하는 중인 세션은 끝난 뒤에 다시 누르세요.`) }}>
+          {movable < orca.length ? `옮길 수 있는 ${movable}개 웹으로 옮기기` : '모두 웹으로 옮기기'}</Button>
+      </Group>
+    </Alert>}
+    {recent.length >= 2 && <Alert color="red" variant="light" p="xs">
+      <Group justify="space-between" gap="sm">
+        <Text size="sm">최근 30분 안에 세션 {recent.length}개가 닫혔습니다(Orca 종료 등). 대화는 남아 있어서 웹에서 같은 옵션으로 다시 열 수 있습니다.</Text>
+        <Group gap={6}>
+          <Button size="xs" color="red" loading={busy} onClick={async () => {
+            setBusy(true); const r = await api<string[]>('session/reopen', { sids: recent.map(c => c.sid) }); setBusy(false)
+            if (r) toast(`${r.result.length}개를 웹에서 다시 열었습니다.`)
+          }}>모두 웹에서 다시 열기</Button>
+          <Button size="xs" variant="subtle" color="gray" onClick={() => recent.forEach(c => api('session/forget-closed', { sid: c.sid }))}>무시</Button>
+        </Group>
+      </Group>
+    </Alert>}
+  </>
 }
 
 function Header({ S }: { S: Snapshot }) {
@@ -112,6 +142,7 @@ export function App() {
     <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
       <Header S={S} />
       {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
+      <Notices S={S} />
       <Counters S={S} />
       <Group justify="space-between">
         <SegmentedControl value={ui.mode} onChange={v => setMode(v as Mode)}

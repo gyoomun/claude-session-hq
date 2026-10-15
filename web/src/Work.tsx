@@ -48,6 +48,30 @@ function Head({ S, s, btw, onBtw }: { S: Snapshot; s: Session; btw: boolean; onB
   </Paper>
 }
 
+// 최근 닫힌 세션: 대화는 남아 있으니 웹에서 같은 옵션으로 다시 연다
+function ClosedList({ S }: { S: Snapshot }) {
+  const [open, setOpen] = useState(false)
+  if (!S.closed.length) return null
+  return <Stack gap={2}>
+    <UnstyledButton px={8} onClick={() => setOpen(o => !o)}>
+      <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{open ? '▾' : '▸'} 최근 닫힌 세션</Text><Text size="xs" c="dimmed">{S.closed.length}</Text></Group>
+    </UnstyledButton>
+    {open && <>
+      {S.closed.map(c => <Group key={c.sid} gap={6} wrap="nowrap" px={8} py={4} align="flex-start">
+        <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
+          <Text size="sm" className="hq-wrap" lh={1.35} c="dimmed">{c.title}</Text>
+          <Text size="xs" c="dimmed">{c.cwd} · <Since t={c.closedAt} suf=" 전" /></Text>
+        </Stack>
+        <Button size="compact-xs" variant="light" onClick={async () => { if (await api('session/reopen', { sid: c.sid })) toast('웹에서 다시 열었습니다.') }}>다시 열기</Button>
+      </Group>)}
+      <Group gap={6} px={8}>
+        <Button size="compact-xs" variant="subtle" onClick={async () => { const r = await api<string[]>('session/reopen', { sids: S.closed.map(c => c.sid) }); if (r) toast(`${r.result.length}개를 다시 열었습니다.`) }}>모두 다시 열기</Button>
+        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('session/forget-closed', {})}>목록 비우기</Button>
+      </Group>
+    </>}
+  </Stack>
+}
+
 export function WorkView({ S }: { S: Snapshot }) {
   const ui = useUI()
   const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, ss: sessOf(S, t) })),
@@ -68,6 +92,7 @@ export function WorkView({ S }: { S: Snapshot }) {
             {g.ss.map(x => <Item key={x.pid} s={x} on={x.sid === ui.sel} />)}
             {!g.ss.length && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
           </Stack>)}
+          <ClosedList S={S} />
         </Stack>
       </ScrollArea>
     </Paper>

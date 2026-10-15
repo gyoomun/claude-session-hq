@@ -48,6 +48,10 @@ export interface Snapshot {
   access: Access
   layout: Record<string, { x: number; y: number }> // 가상 사무실의 책상 위치(방 안 0~1 비율)
   btw: Record<string, BtwItem[]> // 세션별 곁가지 질문
+  closed: Closed[] // 최근 닫힌 세션(웹에서 다시 열 수 있음)
+  migrating: boolean // Orca 세션을 웹으로 옮기는 중
 }
+
+export interface Closed { sid: string; title: string; dir: string; cwd: string; args: string[]; host: string; closedAt: number }
 
 export interface BtwItem { id: string; q: string; a: string; state: 'asking' | 'done' | 'error'; at: number; doneAt?: number }
