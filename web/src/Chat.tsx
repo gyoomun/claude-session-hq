@@ -4,7 +4,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Box, Button, CloseButton, Group, Kbd, Loader, Modal, Paper, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
-import { api, toast } from './store'
+import { api, serverNow, toast } from './store'
 import { pickNew } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
@@ -111,7 +111,7 @@ function useDraft(sid: string) {
 }
 type Draft = ReturnType<typeof useDraft>
 
-function Composer({ s, d }: { s: Session; d: Draft }) {
+function Composer({ s, d, working, onSent, interrupt }: { s: Session; d: Draft; working: boolean; onSent: () => void; interrupt: () => void }) {
   const { text, setText, imgs, setImgs, uploading, attach } = d
   const [busy, setBusy] = useState(false)
   const box = useRef<HTMLTextAreaElement>(null)
@@ -126,7 +126,7 @@ function Composer({ s, d }: { s: Session; d: Draft }) {
     setBusy(true)
     const ok = await api('term/send', { pid: s.pid, parts })
     setBusy(false)
-    if (ok) { setText(''); setImgs([]) }
+    if (ok) { setText(''); setImgs([]); onSent() }
   }
   const key = (k: string) => api('term/key', { pid: s.pid, key: k })
   return <Paper withBorder p="sm">
@@ -159,7 +159,7 @@ function Composer({ s, d }: { s: Session; d: Draft }) {
       <Group justify="space-between" gap={6}>
         <Text size="xs" c="dimmed"><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
         <Group gap={6}>
-          {(s.state === 'working' || s.state === 'compact' || s.state === 'approval') && <Button size="xs" variant="default" onClick={() => key('esc')}>중단 (Esc)</Button>}
+          {working && <Button size="xs" variant="default" onClick={interrupt}>중단 (Esc)</Button>}
           <Button size="xs" loading={busy || uploading > 0} onClick={send}>보내기</Button>
         </Group>
       </Group>
@@ -225,6 +225,26 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   useLayoutEffect(() => { if (stick.current && view.current) view.current.scrollTop = view.current.scrollHeight }, [items, s.state])
   useEffect(() => { stick.current = true }, [s.sid])
   const draft = useDraft(s.sid)
+  // 보낸 직후에는 상태가 '작업중'으로 바뀌기까지 1~2초 걸린다. 그 사이에도 중단할 수 있게, 보낸 뒤 상태가 아직 안 바뀌었으면 일하는 중으로 본다
+  const [sentAt, setSentAt] = useState(0)
+  const working = s.state === 'working' || s.state === 'compact' || s.state === 'approval' || (serverNow() - sentAt < 15000 && s.since < sentAt)
+  const interrupt = async () => {
+    const r = await api<{ restored?: string } | undefined>('term/key', { pid: s.pid, key: 'esc' })
+    // 답을 시작하기 전에 멈추면 보낸 말이 돌아온다(터미널의 Claude Code와 같다). 웹 입력칸에 되살린다
+    const back = r?.result?.restored
+    if (back) { draft.setText(p => back + (p ? '\n' + p : '')); toast('중단했습니다. 보낸 말이 입력칸으로 돌아왔습니다.') }
+  }
+  // Esc 키로 중단. 일하는 중일 때만 보낸다(쉬는 중에 Esc를 두 번 보내면 Claude Code의 되감기 창이 열린다). 창(설정 등)이 떠 있으면 그 창을 닫는 Esc다
+  const esc = useRef(() => {})
+  esc.current = () => { if (working && s.host) interrupt() }
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing || document.querySelector('.mantine-Modal-content, .mantine-Drawer-content')) return
+      esc.current()
+    }
+    addEventListener('keydown', on)
+    return () => removeEventListener('keydown', on)
+  }, [])
   const [dropOver, setDropOver] = useState(false)
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
   return <Stack gap={8} style={{ flex: 1, minHeight: 0, position: 'relative' }}
@@ -249,6 +269,6 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
         </Stack>
       </ScrollArea>
     </Paper>
-    {s.host ? <Composer s={s} d={draft} /> : <NoInput s={s} />}
+    {s.host ? <Composer s={s} d={draft} working={working} onSent={() => setSentAt(serverNow())} interrupt={interrupt} /> : <NoInput s={s} />}
   </Stack>
 }

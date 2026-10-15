@@ -695,10 +695,36 @@ const routes = {
     const k = keys[b.key];
     if (!k) throw new Error('모르는 키입니다');
     const where = handles.get(+b.pid) || {};
-    if (where.tmux) return tmux(['send-keys', '-t', where.tmux, k[0]]);
-    return orca(b.pid, ['terminal', 'send', '--text', k[1]]);
+    if (!where.tmux) return orca(b.pid, ['terminal', 'send', '--text', k[1]]);
+    await tmux(['send-keys', '-t', where.tmux, k[0]]);
+    if (b.key !== 'esc') return;
+    // Claude가 답을 시작하기 전에 중단하면 Claude Code는 보낸 말을 자기 입력칸에 되돌려 놓는다(고쳐서 다시 보내라고).
+    // 웹에서는 그 입력칸이 안 보여서, 다음에 보낸 말이 그 뒤에 붙어 둘이 한꺼번에 간다. 그래서 되돌아온 글을 비우고 웹 입력칸으로 돌려준다
+    for (let i = 0; i < 4; i++) {
+      await sleep(300);
+      const text = await inputBox(where.tmux);
+      if (text) { await clearInput(where.tmux, text); return { restored: text }; }
+    }
   },
 };
+// Claude Code 입력칸(화면 맨 아래 두 가로줄 사이)에 들어 있는 글. 흐린 글씨(빈 칸 안내·다음 말 추천)는 빈 것으로 본다
+const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
+async function inputBox(name) {
+  const raw = (await tmux(['capture-pane', '-p', '-e', '-t', name])).split('\n');
+  const plain = raw.map(l => l.replace(ANSI, ''));
+  const borders = plain.map((l, i) => /^─{20,}$/.test(l.trim()) ? i : -1).filter(i => i >= 0);
+  if (borders.length < 2) return '';
+  const [a, b] = borders.slice(-2);
+  const at = plain[a + 1]?.indexOf('❯\u00a0') ?? -1;
+  if (at < 0 || raw[a + 1].slice(raw[a + 1].indexOf('❯\u00a0') + 2).startsWith('\x1b[2m')) return '';
+  return plain.slice(a + 1, b).map((l, i) => i ? l.replace(/^  /, '') : l.slice(at + 2)).join('\n').trim();
+}
+// 입력칸 비우기: 커서가 어디 있든 앞뒤로 지운다. Ctrl-C는 빈 칸에서 두 번이면 Claude가 꺼지고, Ctrl-U는 여러 줄을 다 못 지워서 쓰지 않는다
+async function clearInput(name, text) {
+  const n = String(text.length + 20);
+  await tmux(['send-keys', '-t', name, '-N', n, 'BSpace']);
+  await tmux(['send-keys', '-t', name, '-N', n, 'DC']);
+}
 function orca(pid, args) {
   const h = (handles.get(+pid) || {}).orca;
   if (!h) throw new Error('이 세션은 Orca 터미널이 아닙니다');
