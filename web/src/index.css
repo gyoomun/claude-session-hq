@@ -91,3 +91,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-tool pre { margin: 6px 0 2px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--mantine-color-default); padding: 8px; border-radius: 6px; font-size: 12px; }
 .hq-dropzone { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; border: 3px dashed var(--mantine-color-indigo-4);
   border-radius: var(--mantine-radius-md); background: color-mix(in srgb, var(--mantine-color-indigo-6) 18%, transparent); pointer-events: none; }
+/* 대화 오른쪽 칸(핀·메모·btw) 사이의 높이 조절 경계 */
+.hq-split { height: 10px; display: grid; place-items: center; outline: none; }
+.hq-split::after { content: ''; width: 44px; height: 3px; border-radius: 2px; background: var(--mantine-color-default-border); }
+.hq-split[data-separator="hover"]::after, .hq-split[data-separator="active"]::after, .hq-split[data-separator="focus"]::after { width: 100%; background: var(--mantine-color-indigo-5); }

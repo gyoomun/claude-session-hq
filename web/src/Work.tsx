@@ -37,7 +37,7 @@ function Head({ S, s, side, onSide }: { S: Snapshot; s: Session; side: boolean; 
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
         {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함</Button>}
-        <Button size="xs" variant="subtle" color="gray" onClick={onSide}>{side ? '오른쪽 칸 접기' : '핀·메모·질문 펼치기'}</Button>
+        <Button size="xs" variant="subtle" color="gray" onClick={onSide}>{side ? '오른쪽 칸 접기' : '핀·메모·btw 펼치기'}</Button>
         <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
         {s.host === 'web' && <Button size="xs" variant="outline" color="red" onBlur={() => setConfirm(false)} onClick={async () => {
           if (!confirm) { setConfirm(true); return }

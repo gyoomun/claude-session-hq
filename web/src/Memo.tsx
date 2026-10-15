@@ -1,4 +1,4 @@
-// 대화 오른쪽 칸(핀·메모·곁가지 질문)과 메모 보기(F4).
+// 대화 오른쪽 칸(핀·메모·btw)과 메모 보기(F4).
 // 핀: Claude 핀보드 모드가 올린 할 일·결정할 것(읽기만). 메모: Claude가 알 수 없는 사정을 내가 적거나, 내가 시킬 때 Claude가 적는다(skills/hq-memo)
 import { useState } from 'react'
 import { Badge, Box, Button, Checkbox, CloseButton, Group, Paper, ScrollArea, SimpleGrid, Stack, Text, Textarea, UnstyledButton } from '@mantine/core'
@@ -7,6 +7,7 @@ import { pick } from './ui'
 import type { Memo, Session, Snapshot } from './types'
 import { Since } from './util'
 import { BtwTab } from './Btw'
+import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 
 const enter = (f: () => void) => (e: React.KeyboardEvent) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); f() }
@@ -62,24 +63,29 @@ function PinList({ s }: { s: Session }) {
   </Stack>
 }
 
-function Section({ title, sub, mah, children }: { title: string; sub?: string; mah: string; children: React.ReactNode }) {
-  return <Paper withBorder style={{ flex: 'none' }}>
+function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+  return <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }}>
     <Group p="8px 12px 2px" gap={6}><Text fw={600} size="sm">{title}</Text>{sub && <Text size="xs" c="dimmed">{sub}</Text>}</Group>
-    <ScrollArea.Autosize mah={mah}><Box p="6px 12px 12px">{children}</Box></ScrollArea.Autosize>
+    <ScrollArea style={{ flex: 1, minHeight: 0 }}><Box p="6px 12px 12px">{children}</Box></ScrollArea>
   </Paper>
 }
 
-// 대화 오른쪽 칸: 핀·메모·곁가지 질문을 위아래로 늘 펼쳐 둔다(넓은 화면의 여백을 쓴다)
+// 대화 오른쪽 칸: 핀·메모·btw를 위아래로 늘 펼쳐 둔다. 사이 경계를 끌어 높이를 바꾸고, 바꾼 비율은 이 브라우저에 남는다
 export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
   const asking = (S.btw?.[s.sid] || []).some(x => x.state === 'asking')
-  return <Stack gap={8} style={{ minHeight: 0, height: '100%' }}>
-    <Section title="핀" sub="Claude 핀보드" mah="28vh"><PinList s={s} /></Section>
-    <Section title="메모" mah="30vh"><MemoList S={S} sid={s.sid} /></Section>
-    <Paper withBorder style={{ flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column' }}>
-      <Group p="8px 12px 0" gap={6}><Text fw={600} size="sm">곁가지 질문{asking ? ' …' : ''}</Text><Text size="xs" c="dimmed">btw</Text></Group>
-      <BtwTab S={S} s={s} />
-    </Paper>
-  </Stack>
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-side' })
+  return <Split orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
+    <Panel id="pin" defaultSize="25" minSize={70}><Section title="핀" sub="Claude 핀보드"><PinList s={s} /></Section></Panel>
+    <Separator className="hq-split" />
+    <Panel id="memo" defaultSize="30" minSize={70}><Section title="메모"><MemoList S={S} sid={s.sid} /></Section></Panel>
+    <Separator className="hq-split" />
+    <Panel id="btw" minSize={200}>
+      <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }}>
+        <Text p="8px 12px 0" fw={600} size="sm">btw{asking ? ' …' : ''}</Text>
+        <BtwTab S={S} s={s} />
+      </Paper>
+    </Panel>
+  </Split>
 }
 
 // 메모 보기(F4): 메모가 있는 세션을 모아 본다. 닫힌 대화의 메모도 남아 있다
@@ -87,7 +93,7 @@ export function MemoView({ S }: { S: Snapshot }) {
   const list = Object.entries(S.memos || {}).filter(([, m]) => m.items.length)
     .sort(([, a], [, b]) => Number(b.items.some(x => !x.done)) - Number(a.items.some(x => !x.done)) || Math.max(...b.items.map(x => x.at)) - Math.max(...a.items.map(x => x.at)))
   if (!list.length) return <Paper withBorder p="xl" style={{ borderStyle: 'dashed' }}>
-    <Text c="dimmed">아직 메모가 없습니다. 작업 보기에서 대화 옆 패널의 메모 탭에 적거나, Claude에게 "이거 메모해 둬"라고 시키세요.</Text>
+    <Text c="dimmed">아직 메모가 없습니다. 작업 보기에서 대화 옆 메모 칸에 적거나, Claude에게 "이거 메모해 둬"라고 시키세요.</Text>
   </Paper>
   return <ScrollArea h="100%">
     <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="md" pb="md">

@@ -1,4 +1,4 @@
-// 곁가지 질문(btw): 메인 작업을 시켜 둔 채 같은 맥락으로 궁금한 것을 묻는다. 원래 대화에는 남지 않는다
+// btw: 메인 작업을 시켜 둔 채 같은 맥락으로 궁금한 것을 묻는다. 원래 대화에는 남지 않는다
 import { useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -37,7 +37,7 @@ export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
       </Stack>
     </ScrollArea>
     <Box p="sm" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
-      <Textarea autosize minRows={2} maxRows={6} value={q} onChange={e => setQ(e.currentTarget.value)} placeholder="곁가지로 물어보기" aria-label="곁가지 질문"
+      <Textarea autosize minRows={2} maxRows={6} value={q} onChange={e => setQ(e.currentTarget.value)} placeholder="btw로 물어보기" aria-label="btw 질문"
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask() } }} />
       <Group justify="flex-end" mt={6}><Button size="xs" variant="light" loading={busy} onClick={ask}>묻기</Button></Group>
     </Box>

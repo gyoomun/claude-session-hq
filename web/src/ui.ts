@@ -17,7 +17,7 @@ interface UI {
   addTask: boolean
   brief: boolean
   access: boolean
-  side: boolean // 핀·메모·곁가지 질문 칸을 펼쳤는지
+  side: boolean // 핀·메모·btw 칸을 펼쳤는지
 }
 let ui: UI = {
   mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '',
