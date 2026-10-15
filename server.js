@@ -475,7 +475,9 @@ const routes = {
   'task/add': b => {
     const name = str(b.name, 120); if (!name) throw new Error('업무 이름이 필요합니다');
     const now = Date.now();
-    db.tasks.push({ id: 't' + db.nextId++, name, memo: str(b.memo), next: '', waits: [], createdAt: now, updatedAt: now });
+    const id = 't' + db.nextId++;
+    db.tasks.push({ id, name, memo: str(b.memo), next: '', waits: [], createdAt: now, updatedAt: now });
+    return id;
   },
   'task/update': b => {
     const t = task(b.id); if (!t) throw new Error('없는 업무입니다');

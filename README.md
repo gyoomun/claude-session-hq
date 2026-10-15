@@ -10,6 +10,7 @@ Claude Code 세션 여러 개를 동시에 굴리면서, 터미널 탭을 오가
 - **가상 사무실**: 업무별 보기는 업무마다 방이 하나씩 있는 픽셀 사무실입니다. 세션은 책상 앞 사람으로 보이고, 나를 기다리는 사람은 손을 들고 말풍선을 띄웁니다. 책상을 끌어 자리나 방(업무)을 옮깁니다
 - **업무 단위**: 업무를 만들고 세션을 방으로 끌어다 놓아 묶습니다. 업무마다 "박과장 답 기다림" 같은 사람 대기를 적어 둡니다
 - **지난 대화 다시 열기**: 웹 안의 Claude에게 "조신혜 대리랑 ssh 연결했던 거 찾아서 열어줘"처럼 말하면, Claude가 대화 기록을 뒤져 찾은 뒤 웹에 그 대화를 이어 엽니다(`skills/hq-open`)
+- **업무로 들어가기**: 세션의 Claude에게 "○○ 업무로 가", "어울리는 이름으로 업무 만들어서 들어가 있어"라고 말하면 Claude가 스스로 업무(사무실 방)에 들어갑니다(`skills/hq-task`)
 - **Orca에서 옮기기**: Orca에서 띄운 세션은 버튼 하나로 웹으로 옮깁니다. Orca 쪽 Claude를 끝내고 같은 대화를 원래 옵션 그대로 이어 띄웁니다
 
 기본으로는 이 맥에서만 열립니다. 사내망의 다른 PC에서 쓰려면 아래 **사내망 접속**을 켭니다.
@@ -30,7 +31,7 @@ node scripts/install.js
 
 설치하면 세 가지가 바뀝니다.
 
-1. `~/.claude/settings.json`에 훅 5개(UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop)를 추가합니다. 다른 도구의 훅은 건드리지 않고, 바꾸기 전 파일을 `settings.json.bak-claude-session-hq`로 남깁니다.
+1. `~/.claude/settings.json`에 훅 6개(UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop, PreCompact)를 추가합니다. 다른 도구의 훅은 건드리지 않고, 바꾸기 전 파일을 `settings.json.bak-claude-session-hq`로 남깁니다.
 2. `skills/`의 스킬을 `~/.claude/skills`에 링크로 겁니다.
 3. 로그인하면 서버가 자동으로 뜨도록 launchd에 등록합니다(`~/Library/LaunchAgents/dev.gyoomun.claude-session-hq.plist`).
 

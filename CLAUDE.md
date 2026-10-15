@@ -22,6 +22,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - `auth.js`: 사내망 접속 인증(메일 인증번호 → 로그인 쿠키, 로그인 기기 목록·끊기). 외부 라이브러리 없이 SMTP로 메일을 보낸다
 - `public/login.html`: 다른 PC가 처음 들어올 때 보는 로그인 화면
 - `skills/hq-open`: 웹 안의 Claude가 지난 대화를 기록에서 찾아 `/api/session/resume`으로 다시 여는 스킬. install.js가 `~/.claude/skills`에 링크한다
+- `skills/hq-task`: 세션 안의 Claude가 자기 대화 ID(`~/.claude/sessions/$CLAUDE_PID.json`)로 `/api/assign`·`/api/task/add`를 불러 스스로 업무(방)에 들어가거나 업무를 만든다
 - `scripts/install.js`: settings.json 훅 등록 + 스킬 링크 + launchd plist
 
 ## 핵심 개념
@@ -31,7 +32,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - **Orca 의존**: Orca에서 띄운 세션은 Claude 프로세스가 Orca 터미널 안에 산다. 웹은 그 세션에 `orca terminal send`로 입력만 넣으므로, Orca를 끄면 그 세션들은 같이 꺼진다(실제로 Orca 강제 종료 때 전부 사라졌다). 웹(tmux)에서 띄운 세션만 Orca와 무관하다. 그래서 화면 위에 'Orca 안에서 도는 세션 N개' 안내와 '모두 웹으로 옮기기'(`session/migrate-all`, 일하는 중인 것은 건너뜀)를 둔다
 - 최근 닫힌 세션(`db.closed`, 7일·60개): 세션이 사라지면 대화 ID·폴더·원래 옵션(ps로 미리 읽어 둔 `argsByPid`)·상태를 남긴다. 화면에서 '다시 열기'/'모두 웹에서 다시 열기'(`session/reopen`)로 같은 옵션의 `--resume`으로 웹에 띄운다. 30분 안에 2개 이상 닫히면 위에 경고를 띄운다. 다시 열린 대화는 닫히기 전 상태를 따른다(재시작만으로 '내 차례'가 되지 않게)
 - 복구: 서버가 켜질 때 `db.web`에 있는데 tmux에 없는 세션을 `claude <args> --resume <sid>`로 다시 띄운다. 단, 그 대화가 이미 다른 곳(Orca 등)에서 열려 있으면 띄우지 않는다(실제로 같은 대화가 둘로 돈 적이 있다). 스스로 끝난 세션은 scan이 `db.web`에서 빼서 다시 띄우지 않는다
-- 상태 판정(`stateOf`): 승인 요청 훅 → 승인 필요, AskUserQuestion → 내 차례, busy → 작업중, idle이면서 `statusUpdatedAt > seen` → 내 차례, 아니면 쉼
+- 상태 판정(`stateOf`): 승인 요청 훅 → 승인 필요, AskUserQuestion → 내 차례, busy → 작업중, idle이면서 `statusUpdatedAt > seen` → 내 차례, 아니면 쉼. 단 마지막 훅이 PreCompact면(Claude Code가 쉬는 동안 스스로 대화를 압축함) 상태 시각만 바뀐 것이라 압축 전 상태로 되돌린다(압축 전 상태는 메모리에만 있어 서버를 그 사이에 재시작하면 내 차례로 보일 수 있다)
 - `seen[sessionId]`: 확인함을 누른 시각. 처음 보는 세션이 30분 넘게 쉬던 중이면 쉼으로 시작. 복구한 세션은 꺼지기 전 상태가 내 차례가 아니었으면 쉼으로 시작
 - 업무 배치는 sessionId 기준(`db.assign`). 폴더(cwd)로 묶지 않는다. 사용자가 폴더 단위 묶음을 짐으로 느껴서 일부러 뺐다
 - 대화(파일)와 세션(돌고 있는 claude 프로그램)은 다르다. Orca든 웹이든 같은 `~/.claude` 기록을 쓰고, 웹에서 키보드를 꽂을 수 있는 건 웹 tmux에서 돈 프로그램뿐이다. 그래서 지난 대화는 옮기지 않고 `--resume`으로 다시 띄운다
@@ -70,6 +71,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 
 ## 확인하지 못한 것
 - 실제 사람 손으로 웹 터미널·대화 화면을 오래 써 보지 않았다(스크롤·복사·한글 입력기·붙여넣기)
+- 대화 화면의 쓰던 글은 브라우저 localStorage(`hq-draft:<sid>`)에 남는다. 붙인 이미지는 그 탭이 열려 있는 동안만 남는다
 - 대화 화면은 지금 보이는 메시지 줄기만 그린다. 되돌리기(rewind)로 갈라진 대화나 이미지·생각(thinking)은 보이지 않는다
 - 승인 대기(PermissionRequest)와 AskUserQuestion 표시는 실제 상황에서 확인하지 않았다
 - 실제 맥 재부팅 뒤 복구는 tmux를 죽여서 흉내 낸 것만 확인했다
