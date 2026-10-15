@@ -1,6 +1,6 @@
 // 대화 화면: 대화 기록을 읽어 웹 UI로 그리고, 아래 입력칸으로 그 세션에 바로 말한다.
 // Orca 세션도 Claude를 하나 더 띄우지 않고, 이미 돌고 있는 그 Claude에 입력을 넣는다.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Box, Button, CloseButton, Group, Kbd, Loader, Modal, Paper, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
@@ -13,7 +13,8 @@ interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'res
 
 // 링크는 새 탭에서 연다(이 화면을 떠나지 않게)
 const NewTab = (p: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...p} target="_blank" rel="noopener noreferrer" />
-const Md = ({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab }}>{text}</ReactMarkdown></div>
+// 마크다운 해석이 가장 무겁다. 같은 글은 다시 해석하지 않는다
+const Md = memo(({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab }}>{text}</ReactMarkdown></div>)
 // 내 말풍선은 마크다운이 아니라 그대로 보이되, 주소만 링크로
 const Linkify = ({ text }: { text: string }) => <>{text.split(/(https?:\/\/[^\s<>"')\]]*[^\s<>"')\].,])/).map((x, i) => i % 2 ? <NewTab key={i} href={x} className="hq-link">{x}</NewTab> : x)}</>
 
@@ -200,13 +201,29 @@ function grouped(items: Item[]) {
   return out
 }
 
+// 메시지 목록. 입력칸에 글을 칠 때나 2초마다 상태가 바뀔 때는 다시 그리지 않는다(items·detail이 바뀔 때만).
+// 터미널처럼 최근 것만 그리고(처음 200개), 더 보려면 위에서 '이전 대화 더 보기'를 누른다
+const PAGE = 200
+const Messages = memo(function Messages({ items, detail }: { items: Item[]; detail: boolean }) {
+  const [limit, setLimit] = useState(PAGE)
+  const results = new Map(items.filter(i => i.t === 'result').map(i => [i.toolId, i]))
+  const all = detail ? items.filter(i => i.t !== 'result') : grouped(items)
+  const list = all.slice(-limit)
+  return <>
+    {all.length > list.length && <Button size="xs" variant="subtle" color="gray" onClick={() => setLimit(l => l + PAGE)}>이전 대화 더 보기 ({all.length - list.length}개 남음)</Button>}
+    {list.map(it => Array.isArray(it) ? <ToolGroup key={it[0].id} tools={it} results={results} />
+      : it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><Linkify text={it.text} /></Text></Box>
+      : it.t === 'assistant' ? <Box key={it.id} className="hq-say"><Md text={it.text} /></Box>
+      : <Tool key={it.id} it={it} result={results.get(it.toolId)} />)}
+  </>
+})
+
 export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   const { items, missing } = useTranscript(s.sid)
   const view = useRef<HTMLDivElement>(null)
   const stick = useRef(true) // 맨 아래를 보고 있으면 새 메시지가 올 때 따라 내려간다
   useLayoutEffect(() => { if (stick.current && view.current) view.current.scrollTop = view.current.scrollHeight }, [items, s.state])
   useEffect(() => { stick.current = true }, [s.sid])
-  const results = new Map(items.filter(i => i.t === 'result').map(i => [i.toolId, i]))
   const draft = useDraft(s.sid)
   const [dropOver, setDropOver] = useState(false)
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
@@ -227,11 +244,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
         <Stack gap={10} p="md" maw={980} mx="auto">
           {missing && <Text c="dimmed">이 세션의 대화 기록을 찾지 못했습니다.</Text>}
           {!missing && !items.length && <Group gap={8}><Loader size="xs" /><Text c="dimmed" size="sm">대화를 불러오는 중입니다…</Text></Group>}
-          {(detail ? items : grouped(items)).map(it => Array.isArray(it) ? <ToolGroup key={it[0].id} tools={it} results={results} />
-            : it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><Linkify text={it.text} /></Text></Box>
-            : it.t === 'assistant' ? <Box key={it.id} className="hq-say"><Md text={it.text} /></Box>
-            : it.t === 'tool' ? <Tool key={it.id} it={it} result={results.get(it.toolId)} />
-            : null)}
+          <Messages items={items} detail={detail} />
           {(s.state === 'working' || s.state === 'compact') && <Group gap={8}><Loader size="xs" color={COLOR[s.state]} /><Text size="sm" c={`${COLOR[s.state]}.4`} ff="monospace">{s.act || '생각 중'}</Text></Group>}
         </Stack>
       </ScrollArea>
