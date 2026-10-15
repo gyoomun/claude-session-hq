@@ -25,7 +25,7 @@ function Item({ s, on, memo }: { s: Session; on: boolean; memo: boolean }) {
   </UnstyledButton>
 }
 
-function Head({ S, s, btw, onBtw }: { S: Snapshot; s: Session; btw: boolean; onBtw: () => void }) {
+function Head({ S, s, side, onSide }: { S: Snapshot; s: Session; side: boolean; onSide: () => void }) {
   const [confirm, setConfirm] = useState(false)
   return <Paper withBorder p="10px 12px">
     <Group gap="sm" wrap="wrap">
@@ -37,7 +37,7 @@ function Head({ S, s, btw, onBtw }: { S: Snapshot; s: Session; btw: boolean; onB
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
         {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함</Button>}
-        <Button size="xs" variant={btw ? 'light' : 'subtle'} color={btw ? 'indigo' : 'gray'} onClick={onBtw}>핀·메모·질문{(S.btw?.[s.sid] || []).some(x => x.state === 'asking') ? ' …' : ''}</Button>
+        <Button size="xs" variant="subtle" color="gray" onClick={onSide}>{side ? '오른쪽 칸 접기' : '핀·메모·질문 펼치기'}</Button>
         <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
         {s.host === 'web' && <Button size="xs" variant="outline" color="red" onBlur={() => setConfirm(false)} onClick={async () => {
           if (!confirm) { setConfirm(true); return }
@@ -82,9 +82,11 @@ export function WorkView({ S }: { S: Snapshot }) {
   const [view, setView] = useState(() => { try { return localStorage.getItem('hq-view') || 'chat' } catch { return 'chat' } })
   // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
   const [detail, setDetail] = useState(() => { try { return localStorage.getItem('hq-detail') === '1' } catch { return false } })
-  const [btw, setBtw] = useState(() => { try { return localStorage.getItem('hq-btw') === '1' } catch { return false } })
-  const toggleBtw = () => setBtw(v => { try { localStorage.setItem('hq-btw', v ? '0' : '1') } catch { /* 무시 */ } return !v })
-  return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(0, 1fr)', gap: 12, height: '100%' }}>
+  // 오른쪽 칸(핀·메모·곁가지 질문). 기본으로 펼쳐 두고, 좁은 화면에서는 접는다
+  const [side, setSide] = useState(() => { try { return localStorage.getItem('hq-side-open') !== '0' } catch { return true } })
+  const toggleSide = () => setSide(v => { try { localStorage.setItem('hq-side-open', v ? '0' : '1') } catch { /* 무시 */ } return !v })
+  const cols = 'minmax(220px, 290px) minmax(0, 1fr)' + (s && side ? ' minmax(320px, 440px)' : '')
+  return <Box style={{ display: 'grid', gridTemplateColumns: cols, gap: 12, height: '100%' }}>
     <Paper withBorder p={6} style={{ minHeight: 0, display: 'flex' }}>
       <ScrollArea style={{ flex: 1 }}>
         <Stack gap="md" p={4}>
@@ -106,20 +108,18 @@ export function WorkView({ S }: { S: Snapshot }) {
           {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
         </Stack>
       </Paper> : <>
-        <Head S={S} s={s} btw={btw} onBtw={toggleBtw} />
+        <Head S={S} s={s} side={side} onSide={toggleSide} />
         <Group gap="md">
           {s.host === 'web' && <SegmentedControl size="xs" value={view} onChange={v => { setView(v); try { localStorage.setItem('hq-view', v) } catch { /* 무시 */ } }}
             data={[{ label: '대화', value: 'chat' }, { label: '터미널', value: 'term' }]} />}
           {(s.host !== 'web' || view === 'chat') && <Switch size="xs" label="작업 과정 자세히" checked={detail}
             onChange={e => { const v = e.currentTarget.checked; setDetail(v); try { localStorage.setItem('hq-detail', v ? '1' : '0') } catch { /* 무시 */ } }} />}
         </Group>
-        <Box style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: btw ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)', gap: 8 }}>
-          <Box style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            {s.host === 'web' && view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={detail} />}
-          </Box>
-          {btw && <SidePanel S={S} s={s} onClose={toggleBtw} />}
+        <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {s.host === 'web' && view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={detail} />}
         </Box>
       </>}
     </Stack>
+    {s && side && <SidePanel S={S} s={s} />}
   </Box>
 }

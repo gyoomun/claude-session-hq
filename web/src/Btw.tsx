@@ -7,7 +7,7 @@ import { api } from './store'
 import type { Session, Snapshot } from './types'
 import { Since } from './util'
 
-// 대화 옆 패널의 한 탭(Memo.tsx의 SidePanel)
+// 대화 오른쪽 칸의 한 칸(Memo.tsx의 SidePanel)
 export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
   const list = S.btw?.[s.sid] || []
   const [q, setQ] = useState('')

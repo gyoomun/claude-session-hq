@@ -25,7 +25,7 @@ export function personSvg(seed: string, pose: 'sit' | 'hand' | 'stand' = 'sit') 
 
 export function deskSvg(s: Session) {
   const st = s.state
-  const scr = st === 'working' || st === 'myturn' || st === 'approval' ? cssColor(st) : 'var(--hq-screen-off)'
+  const scr = st === 'working' || st === 'compact' || st === 'myturn' || st === 'approval' ? cssColor(st) : 'var(--hq-screen-off)'
   let g = r(21, 9, 9, 7, 'var(--hq-chair)')
   if (st !== 'idle') g += `<g transform="translate(21 4)">${personSvg(s.sid, st === 'myturn' || st === 'approval' ? 'hand' : 'sit')}</g>`
   g += r(6, 4, 13, 10, 'var(--hq-mon)') + r(7, 5, 11, 8, scr)

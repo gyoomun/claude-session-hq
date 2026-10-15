@@ -4,19 +4,19 @@ import type { Session, Snapshot, Task, Wait } from './types'
 export const M = 6e4, H = 36e5, D = 864e5
 
 export const LABEL: Record<string, string> = {
-  working: '작업중', myturn: '내 차례', approval: '승인 필요', idle: '쉼',
+  working: '작업중', compact: '압축 중', myturn: '내 차례', approval: '승인 필요', idle: '쉼',
   human: '남 기다림', empty: '세션 없음', open: '열림', closed: '닫힘',
 }
 // 상태 색은 Mantine 색 이름. 픽셀 그림에서도 같은 색을 쓴다
 export const COLOR: Record<string, string> = {
-  working: 'teal', myturn: 'yellow', approval: 'red', idle: 'gray',
+  working: 'teal', compact: 'cyan', myturn: 'yellow', approval: 'red', idle: 'gray',
   human: 'grape', empty: 'gray', open: 'indigo', closed: 'gray',
 }
 export const cssColor = (state: string, shade = 6) => `var(--mantine-color-${COLOR[state] || 'gray'}-${shade})`
 // 배경에 깔 옅은 상태 색. Mantine의 -light는 노랑이 너무 진해서 직접 섞는다
 export const tint = (state: string, pct = 10) => `color-mix(in srgb, ${cssColor(state)} ${pct}%, var(--mantine-color-body))`
 
-const RANK: Record<string, number> = { approval: 0, myturn: 1, working: 2, idle: 3 }
+const RANK: Record<string, number> = { approval: 0, myturn: 1, working: 2, compact: 2, idle: 3 }
 // 나를 기다리는 것이 위로, 기다린 지 오래된 것이 먼저. 쉬는 것은 최근 것이 먼저
 export const bySt = (a: Session, b: Session) =>
   RANK[a.state] - RANK[b.state] || (a.state === 'idle' ? b.since - a.since : a.since - b.since)

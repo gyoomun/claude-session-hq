@@ -1,7 +1,7 @@
-// 대화 옆 패널(핀·메모·곁가지 질문)과 메모 보기(F4).
+// 대화 오른쪽 칸(핀·메모·곁가지 질문)과 메모 보기(F4).
 // 핀: Claude 핀보드 모드가 올린 할 일·결정할 것(읽기만). 메모: Claude가 알 수 없는 사정을 내가 적거나, 내가 시킬 때 Claude가 적는다(skills/hq-memo)
 import { useState } from 'react'
-import { Badge, Box, Button, Checkbox, CloseButton, Group, Paper, ScrollArea, SimpleGrid, Stack, Tabs, Text, Textarea, UnstyledButton } from '@mantine/core'
+import { Badge, Box, Button, Checkbox, CloseButton, Group, Paper, ScrollArea, SimpleGrid, Stack, Text, Textarea, UnstyledButton } from '@mantine/core'
 import { api } from './store'
 import { pick } from './ui'
 import type { Memo, Session, Snapshot } from './types'
@@ -46,7 +46,7 @@ const MARK = { '>': ['▸', 'yellow.5'], ' ': ['○', undefined], 'x': ['✓', '
 function PinList({ s }: { s: Session }) {
   const decisions = s.pin.filter(p => p.mark === '?'), todos = s.pin.filter(p => p.mark !== '?')
   const done = todos.filter(p => p.mark === 'x').length
-  if (!s.pin.length) return <Text size="sm" c="dimmed">핀보드가 비어 있습니다. Claude가 할 일·결정할 것을 핀에 올리면 여기에 보입니다.</Text>
+  if (!s.pin.length) return <Text size="sm" c="dimmed">비어 있습니다. Claude가 할 일·결정할 것을 핀에 올리면 보입니다.</Text>
   const row = (p: Session['pin'][number]) => <Group key={p.id} gap={8} wrap="nowrap" align="flex-start">
     <Text size="sm" c={MARK[p.mark][1]} w={12} ta="center" style={{ flex: 'none' }}>{MARK[p.mark][0]}</Text>
     <Text size="sm" style={{ overflowWrap: 'anywhere' }}>{p.text}</Text>
@@ -62,25 +62,24 @@ function PinList({ s }: { s: Session }) {
   </Stack>
 }
 
-const getTab = () => { try { return localStorage.getItem('hq-side') || 'memo' } catch { return 'memo' } }
-export function SidePanel({ S, s, onClose }: { S: Snapshot; s: Session; onClose: () => void }) {
-  const [tab, setTab] = useState(getTab)
-  const asking = (S.btw?.[s.sid] || []).some(x => x.state === 'asking')
-  return <Paper withBorder style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
-    <Tabs value={tab} onChange={v => { const t = v || 'memo'; setTab(t); try { localStorage.setItem('hq-side', t) } catch { /* 무시 */ } }}
-      style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <Group gap={0} wrap="nowrap" pr={6} style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
-        <Tabs.List style={{ flex: 1, borderBottom: 0 }}>
-          <Tabs.Tab value="pin">핀{s.pin.some(p => p.mark === '?') ? ' ?' : ''}</Tabs.Tab>
-          <Tabs.Tab value="memo">메모</Tabs.Tab>
-          <Tabs.Tab value="btw">곁가지 질문{asking ? ' …' : ''}</Tabs.Tab>
-        </Tabs.List>
-        <CloseButton size="sm" onClick={onClose} aria-label="옆 패널 닫기" />
-      </Group>
-      {tab === 'btw' ? <BtwTab S={S} s={s} />
-        : <ScrollArea style={{ flex: 1 }}><Box p="sm">{tab === 'pin' ? <PinList s={s} /> : <MemoList S={S} sid={s.sid} />}</Box></ScrollArea>}
-    </Tabs>
+function Section({ title, sub, mah, children }: { title: string; sub?: string; mah: string; children: React.ReactNode }) {
+  return <Paper withBorder style={{ flex: 'none' }}>
+    <Group p="8px 12px 2px" gap={6}><Text fw={600} size="sm">{title}</Text>{sub && <Text size="xs" c="dimmed">{sub}</Text>}</Group>
+    <ScrollArea.Autosize mah={mah}><Box p="6px 12px 12px">{children}</Box></ScrollArea.Autosize>
   </Paper>
+}
+
+// 대화 오른쪽 칸: 핀·메모·곁가지 질문을 위아래로 늘 펼쳐 둔다(넓은 화면의 여백을 쓴다)
+export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
+  const asking = (S.btw?.[s.sid] || []).some(x => x.state === 'asking')
+  return <Stack gap={8} style={{ minHeight: 0, height: '100%' }}>
+    <Section title="핀" sub="Claude 핀보드" mah="28vh"><PinList s={s} /></Section>
+    <Section title="메모" mah="30vh"><MemoList S={S} sid={s.sid} /></Section>
+    <Paper withBorder style={{ flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column' }}>
+      <Group p="8px 12px 0" gap={6}><Text fw={600} size="sm">곁가지 질문{asking ? ' …' : ''}</Text><Text size="xs" c="dimmed">btw</Text></Group>
+      <BtwTab S={S} s={s} />
+    </Paper>
+  </Stack>
 }
 
 // 메모 보기(F4): 메모가 있는 세션을 모아 본다. 닫힌 대화의 메모도 남아 있다

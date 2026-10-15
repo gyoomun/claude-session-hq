@@ -7,6 +7,7 @@ import { Box, Button, CloseButton, Group, Kbd, Loader, Modal, Paper, ScrollArea,
 import { api, toast } from './store'
 import { pickNew } from './ui'
 import type { Session } from './types'
+import { COLOR } from './util'
 
 interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'result'; text: string; name?: string; toolId?: string; error?: boolean }
 
@@ -62,9 +63,11 @@ function useTranscript(sid: string) {
 }
 
 interface Img { n: number; path: string; url: string }
-// 입력칸에 이미지를 붙인 자리 표시. 보낼 때 이 자리에 이미지가 들어가고, Claude 쪽에서는 [Image #N]이 된다
-const tok = (n: number) => `[이미지 ${n}]`
-const TOK = /(\[이미지 \d+\])/
+// 입력칸에 이미지를 붙인 자리 표시. 터미널의 Claude Code처럼 [Image #N]이고, 보낼 때 이 자리에 이미지가 들어간다.
+// 번호는 대화 기록에 나온 마지막 번호 다음부터(Claude Code가 매기는 번호와 대개 같지만, 어긋날 수 있다)
+const tok = (n: number) => `[Image #${n}]`
+const TOK = /(\[Image #\d+\])/
+const IMG_NO = /\[Image #(\d+)\]/g
 
 async function upload(f: File) {
   const r = await fetch('/api/upload', { method: 'POST', headers: { 'x-hq': '1', 'Content-Type': f.type }, body: f })
@@ -80,7 +83,7 @@ const saveDraft = (sid: string, v: string) => { try { if (v) localStorage.setIte
 const draftImgs = new Map<string, Img[]>()
 
 // 입력칸의 글과 붙인 이미지. 끌어다 놓기는 대화 화면 전체에서 받으므로 ChatView가 만들어 Composer에 넘긴다
-function useDraft(sid: string) {
+function useDraft(sid: string, base: number) {
   const [text, setTextState] = useState(() => loadDraft(sid))
   const setText = (v: string | ((p: string) => string)) => setTextState(p => { const x = typeof v === 'function' ? v(p) : v; saveDraft(sid, x); return x })
   const [imgs, setImgs] = useState<Img[]>(() => draftImgs.get(sid) || [])
@@ -90,7 +93,7 @@ function useDraft(sid: string) {
   const attach = (files: File[], at?: [number, number]) => {
     const list = files.filter(f => f.type.startsWith('image/'))
     if (!list.length) return 0
-    let n = Math.max(0, ...imgs.map(i => i.n), ...text.split(TOK).filter((_, i) => i % 2).map(t => +t.replace(/\D/g, '')))
+    let n = Math.max(base, ...imgs.map(i => i.n), ...[...text.matchAll(IMG_NO)].map(m => +m[1]))
     const items = list.map(f => ({ f, n: ++n }))
     const ins = items.map(x => tok(x.n)).join(' ')
     setText(p => at ? p.slice(0, at[0]) + ins + p.slice(at[1]) : p + (p && !/\s$/.test(p) ? ' ' : '') + ins)
@@ -113,11 +116,10 @@ function Composer({ s, d }: { s: Session; d: Draft }) {
   const shown = imgs.filter(i => text.includes(tok(i.n))) // 표시를 지운 이미지는 보내지 않는다
   const send = async () => {
     if (!text.trim() || busy || uploading) return
-    // 글과 이미지를 쓴 순서대로 나눈다. 올린 이미지가 없는 표시(새로고침으로 사라진 것 등)는 뺀다
+    // 글과 이미지를 쓴 순서대로 나눈다. 올린 이미지가 없는 표시(앞서 보낸 이미지를 글로 가리킨 것 등)는 글 그대로 보낸다
     const parts = text.split(TOK).flatMap((x, i): { text?: string; image?: string }[] => {
-      if (!(i % 2)) return x ? [{ text: x }] : []
-      const img = imgs.find(m => tok(m.n) === x)
-      return img ? [{ image: img.path }] : []
+      const img = i % 2 ? imgs.find(m => tok(m.n) === x) : undefined
+      return img ? [{ image: img.path }] : x ? [{ text: x }] : []
     })
     setBusy(true)
     const ok = await api('term/send', { pid: s.pid, parts })
@@ -135,7 +137,7 @@ function Composer({ s, d }: { s: Session; d: Draft }) {
       </Group>}
       {shown.length > 0 && <Group gap={6}>{shown.map(i => <Box key={i.n} pos="relative">
         <img src={i.url} alt={tok(i.n)} style={{ height: 64, borderRadius: 6, display: 'block', border: '1px solid var(--mantine-color-default-border)' }} />
-        <Text fz={10} pos="absolute" bottom={2} left={4} px={4} style={{ background: 'rgba(0,0,0,.6)', color: '#fff', borderRadius: 4 }}>{tok(i.n)}</Text>
+        <Text fz={10} pos="absolute" bottom={2} left={4} px={4} style={{ background: 'rgba(0,0,0,.6)', color: '#fff', borderRadius: 4, whiteSpace: 'nowrap' }}>{tok(i.n)}</Text>
         <CloseButton size="xs" variant="filled" pos="absolute" top={2} right={2} aria-label="이미지 빼기" onClick={() => setText(p => p.replace(tok(i.n), ''))} />
       </Box>)}</Group>}
       <Textarea ref={box} autosize minRows={2} maxRows={10} value={text} onChange={e => setText(e.currentTarget.value)}
@@ -155,7 +157,7 @@ function Composer({ s, d }: { s: Session; d: Draft }) {
       <Group justify="space-between" gap={6}>
         <Text size="xs" c="dimmed"><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
         <Group gap={6}>
-          {(s.state === 'working' || s.state === 'approval') && <Button size="xs" variant="default" onClick={() => key('esc')}>중단 (Esc)</Button>}
+          {(s.state === 'working' || s.state === 'compact' || s.state === 'approval') && <Button size="xs" variant="default" onClick={() => key('esc')}>중단 (Esc)</Button>}
           <Button size="xs" loading={busy || uploading > 0} onClick={send}>보내기</Button>
         </Group>
       </Group>
@@ -204,7 +206,9 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   useLayoutEffect(() => { if (stick.current && view.current) view.current.scrollTop = view.current.scrollHeight }, [items, s.state])
   useEffect(() => { stick.current = true }, [s.sid])
   const results = new Map(items.filter(i => i.t === 'result').map(i => [i.toolId, i]))
-  const draft = useDraft(s.sid)
+  // 대화에 나온 마지막 이미지 번호. 새로 붙이는 이미지는 그다음 번호로 표시한다
+  const lastImg = Math.max(0, ...items.filter(i => i.t === 'user').flatMap(i => [...i.text.matchAll(IMG_NO)].map(m => +m[1])))
+  const draft = useDraft(s.sid, lastImg)
   const [dropOver, setDropOver] = useState(false)
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
   return <Stack gap={8} style={{ flex: 1, minHeight: 0, position: 'relative' }}
@@ -229,7 +233,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
             : it.t === 'assistant' ? <Box key={it.id} className="hq-say"><Md text={it.text} /></Box>
             : it.t === 'tool' ? <Tool key={it.id} it={it} result={results.get(it.toolId)} />
             : null)}
-          {s.state === 'working' && <Group gap={8}><Loader size="xs" color="teal" /><Text size="sm" c="teal.4" ff="monospace">{s.act || '생각 중'}</Text></Group>}
+          {(s.state === 'working' || s.state === 'compact') && <Group gap={8}><Loader size="xs" color={COLOR[s.state]} /><Text size="sm" c={`${COLOR[s.state]}.4`} ff="monospace">{s.act || '생각 중'}</Text></Group>}
         </Stack>
       </ScrollArea>
     </Paper>

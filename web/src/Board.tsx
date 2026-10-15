@@ -31,7 +31,7 @@ const deskGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minm
 
 function AllGroups({ S }: { S: Snapshot }) {
   if (!S.sessions.length) return <Paper withBorder p="md"><Text c="dimmed">열린 Claude 세션이 없습니다.</Text></Paper>
-  return <Stack gap="md">{(['approval', 'myturn', 'working', 'idle'] as const).map(k => {
+  return <Stack gap="md">{(['approval', 'myturn', 'working', 'compact', 'idle'] as const).map(k => {
     const ss = S.sessions.filter(s => s.state === k).sort(bySt)
     if (!ss.length) return null
     return <Paper key={k} withBorder p="12px 14px 14px">

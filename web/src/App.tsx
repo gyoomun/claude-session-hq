@@ -41,7 +41,7 @@ function LanAddress({ S }: { S: Snapshot }) {
 // 세션이 어디에 기대고 있는지 드러낸다: Orca에서 도는 세션은 Orca를 끄면 같이 꺼지고, 방금 한꺼번에 닫힌 세션은 웹에서 다시 연다
 function Notices({ S }: { S: Snapshot }) {
   const orca = S.sessions.filter(s => s.host === 'orca')
-  const movable = orca.filter(s => s.state !== 'working' && s.state !== 'approval').length
+  const movable = orca.filter(s => s.state !== 'working' && s.state !== 'compact' && s.state !== 'approval').length
   const recent = S.closed.filter(c => Date.now() - c.closedAt < 30 * 60e3)
   const [busy, setBusy] = useState(false)
   // 화면을 연 뒤에 새 빌드가 나왔으면 새로고침하라고 알린다(데이터는 2초마다 오지만 화면 코드는 새로고침해야 바뀐다)
@@ -159,7 +159,7 @@ export function App() {
 
   if (!S) return <Center h="100vh"><Loader /></Center>
   // 페이지 자체는 스크롤하지 않는다. 위쪽(머리·카운터·보기 전환)은 고정, 아래 내용 영역만 화면 높이를 채우고 그 안에서 스크롤한다
-  return <Box px="md" py="md" maw={1600} mx="auto" h="100dvh" style={{ display: 'flex', flexDirection: 'column' }}>
+  return <Box px="md" py="md" h="100dvh" style={{ display: 'flex', flexDirection: 'column' }}>
     <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
       <Header S={S} />
       {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}

@@ -1,5 +1,5 @@
 // 서버(/api/state)가 보내는 모양
-export type SessionState = 'working' | 'myturn' | 'approval' | 'idle'
+export type SessionState = 'working' | 'compact' | 'myturn' | 'approval' | 'idle' // compact: 대화 압축 중(일이 아님)
 
 export interface Session {
   pid: number

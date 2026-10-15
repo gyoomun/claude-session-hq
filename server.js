@@ -138,8 +138,8 @@ function stateOf(s, h, now) {
   const fresh = h && h.at >= at - 2000;
   if (fresh && h.event === 'PermissionRequest') return ['approval', h.at];
   if (fresh && h.event === 'PreToolUse' && h.tool === 'AskUserQuestion') return ['myturn', h.at];
-  if (s.status === 'busy') return ['working', at];
-  if (s.status && s.status !== 'idle') return ['working', at];
+  // 대화 압축(PreCompact 훅 직후의 busy)은 일이 아니므로 따로 '압축 중'으로 보인다
+  if (s.status && s.status !== 'idle') return [fresh && h.event === 'PreCompact' ? 'compact' : 'working', at];
   let st = at > (db.seen[s.sessionId] || 0) ? 'myturn' : 'idle';
   // Claude Code는 쉬는 동안 스스로 대화를 압축한다(PreCompact 훅이 마지막 이벤트). 끝나면 상태 시각만 바뀌고 새로 할 말은 없으니 압축 전 상태로 둔다
   if (st === 'myturn' && h && h.event === 'PreCompact' && quiet.get(s.sessionId) === 'idle') { db.seen[s.sessionId] = at; st = 'idle'; }
@@ -307,7 +307,7 @@ function scan() {
     return {
       pid: s.pid, sid: s.sessionId, name: s.name, title: t.custom || (tabTitle && tabTitle !== 'Claude Code' ? tabTitle : '') || t.title || s.name,
       cwd: s.cwd.replace(HOME, '~'), dir: s.cwd, state, since, startedAt: s.startedAt,
-      act: state === 'working' ? (toolNow ? toolLine(h) : h && h.event === 'PreCompact' && h.at >= (s.statusUpdatedAt || 0) - 2000 ? '대화 압축 중' : '생각 중') : '',
+      act: state === 'working' ? (toolNow ? toolLine(h) : '생각 중') : state === 'compact' ? '대화 압축 중' : '',
       msg, prompt: clip(t.lastPrompt, 400), task: db.assign[s.sessionId] || '',
       // 핀보드는 Claude 프로세스 메모리에만 있어 다시 띄우면 비워진다. 이 프로세스가 뜬 뒤의 기록만 믿는다
       pin: t.pin && t.pin.at >= s.startedAt ? pinItems(t.pin.text) : [],
@@ -464,7 +464,7 @@ async function migrateOne(pid) {
   const s = snapshot.sessions.find(x => x.pid === pid);
   const where = handles.get(pid) || {};
   if (!s || !where.orca) throw new Error('Orca에서 도는 세션만 옮길 수 있습니다');
-  if (s.state === 'working' || s.state === 'approval') throw new Error('일하는 중에는 옮길 수 없습니다. 끝난 뒤에 옮겨 주세요');
+  if (s.state === 'working' || s.state === 'compact' || s.state === 'approval') throw new Error('일하는 중에는 옮길 수 없습니다. 끝난 뒤에 옮겨 주세요');
   const args = argsByPid.get(pid) || keepFlags((await run('/bin/ps', ['-o', 'command=', '-p', String(pid)])).trim().split(/\s+/).slice(1));
   await run(ORCA, ['terminal', 'send', '--terminal', where.orca, '--text', '/exit', '--enter', '--json']);
   for (let i = 0; i < 40 && alive(pid); i++) await sleep(500);
@@ -538,7 +538,7 @@ const routes = {
   // Orca에서 도는 세션을 모두 웹(tmux)으로 옮긴다. 일하는 중인 것은 건너뛴다. 오래 걸리므로 뒤에서 하나씩 한다
   'session/migrate-all': () => {
     if (migrating) throw new Error('이미 옮기는 중입니다');
-    const list = snapshot.sessions.filter(x => x.host === 'orca' && x.state !== 'working' && x.state !== 'approval');
+    const list = snapshot.sessions.filter(x => x.host === 'orca' && x.state !== 'working' && x.state !== 'compact' && x.state !== 'approval');
     if (!list.length) throw new Error('지금 옮길 수 있는 Orca 세션이 없습니다(일하는 중인 것은 끝난 뒤에 옮깁니다)');
     migrating = true;
     (async () => {
