@@ -365,6 +365,23 @@ function transcript(params) {
   } finally { fs.closeSync(fd); }
 }
 
+/* 이미지 올리기: 대화 화면에 붙여넣거나 끌어다 놓은 이미지를 파일로 저장하고, 그 경로를 Claude에 붙여넣는다(Claude Code는 붙여넣은 이미지 경로를 이미지로 받는다) */
+const UPLOAD_DIR = path.join(BOARD_DIR, 'uploads');
+const IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+function upload(req, res) {
+  const ext = IMAGE_EXT[String(req.headers['content-type'] || '').split(';')[0]];
+  if (!ext) return json(res, 400, { error: 'png, jpg, gif, webp 이미지만 올릴 수 있습니다' });
+  const chunks = []; let size = 0;
+  req.on('data', c => { size += c.length; if (size > 20e6) { req.destroy(); } else chunks.push(c); });
+  req.on('end', () => {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    const f = path.join(UPLOAD_DIR, `${new Date().toISOString().slice(0, 10)}-${crypto.randomBytes(6).toString('hex')}.${ext}`);
+    fs.writeFileSync(f, Buffer.concat(chunks), { mode: 0o600 });
+    json(res, 200, { path: f });
+  });
+}
+const isUpload = f => typeof f === 'string' && path.resolve(f).startsWith(UPLOAD_DIR + path.sep) && fs.existsSync(f);
+
 /* 화면에서 오는 요청 */
 const task = id => db.tasks.find(t => t.id === id);
 const str = (v, n = 300) => String(v ?? '').trim().slice(0, n);
@@ -465,22 +482,25 @@ const routes = {
   'term/switch': b => orca(b.pid, ['terminal', 'switch']),
   'term/send': async b => {
     const text = String(b.text ?? '').replace(/\r\n?/g, '\n').trim().slice(0, 20000);
-    if (!text) throw new Error('보낼 내용이 없습니다');
+    const images = (Array.isArray(b.images) ? b.images : []).filter(isUpload).slice(0, 10);
+    if (!text && !images.length) throw new Error('보낼 내용이 없습니다');
     const where = handles.get(+b.pid) || {};
-    // 여러 줄은 붙여넣기로 넣어야 중간 줄바꿈이 Enter로 처리되지 않는다
-    if (where.tmux) {
-      if (text.includes('\n')) {
-        await tmux(['set-buffer', '-b', 'hq', '--', text]);
+    if (!where.tmux && !where.orca) throw new Error('이 세션에는 입력을 넣을 수 없습니다');
+    // 붙여넣기로 넣는다: 여러 줄의 중간 줄바꿈이 Enter로 처리되지 않고, 이미지 경로는 이미지로 붙는다
+    const paste = async t => {
+      if (where.tmux) {
+        await tmux(['set-buffer', '-b', 'hq', '--', t]);
         await tmux(['paste-buffer', '-p', '-d', '-b', 'hq', '-t', where.tmux]);
-      } else await tmux(['send-keys', '-t', where.tmux, '-l', text]);
-      await sleep(80);
-      return tmux(['send-keys', '-t', where.tmux, 'Enter']);
-    }
-    if (text.includes('\n')) {
-      await orca(b.pid, ['terminal', 'send', '--text', '\x1b[200~' + text + '\x1b[201~']);
-      return orca(b.pid, ['terminal', 'send', '--text', '', '--enter']);
-    }
-    return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']);
+      } else await orca(b.pid, ['terminal', 'send', '--text', '\x1b[200~' + t + '\x1b[201~']);
+      await sleep(150);
+    };
+    for (const f of images) await paste(f);
+    if (text.includes('\n') || images.length) { if (text) await paste((images.length ? ' ' : '') + text); }
+    else if (where.tmux) await tmux(['send-keys', '-t', where.tmux, '-l', text]);
+    else return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']);
+    await sleep(120);
+    if (where.tmux) return tmux(['send-keys', '-t', where.tmux, 'Enter']);
+    return orca(b.pid, ['terminal', 'send', '--text', '', '--enter']);
   },
   // 대화 화면의 단축 키: 중단(Esc), 승인 창의 번호 고르기
   'term/key': async b => {
@@ -574,6 +594,7 @@ http.createServer((req, res) => {
   if (req.method !== 'POST') return json(res, 404, { error: 'not found' });
   // 다른 사이트가 이 주소로 몰래 요청을 보내지 못하게 전용 헤더를 요구한다(브라우저는 다른 사이트에서 이 헤더를 못 붙인다)
   if (req.headers['x-hq'] !== '1') return json(res, 403, { error: 'forbidden' });
+  if (url === '/api/upload') return upload(req, res);
   let body = '';
   req.on('data', c => { body += c; if (body.length > 1e6) req.destroy(); });
   req.on('end', async () => {

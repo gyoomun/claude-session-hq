@@ -37,6 +37,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 사무실 편집기(방 크기·벽·가구 꾸미기)는 아직 없다. 방은 업무 수만큼 격자로 자동 배치된다
 - 대화 화면(작업 보기의 기본): 서버 `/api/transcript`가 대화 기록 jsonl을 메시지(user·assistant·tool·result)로 바꿔 주고, 화면은 1.5초마다 늘어난 만큼만 받아 그린다. 처음엔 끝 3MB만 읽는다. 하위 에이전트(isSidechain)와 시스템 문구(`<`로 시작)는 뺀다
 - 대화 화면의 입력은 그 세션이 도는 곳에 그대로 넣는다: 웹 세션은 tmux, Orca 세션은 `orca terminal send`. 그래서 Orca 세션도 옮기지 않고 웹에서 바로 대화한다(Claude가 하나라 꼬이지 않는다). 여러 줄은 붙여넣기로 넣는다(tmux `paste-buffer -p`, Orca는 `ESC[200~…ESC[201~`). 중단은 Esc, 승인 창은 1·2·3 키를 보낸다
+- 이미지: 대화 입력칸에 붙여넣거나(Ctrl+V) 끌어다 놓으면 `/api/upload`로 `~/.claude/board/uploads/`에 저장하고, 보낼 때 그 파일 경로를 붙여넣기로 넣는다. Claude Code는 붙여넣은 이미지 경로를 `[Image #N]`으로 받는다(웹·Orca 세션 모두 확인). 올린 파일은 지우지 않고 쌓인다
 - 다른 터미널에서 직접 띄운 세션은 입력할 길이 없어 읽기만 된다. '웹에서도 열기'는 경고를 보여 준 뒤 같은 대화를 하나 더 띄운다(`session/resume`의 `force`)
 - 웹 세션은 대화/터미널 화면을 바꿔 볼 수 있다. Orca → 웹 옮기기(`session/migrate`)는 API만 남기고 화면 버튼은 뺐다
 - 세션 제목 순서: custom-title → 탭 제목(tmux pane_title 또는 Orca) → ai-title → `name`

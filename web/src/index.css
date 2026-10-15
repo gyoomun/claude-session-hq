@@ -85,3 +85,5 @@ body { background: var(--mantine-color-body); }
 .hq-tool summary .name { color: var(--mantine-color-teal-4); font-weight: 600; }
 .hq-tool summary .arg { font-family: var(--mantine-font-family-monospace); }
 .hq-tool pre { margin: 6px 0 2px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--mantine-color-default); padding: 8px; border-radius: 6px; font-size: 12px; }
+.hq-dropzone { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; border: 3px dashed var(--mantine-color-indigo-4);
+  border-radius: var(--mantine-radius-md); background: color-mix(in srgb, var(--mantine-color-indigo-6) 18%, transparent); pointer-events: none; }

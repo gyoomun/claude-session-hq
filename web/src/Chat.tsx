@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Box, Button, Group, Kbd, Loader, Modal, Paper, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
+import { Box, Button, CloseButton, Group, Kbd, Loader, Modal, Paper, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
 import { api, toast } from './store'
 import { pickNew } from './ui'
 import type { Session } from './types'
@@ -45,15 +45,28 @@ function useTranscript(sid: string) {
   return { items, missing }
 }
 
-function Composer({ s }: { s: Session }) {
+interface Img { path: string; url: string }
+// 붙여넣거나 끌어다 놓은 이미지를 서버에 올리고, 보낼 때 그 경로를 Claude에 붙여넣는다
+async function uploadImages(files: File[], add: (i: Img) => void) {
+  for (const f of files.filter(f => f.type.startsWith('image/'))) {
+    try {
+      const r = await fetch('/api/upload', { method: 'POST', headers: { 'x-hq': '1', 'Content-Type': f.type }, body: f })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || '이미지를 올리지 못했습니다')
+      add({ path: d.path, url: URL.createObjectURL(f) })
+    } catch (e) { toast((e as Error).message, 'red') }
+  }
+}
+
+function Composer({ s, imgs, setImgs }: { s: Session; imgs: Img[]; setImgs: React.Dispatch<React.SetStateAction<Img[]>> }) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const send = async () => {
-    if (!text.trim() || busy) return
+    if ((!text.trim() && !imgs.length) || busy) return
     setBusy(true)
-    const ok = await api('term/send', { pid: s.pid, text })
+    const ok = await api('term/send', { pid: s.pid, text, images: imgs.map(i => i.path) })
     setBusy(false)
-    if (ok) setText('')
+    if (ok) { setText(''); setImgs([]) }
   }
   const key = (k: string) => api('term/key', { pid: s.pid, key: k })
   return <Paper withBorder p="sm">
@@ -64,14 +77,22 @@ function Composer({ s }: { s: Session }) {
         <Button size="xs" variant="default" onClick={() => key('2')}>2 · 이번 세션 동안 허용</Button>
         <Button size="xs" variant="outline" color="red" onClick={() => key('3')}>3 · 거부</Button>
       </Group>}
+      {imgs.length > 0 && <Group gap={6}>{imgs.map(i => <Box key={i.path} pos="relative">
+        <img src={i.url} alt="붙일 이미지" style={{ height: 64, borderRadius: 6, display: 'block', border: '1px solid var(--mantine-color-default-border)' }} />
+        <CloseButton size="xs" variant="filled" pos="absolute" top={2} right={2} aria-label="이미지 빼기" onClick={() => setImgs(p => p.filter(x => x !== i))} />
+      </Box>)}</Group>}
       <Textarea autosize minRows={2} maxRows={10} value={text} onChange={e => setText(e.currentTarget.value)}
+        onPaste={e => {
+          const files = [...e.clipboardData.files].filter(f => f.type.startsWith('image/'))
+          if (files.length) { e.preventDefault(); uploadImages(files, i => setImgs(p => [...p, i])) }
+        }}
         placeholder={`${s.title}에게 말하기`} aria-label="보낼 말"
         onKeyDown={e => {
           // 한글 입력 중(조합 중)의 Enter는 글자 확정이라 보내지 않는다
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
         }} />
       <Group justify="space-between" gap={6}>
-        <Text size="xs" c="dimmed"><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈</Text>
+        <Text size="xs" c="dimmed"><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
         <Group gap={6}>
           {(s.state === 'working' || s.state === 'approval') && <Button size="xs" variant="default" onClick={() => key('esc')}>중단 (Esc)</Button>}
           <Button size="xs" loading={busy} onClick={send}>보내기</Button>
@@ -110,7 +131,19 @@ export function ChatView({ s }: { s: Session }) {
   useLayoutEffect(() => { if (stick.current && view.current) view.current.scrollTop = view.current.scrollHeight }, [items, s.state])
   useEffect(() => { stick.current = true }, [s.sid])
   const results = new Map(items.filter(i => i.t === 'result').map(i => [i.toolId, i]))
-  return <Stack gap={8} style={{ flex: 1, minHeight: 0 }}>
+  const [imgs, setImgs] = useState<Img[]>([])
+  const [dropOver, setDropOver] = useState(false)
+  useEffect(() => { setImgs([]) }, [s.sid])
+  const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
+  return <Stack gap={8} style={{ flex: 1, minHeight: 0, position: 'relative' }}
+    onDragOver={e => { if (s.host && hasFiles(e)) { e.preventDefault(); setDropOver(true) } }}
+    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(false) }}
+    onDrop={e => {
+      if (!s.host || !hasFiles(e)) return
+      e.preventDefault(); setDropOver(false)
+      uploadImages([...e.dataTransfer.files], i => setImgs(p => [...p, i]))
+    }}>
+    {dropOver && <Box className="hq-dropzone"><Text fw={600}>여기에 놓으면 이미지를 붙입니다</Text></Box>}
     <Paper withBorder style={{ flex: 1, minHeight: 0, display: 'flex' }}>
       <ScrollArea viewportRef={view} style={{ flex: 1 }} onScrollPositionChange={({ y }) => {
         const v = view.current
@@ -127,6 +160,6 @@ export function ChatView({ s }: { s: Session }) {
         </Stack>
       </ScrollArea>
     </Paper>
-    {s.host ? <Composer s={s} /> : <NoInput s={s} />}
+    {s.host ? <Composer s={s} imgs={imgs} setImgs={setImgs} /> : <NoInput s={s} />}
   </Stack>
 }
