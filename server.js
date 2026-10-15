@@ -459,6 +459,7 @@ const accessRoutes = {
     if (!b.on) dropLogins(db.logins.map(l => l.id)); // 끄면 다른 PC의 터미널도 끊는다
   },
   'access/revoke': b => dropLogins(auth.revoke(String(b.id || ''))),
+  'access/rename': b => auth.rename(String(b.id || ''), b.label),
   'access/logout': (b, who) => { if (who.login) dropLogins(auth.revoke(who.login.id)); },
 };
 
@@ -488,7 +489,7 @@ http.createServer((req, res) => {
     let b; try { b = JSON.parse(body || '{}'); } catch { return json(res, 400, { error: 'bad json' }); }
     try {
       if (url === '/auth/request') return json(res, 200, await auth.requestCode(req));
-      if (url === '/auth/verify') { auth.verifyCode(req, res, b); return json(res, 200, { ok: true }); }
+      if (url === '/auth/verify') { await auth.verifyCode(req, res, b); return json(res, 200, { ok: true }); }
     } catch (e) { return json(res, 400, { error: e.message }); }
     // 키 입력과 크기 조정은 자주 오므로 상태를 다시 만들지 않고 바로 답한다
     if (url === '/api/term/input') { ptys.get(b.id)?.p.write(String(b.data || '')); return send(res, 204, 'text/plain', ''); }

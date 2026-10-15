@@ -32,7 +32,6 @@ input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline
   </form>
   <form id="verify" hidden>
     <label>인증번호 6자리<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*"></label>
-    <label>이 기기 이름 (나중에 목록에서 알아보기 쉽게, 선택)<input id="label" maxlength="60" placeholder="예: 박과장 자리 PC"></label>
     <button type="submit">로그인</button>
     <button type="button" class="ghost" id="again">인증번호 다시 받기</button>
   </form>
@@ -49,7 +48,7 @@ async function ask(){$('ask-btn').disabled=true;say('메일을 보내는 중입�
 $('ask').addEventListener('submit',e=>{e.preventDefault();ask()});
 $('again').addEventListener('click',ask);
 $('verify').addEventListener('submit',async e=>{e.preventDefault();
- try{await post('/auth/verify',{code:$('code').value,label:$('label').value});location.href='/'}
+ try{await post('/auth/verify',{code:$('code').value});location.href='/'}
  catch(err){say(err.message,true);$('code').select()}});
 </script>
 </body>

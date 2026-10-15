@@ -5,6 +5,7 @@ const os = require('os');
 const crypto = require('crypto');
 const tls = require('tls');
 const net = require('net');
+const { execFile } = require('child_process');
 
 const CODE_TTL = 10 * 60e3; // 인증번호 유효 시간
 const LOGIN_IDLE_TTL = 30 * 864e5; // 이만큼 안 쓰면 로그인이 풀린다
@@ -21,6 +22,12 @@ function deviceOf(ua = '') {
   const osName = /iPhone|iPad/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '기기';
   const browser = /Edg\//.test(ua) ? 'Edge' : /Whale\//.test(ua) ? 'Whale' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '브라우저';
   return `${osName} · ${browser}`;
+}
+
+// 같은 망 Windows PC의 컴퓨터 이름(NetBIOS). 사람 이름은 브라우저로 알 수 없어서, 기기를 알아보는 실마리로 쓴다
+function pcName(ip) {
+  return new Promise(ok => execFile('/usr/bin/smbutil', ['status', ip], { timeout: 3000 },
+    (err, out) => ok((String(out || '').match(/^Server:\s*(\S+)/m) || [])[1] || '')));
 }
 
 // 메일 설정 파일(KEY=VALUE): SMTP_USER, SMTP_PASS(Gmail이면 앱 비밀번호), MAIL_TO, 선택 SMTP_HOST·SMTP_PORT·SMTP_SECURE
@@ -83,6 +90,7 @@ function sendMail(cfg, subject, text) {
 module.exports = function createAuth({ db, save, mailFile, port }) {
   db.logins = db.logins || [];
   db.settings = db.settings || {};
+  db.deviceNames = db.deviceNames || {}; // IP -> 주인이 붙인 이름. 같은 PC가 다시 로그인하면 그 이름을 쓴다
   let code = null; // { hash, exp, tries }
   let lastSent = 0;
   const fails = [];
@@ -109,17 +117,18 @@ module.exports = function createAuth({ db, save, mailFile, port }) {
     if (!cfg) throw new Error('인증 메일 설정이 없습니다. 맥에서 HQ를 열어 접속 설정을 확인하세요');
     if (Date.now() - lastSent < SEND_GAP) throw new Error('인증번호는 1분에 한 번만 보낼 수 있습니다. 잠시 뒤 다시 요청하세요');
     const value = String(crypto.randomInt(0, 1e6)).padStart(6, '0');
+    const pc = await pcName(ipOf(req));
     lastSent = Date.now();
     await sendMail(cfg, `[Claude Session HQ] 로그인 인증번호 ${value}`, [
       `인증번호: ${value}`, '', '10분 동안 쓸 수 있습니다.',
-      `요청한 곳: ${ipOf(req)} (${deviceOf(req.headers['user-agent'])})`, `요청 시각: ${new Date().toLocaleString('ko-KR')}`, '',
+      `요청한 곳: ${db.deviceNames[ipOf(req)] ? db.deviceNames[ipOf(req)] + ' · ' : ''}${pc ? pc + ' · ' : ''}${ipOf(req)} (${deviceOf(req.headers['user-agent'])})`, `요청 시각: ${new Date().toLocaleString('ko-KR')}`, '',
       '직접 요청한 것이 아니라면 이 메일을 무시하세요. 인증번호 없이는 들어올 수 없습니다.',
     ].join('\n'));
     code = { hash: sha(value), exp: Date.now() + CODE_TTL, tries: 0 };
     return { to: mask(cfg.MAIL_TO) };
   }
 
-  function verifyCode(req, res, b) {
+  async function verifyCode(req, res, b) {
     const now = Date.now();
     while (fails.length && now - fails[0] > 36e5) fails.shift();
     if (fails.length >= HOURLY_FAILS) throw new Error('틀린 시도가 너무 많아 한 시간 동안 잠겼습니다');
@@ -131,8 +140,10 @@ module.exports = function createAuth({ db, save, mailFile, port }) {
     }
     code = null;
     const token = crypto.randomBytes(32).toString('base64url');
-    const label = String(b.label || '').trim().slice(0, 60) || deviceOf(req.headers['user-agent']);
-    db.logins.push({ id: crypto.randomBytes(4).toString('hex'), hash: sha(token), label, ip: ipOf(req),
+    // 로그인하는 사람에게 이름을 묻지 않는다. 주인이 전에 붙인 이름 → PC 이름 → 기기 종류 순으로 정하고, 주인이 나중에 고친다
+    const ip = ipOf(req), pc = await pcName(ip);
+    const label = db.deviceNames[ip] || pc || deviceOf(req.headers['user-agent']);
+    db.logins.push({ id: crypto.randomBytes(4).toString('hex'), hash: sha(token), label, ip, pc,
       device: deviceOf(req.headers['user-agent']), createdAt: now, lastSeenAt: now });
     save();
     res.setHeader('Set-Cookie', `hq_login=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${LOGIN_IDLE_TTL / 1000}`);
@@ -148,7 +159,7 @@ module.exports = function createAuth({ db, save, mailFile, port }) {
     return {
       lan: !!db.settings.lan, mail: cfg ? mask(cfg.MAIL_TO) : '', mailFile, addresses: addresses(),
       me: who.local ? 'local' : who.login.id,
-      logins: db.logins.map(({ id, label, ip, device, createdAt, lastSeenAt }) => ({ id, label, ip, device, createdAt, lastSeenAt })),
+      logins: db.logins.map(({ id, label, ip, pc, device, createdAt, lastSeenAt }) => ({ id, label, ip, pc, device, createdAt, lastSeenAt })),
     };
   }
   function revoke(id) {
@@ -157,7 +168,15 @@ module.exports = function createAuth({ db, save, mailFile, port }) {
     save();
     return gone;
   }
-  return { identify, requestCode, verifyCode, status, revoke };
+  function rename(id, label) {
+    const l = db.logins.find(x => x.id === id);
+    label = String(label || '').trim().slice(0, 60);
+    if (!l || !label) throw new Error('이름을 적어 주세요');
+    l.label = label;
+    db.deviceNames[l.ip] = label;
+    save();
+  }
+  return { identify, requestCode, verifyCode, status, revoke, rename };
 };
 module.exports.sendMail = sendMail;
 module.exports.readMailConfig = readMailConfig;
