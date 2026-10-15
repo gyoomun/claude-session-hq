@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Alert, Box, Button, Center, Group, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { Alert, Box, Button, Center, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { serverNow, useNow, useOffline, useSnapshot } from './store'
 import { type Mode, pickNew, rememberSel, setMode, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
@@ -74,6 +74,19 @@ export function App() {
     if (s) { rememberSel(s.sid); setUI({ sel: s.sid, pendingSel: '' }) }
   }, [S, ui.pendingSel])
 
+  // F1·F2·F3으로 보기 전환. 터미널에 글을 쓰는 중에도 먹도록 가장 먼저(capture) 가로채고, 브라우저 기본 동작(도움말·찾기)은 막는다
+  useEffect(() => {
+    const keys: Record<string, Mode> = { F1: 'work', F2: 'task', F3: 'all' }
+    const onKey = (e: KeyboardEvent) => {
+      const m = keys[e.key]
+      if (!m || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+      e.preventDefault(); e.stopPropagation()
+      setMode(m)
+    }
+    addEventListener('keydown', onKey, true)
+    return () => removeEventListener('keydown', onKey, true)
+  }, [])
+
   if (!S) return <Center h="100vh"><Loader /></Center>
   return <Box px="md" py="md" maw={1600} mx="auto">
     <Stack gap="md">
@@ -82,7 +95,9 @@ export function App() {
       <Counters S={S} />
       <Group justify="space-between">
         <SegmentedControl value={ui.mode} onChange={v => setMode(v as Mode)}
-          data={[{ label: '작업', value: 'work' }, { label: '업무별', value: 'task' }, { label: '세션 전체', value: 'all' }]} />
+          data={[['작업', 'work', 'F1'], ['업무별', 'task', 'F2'], ['세션 전체', 'all', 'F3']].map(([label, value, key]) => ({
+            value, label: <Group gap={6} wrap="nowrap">{label}<Kbd size="xs">{key}</Kbd></Group>,
+          }))} />
         <Group gap="xs">
           <Button variant="default" onClick={() => setUI({ addTask: true })}>+ 업무 추가</Button>
           <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>
