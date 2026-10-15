@@ -17,14 +17,13 @@ interface UI {
   addTask: boolean
   brief: boolean
   access: boolean
-  side: boolean // 핀·메모·btw 칸을 펼쳤는지
   settings: boolean
   view: 'chat' | 'term' // 웹 세션을 대화 화면으로 볼지, 터미널(Claude Code 화면 그대로)로 볼지
   detail: boolean // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
 }
 let ui: UI = {
   mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '',
-  openTask: null, openSess: null, newFor: null, addTask: false, brief: false, access: false, side: get('hq-side-open') !== '0',
+  openTask: null, openSess: null, newFor: null, addTask: false, brief: false, access: false,
   settings: false, view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1',
 }
 history.replaceState(null, '', '#' + ui.mode)
@@ -52,7 +51,6 @@ export function pickNew(tmux: string) {
   setUI({ pendingSel: tmux, sel: '', openTask: null, openSess: null })
   setMode('work')
 }
-export function toggleSide() { set('hq-side-open', ui.side ? '0' : '1'); setUI({ side: !ui.side }) }
 export function setView(v: UI['view']) { set('hq-view', v); setUI({ view: v }) }
 export function setDetail(v: boolean) { set('hq-detail', v ? '1' : '0'); setUI({ detail: v }) }
 export const rememberSel = (sid: string) => set('hq-sel', sid)

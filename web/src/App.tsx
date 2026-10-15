@@ -47,7 +47,7 @@ function Notices({ S }: { S: Snapshot }) {
   const [busy, setBusy] = useState(false)
   // 화면을 연 뒤에 새 빌드가 나왔으면 새로고침하라고 알린다(데이터는 2초마다 오지만 화면 코드는 새로고침해야 바뀐다)
   const build = useRef(S.build)
-  const stale = S.build && build.current && S.build !== build.current
+  const stale = !!(S.build && build.current && S.build !== build.current)
   return <>
     {stale && <Alert color="indigo" variant="light" p="xs">
       <Group justify="space-between" gap="sm"><Text size="sm">새 버전이 나왔습니다. 새로고침하면 바뀐 화면이 보입니다.</Text>
@@ -146,9 +146,9 @@ export function App() {
   }, [])
 
   if (!S) return <Center h="100vh"><Loader /></Center>
-  // 화면 전체를 한 덩어리로 가운데에 놓는다(좌우 여백이 같다). 작업 보기에서 핀·메모·btw 칸을 펼치면 그만큼 넓어진다.
+  // 화면 전체를 한 덩어리로 가운데에 놓는다(좌우 여백이 같다). 작업 보기에서 세션을 고르면 핀·메모·btw 칸만큼 넓어진다.
   // 격자 2행: 위(머리·카운터·보기 전환) / 아래(내용). 페이지 자체는 스크롤하지 않고 아래 내용 영역이 화면 높이를 채운다
-  const side = ui.mode === 'work' && ui.side && S.sessions.some(x => x.sid === ui.sel)
+  const side = ui.mode === 'work' && S.sessions.some(x => x.sid === ui.sel)
   return <Box h="100dvh" py="md" px="md" maw={side ? 1600 + 432 : 1600} mx="auto"
     style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', rowGap: 'var(--mantine-spacing-md)' }}>
     <Stack gap="md" style={{ minWidth: 0 }}>

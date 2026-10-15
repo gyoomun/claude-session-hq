@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Badge, Box, Button, Group, Paper, ScrollArea, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast } from './store'
-import { pick, setUI, toggleSide, useUI } from './ui'
+import { pick, setUI, useUI } from './ui'
 import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
@@ -25,7 +25,7 @@ function Item({ s, on, memo }: { s: Session; on: boolean; memo: boolean }) {
   </UnstyledButton>
 }
 
-function Head({ S, s, side, onSide }: { S: Snapshot; s: Session; side: boolean; onSide: () => void }) {
+function Head({ S, s }: { S: Snapshot; s: Session }) {
   const [confirm, setConfirm] = useState(false)
   return <Paper withBorder p="10px 12px">
     <Group gap="sm" wrap="wrap">
@@ -37,7 +37,6 @@ function Head({ S, s, side, onSide }: { S: Snapshot; s: Session; side: boolean; 
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
         {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함</Button>}
-        <Button size="xs" variant="subtle" color="gray" onClick={onSide}>{side ? '오른쪽 칸 접기' : '핀·메모·btw 펼치기'}</Button>
         <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
         {s.host === 'web' && <Button size="xs" variant="outline" color="red" onBlur={() => setConfirm(false)} onClick={async () => {
           if (!confirm) { setConfirm(true); return }
@@ -73,14 +72,13 @@ function ClosedList({ S }: { S: Snapshot }) {
   </Stack>
 }
 
-// 세 칸: 세션 목록 | 고른 세션(머리 + 대화) | 핀·메모·btw. 격자 2행이라 셋째 칸은 머리 아래, 대화창과 같은 높이에서 시작한다
+// 세 칸 × 2행: 세션 목록(두 행) | 위: 세션 머리(둘째·셋째 칸에 걸침) / 아래: 대화 | 핀·메모·btw(늘 펼쳐 둔다)
 export function WorkView({ S }: { S: Snapshot }) {
   const ui = useUI()
   const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, ss: sessOf(S, t) })),
     { id: '', name: '미배치', ss: S.sessions.filter(s => !s.task).sort(bySt) }]
   const s = S.sessions.find(x => x.sid === ui.sel)
-  const side = !!s && ui.side
-  return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(0, 1fr)' + (side ? ' minmax(300px, 420px)' : ''),
+  return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(0, 1fr)' + (s ? ' minmax(300px, 420px)' : ''),
     gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
     <Paper withBorder p={6} style={{ gridRow: '1 / -1', minHeight: 0, display: 'flex' }}>
       <ScrollArea style={{ flex: 1 }}>
@@ -102,11 +100,11 @@ export function WorkView({ S }: { S: Snapshot }) {
         {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
       </Stack>
     </Paper> : <>
-      <Head S={S} s={s} side={ui.side} onSide={toggleSide} />
+      <Box style={{ gridColumn: '2 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>
       <Box style={{ gridColumn: 2, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
       </Box>
-      {side && <Box style={{ gridColumn: 3, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>}
+      <Box style={{ gridColumn: 3, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
     </>}
   </Box>
 }
