@@ -146,10 +146,9 @@ export function App() {
   }, [])
 
   if (!S) return <Center h="100vh"><Loader /></Center>
-  // 화면 전체를 한 덩어리로 가운데에 놓는다(좌우 여백이 같다). 작업 보기에서 세션을 고르면 핀·메모·btw 칸만큼 넓어진다.
+  // 화면 전체를 한 덩어리로 가운데에 놓는다(좌우 여백이 같다). 폭은 모든 보기에서 같다(작업 보기의 세 칸 기준. 보기마다 다르면 넘길 때 화면이 움찔한다).
   // 격자 2행: 위(머리·카운터·보기 전환) / 아래(내용). 페이지 자체는 스크롤하지 않고 아래 내용 영역이 화면 높이를 채운다
-  const side = ui.mode === 'work' && S.sessions.some(x => x.sid === ui.sel)
-  return <Box h="100dvh" py="md" px="md" maw={side ? 1600 + 432 : 1600} mx="auto"
+  return <Box h="100dvh" py="md" px="md" maw={2032} mx="auto"
     style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', rowGap: 'var(--mantine-spacing-md)' }}>
     <Stack gap="md" style={{ minWidth: 0 }}>
       <Header S={S} />
