@@ -154,6 +154,23 @@ function loadOrcaTitles(now) {
   });
 }
 
+/* 새 세션을 열 수 있는 폴더: Orca 워크스페이스 목록. 1분마다 새로 읽는다. */
+let worktrees = [];
+let worktreesAt = 0;
+function loadWorktrees(now) {
+  if (now - worktreesAt < 60000 || !fs.existsSync(ORCA)) return;
+  worktreesAt = now;
+  execFile(ORCA, ['worktree', 'list', '--json'], { timeout: 8000, maxBuffer: 16e6 }, (err, out) => {
+    if (err) return;
+    try {
+      worktrees = JSON.parse(out).result.worktrees.map(w => ({ path: w.path, name: w.displayName || path.basename(w.path) }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+    } catch {}
+  });
+}
+// 화면에서 연 세션: Orca 핸들로 기억해 두었다가 세션이 나타나면 고른 업무에 배치한다
+const pendingAssign = new Map();
+
 /* 2초마다 전체 상태를 만들고, 상태가 바뀐 세션은 이벤트로 남긴다 */
 let snapshot = { now: Date.now(), sessions: [], tasks: [], feed: [] };
 const prev = new Map();
@@ -165,8 +182,14 @@ function scan() {
   const live = liveSessions();
   loadHandles(live.map(s => s.pid));
   loadOrcaTitles(now);
+  loadWorktrees(now);
   let dirty = false;
   const sessions = live.map(s => {
+    const task = pendingAssign.get(handles.get(s.pid));
+    if (task) {
+      pendingAssign.delete(handles.get(s.pid));
+      if (db.tasks.some(t => t.id === task)) { db.assign[s.sessionId] = task; dirty = true; }
+    }
     if (!(s.sessionId in db.seen)) {
       const at = s.statusUpdatedAt || s.startedAt || now;
       db.seen[s.sessionId] = s.status === 'idle' && now - at > SEEN_GRACE_MS ? at : 0;
@@ -199,7 +222,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA) };
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees };
 }
 
 /* 화면에서 오는 요청 */
@@ -234,6 +257,24 @@ const routes = {
   'wait/done': b => {
     const t = task(b.task); if (!t) throw new Error('없는 업무입니다');
     t.waits = t.waits.filter(w => w.id !== b.id); t.updatedAt = Date.now();
+  },
+  'session/new': b => {
+    // Orca가 아는 폴더에서만 연다. 첫 지시는 claude 인자로 넘기고, 터미널에 입력되는 명령이라 줄바꿈은 공백으로 바꾼다
+    const wt = worktrees.find(w => w.path === b.cwd);
+    if (!wt) throw new Error('Orca 워크스페이스 폴더만 고를 수 있습니다');
+    if (b.task && !task(b.task)) throw new Error('없는 업무입니다');
+    const prompt = str(b.prompt, 4000).replace(/\s*\n\s*/g, ' ');
+    const command = prompt ? `claude '${prompt.replace(/'/g, `'\\''`)}'` : 'claude';
+    return new Promise((ok, fail) => execFile(ORCA, ['terminal', 'create', '--worktree', 'path:' + wt.path, '--command', command, '--json'],
+      { timeout: 20000 }, (err, out, errOut) => {
+        if (err) return fail(new Error(clip((errOut || err.message).trim(), 300)));
+        try {
+          const r = JSON.parse(out).result;
+          const h = r.handle || r.terminal?.handle;
+          if (h && b.task) pendingAssign.set(h, b.task);
+        } catch {}
+        ok();
+      }));
   },
   'term/switch': b => orca(b.pid, ['terminal', 'switch']),
   'term/send': b => {

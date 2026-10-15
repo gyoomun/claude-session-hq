@@ -28,12 +28,13 @@
 - 훅은 stdout에 아무것도 쓰면 안 된다(UserPromptSubmit 출력은 대화에 섞인다). 큰 입력은 16KB만 남기고 나머지는 읽어 버린다. 잘린 JSON은 서버가 정규식으로 읽는다
 - launchd는 nvm 경로를 모른다. Node 경로를 `/opt/homebrew/bin/node`로 고정했다
 - Orca 터미널 핸들은 `ps -E`로 claude 프로세스 환경 변수 `ORCA_TERMINAL_HANDLE`에서 읽는다. 터미널 열기·답 보내기는 `orca terminal switch/send`
+- 새 세션은 `orca terminal create --worktree path:<폴더> --command "claude '<첫 지시>'"`로 연다. 명령은 셸에 타이핑되므로 첫 지시의 줄바꿈은 공백으로 바꾼다. 폴더는 Orca 워크스페이스(`orca worktree list`의 `result.worktrees`)만 허용한다
+- 새 세션의 업무 배치는 만들 때 받은 Orca 핸들로 기억해 두었다가(`pendingAssign`, 메모리), 그 핸들의 세션이 나타나면 넣는다
 - 쓰기 API는 Host가 localhost/127.0.0.1이고 `x-hq: 1` 헤더가 있어야 받는다. 다른 사이트가 보내는 요청을 막으려는 것이니 빼지 않는다
 - 연결된 Claude in Chrome이 다른 PC(Windows)라 이 Mac의 localhost를 열 수 없다. 화면 확인은 Mac의 headless Chrome 스크린샷으로 한다
 
 ## 확인하지 못한 것
 - 실제 브라우저에서 끌어다 놓기·메뉴 배치를 손으로 해 보지 않았다(API와 headless 화면만 확인)
-- 실제 Claude 세션에 답 보내기는 하지 않았다(빈 Orca 터미널로 `terminal send`만 확인)
 - 승인 대기(PermissionRequest)와 AskUserQuestion 표시는 실제 상황에서 확인하지 않았다
 
 ## 작업 방식
