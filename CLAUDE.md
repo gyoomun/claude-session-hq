@@ -7,13 +7,15 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 ## 실행·반영
 - 서버는 launchd(`dev.gyoomun.claude-session-hq`)가 Homebrew Node로 띄운다. 주소는 http://127.0.0.1:7420
 - `server.js`를 고친 뒤: `launchctl kickstart -k gui/$(id -u)/dev.gyoomun.claude-session-hq`. 웹 세션은 tmux에서 돌므로 서버를 재시작해도 끊기지 않는다
-- `public/index.html`만 고쳤으면 브라우저 새로고침으로 충분하다(서버가 요청마다 파일을 읽는다)
+- 화면은 `web/`(Vite + React + Mantine, TypeScript)이고 서버는 빌드 결과 `dist/`를 내준다. 화면을 고친 뒤: `PATH=/opt/homebrew/bin:$PATH npm run typecheck && npm run build` 후 브라우저 새로고침(서버 재시작 불필요). 바로바로 보면서 고치려면 `npm run dev`(5173, API는 7420으로 넘김)
+- 로그인 화면 `public/login.html`은 빌드 없이 그대로 내주는 단독 페이지다
 - 의존성: `PATH=/opt/homebrew/bin:$PATH npm install`(launchd와 같은 Node로 깔아야 node-pty가 맞는다). 설치·제거: `node scripts/install.js` / `--uninstall`. 로그: `~/.claude/board/server.log`
 - 실험은 `PORT=7499 node server.js`로 따로 띄운다. 데이터 파일과 tmux 소켓은 같이 쓰므로 시험 세션·업무는 지운다
 
 ## 구조
 - `server.js`: 2초마다 세션 파일·대화 기록·훅 파일·tmux를 읽어 상태를 만들고, 페이지·`/api/*`·터미널 스트림을 제공
-- `public/index.html`: 화면 전부(빌드 없음). 보기 3개: 작업(목록+터미널), 업무별, 세션 전체
+- `web/src/`: 화면. `store.ts`(서버 상태 2초 폴링·쓰기 요청), `ui.ts`(보기·선택·창 상태, 주소 #으로 뒤로가기), `App.tsx`(머리·카운터·보기 전환), `Work.tsx`(작업 보기), `Board.tsx`(업무별·세션 전체·내 차례 큐), `Drawers.tsx`, `Modals.tsx`, `Terminal.tsx`(xterm), `Desk.tsx`(픽셀 책상·사람)
+- 디자인은 Mantine 컴포넌트를 쓰고, 상태 색은 Mantine 색 이름(`util.tsx`의 `COLOR`)으로 맞춘다. 사용자의 다른 프로젝트(moa)와 같은 조합이라 골랐다
 - `tmux.conf`: 웹 세션용 전용 tmux 설정(상태줄·단축키 끔)
 - `hooks/hook.sh`: Claude Code 훅. 이벤트를 `~/.claude/board/hooks/<pid>.json`에 덮어쓰기만 한다
 - `auth.js`: 사내망 접속 인증(메일 인증번호 → 로그인 쿠키, 로그인 기기 목록·끊기). 외부 라이브러리 없이 SMTP로 메일을 보낸다
@@ -38,14 +40,13 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - tmux와 그 안의 셸에는 새로 만든 환경(`TERM_ENV`)만 넘긴다. Orca나 Claude의 변수(ORCA_*, CLAUDECODE)가 섞이면 세션 판별과 claude 실행이 틀어진다
 - 숨겨진 칸에서 xterm 크기를 맞추면 tmux 창이 아주 작아진다. 칸이 보일 때만 맞춘다
 - launchd plist의 `AbandonProcessGroup`을 빼면 서버 재시작 때 tmux와 세션까지 같이 죽을 수 있다
-- 페이지의 `typing()`은 xterm 입력칸을 예외로 둔다. 아니면 터미널에 쓰는 동안 화면이 멈춘다. 문서 전체 Esc 처리도 터미널 안에서는 하지 않는다(Esc는 Claude가 쓴다)
 - node-pty 미리 빌드된 `spawn-helper`는 실행 권한 없이 깔린다. `postinstall`이 권한을 준다
 - 훅 명령은 `CLAUDE_PID=$PPID '<hook.sh>'` 형태여야 한다. `$PPID`가 claude 프로세스여야 세션 파일과 짝이 맞는다. 훅은 stdout에 아무것도 쓰면 안 된다
 - launchd는 nvm 경로를 모른다. Node 경로를 `/opt/homebrew/bin/node`로 고정했다
 - 접근 판정(`auth.identify`): 이 맥(루프백 주소 + Host가 localhost)이면 로그인 없이 통과, 아니면 로그인 쿠키가 있어야 한다. 사내망 접속(`db.settings.lan`)이 꺼져 있으면 맥 밖 요청은 모두 403. 맥에서 터널(cloudflared 등)로 들어온 요청은 Host가 달라 로그인을 요구받는다
 - 모든 쓰기 요청은 `x-hq: 1` 헤더가 있어야 받는다. 다른 사이트가 이 주소로 몰래 요청을 보내는 것을 막는 장치라 빼지 않는다. 쿠키는 HttpOnly·SameSite=Strict
 - 기기 이름: 주인이 붙인 이름(`db.deviceNames`, IP별) → `~/.claude/board/ip-names.json`(회사 IP 목록 `04note/work/engsoft/handover/trilium/network/office-lan/attachments/engsoft-ip-list.xlsx`의 '내부' 시트에서 사용 중인 IP·이름·부서를 뽑아 만든 것. 동료 이름이 들어 있어 저장소에 넣지 않는다) → NetBIOS PC 이름 → 기기 종류. 엑셀이 바뀌면 파일을 다시 뽑는다
-- 보기 전환은 주소 끝(`#work`·`#task`·`#all`)에 남겨 브라우저·마우스 뒤로가기로 돌아간다. 보기를 바꿀 때는 `mode`를 직접 바꾸지 말고 `setMode()`를 쓴다
+- 보기 전환은 주소 끝(`#work`·`#task`·`#all`)에 남겨 브라우저·마우스 뒤로가기로 돌아간다. 보기를 바꿀 때는 `ui.ts`의 `setMode()`/`pick()`을 쓴다
 - 인증번호·로그인 토큰은 해시로만 `hq.json`에 저장한다. 메일 설정(`~/.claude/board/mail.env`)은 사용자가 직접 만든다(비밀번호가 들어가므로 Claude가 쓰지 않는다)
 - 시험할 때는 `HQ_MAIL_FILE`로 메일 설정 파일을 바꾸고, `SMTP_SECURE=0`이면 TLS 없이 붙는다(가짜 SMTP로 시험하려고 둔 것)
 - Orca → 웹 옮기기는 Orca 쪽 claude에 `/exit`를 보내고 프로세스가 끝나길 기다린 뒤 이어 띄운다. 일하는 중에는 막는다

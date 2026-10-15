@@ -14,12 +14,13 @@ Claude Code 세션 여러 개를 동시에 굴리면서, 터미널 탭을 오가
 
 ## 설치
 
-macOS, Node 18 이상, tmux가 필요합니다(`brew install tmux`).
+macOS, Node 20 이상, tmux가 필요합니다(`brew install tmux`).
 
 ```bash
 git clone https://github.com/gyoomun/claude-session-hq.git
 cd claude-session-hq
 npm install
+npm run build
 node scripts/install.js
 ```
 

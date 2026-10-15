@@ -17,7 +17,7 @@ const BOARD_DIR = path.join(CLAUDE_DIR, 'board');
 const HOOK_DIR = path.join(BOARD_DIR, 'hooks'); // hooks/hook.sh가 <pid>.json으로 마지막 이벤트를 남긴다
 const DB_FILE = path.join(BOARD_DIR, 'hq.json');
 const ORCA = '/Applications/Orca.app/Contents/Resources/bin/orca';
-const PAGE = path.join(__dirname, 'public', 'index.html');
+const DIST = path.join(__dirname, 'dist'); // 화면(web/)을 npm run build로 만든 결과
 const SCAN_MS = 2000;
 // 처음 보는 세션이 이만큼 넘게 쉬고 있었다면 '내 차례'가 아니라 '쉼'으로 시작한다
 const SEEN_GRACE_MS = 30 * 60e3;
@@ -424,11 +424,13 @@ function send(res, code, type, body) {
 }
 const json = (res, code, obj) => send(res, code, 'application/json; charset=utf-8', JSON.stringify(obj));
 const file = (res, f, type) => fs.readFile(f, (e, b) => e ? json(res, 404, { error: 'not found' }) : send(res, 200, type, b));
-const VENDOR = {
-  '/vendor/xterm.js': ['@xterm/xterm/lib/xterm.js', 'text/javascript'],
-  '/vendor/xterm.css': ['@xterm/xterm/css/xterm.css', 'text/css'],
-  '/vendor/addon-fit.js': ['@xterm/addon-fit/lib/addon-fit.js', 'text/javascript'],
-};
+const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json' };
+// 빌드된 화면 파일. dist/ 밖의 파일은 내주지 않는다
+function asset(res, url) {
+  const f = path.join(DIST, path.normalize(decodeURIComponent(url)).replace(/^(\.\.[/\\])+/, ''));
+  if (!f.startsWith(DIST + path.sep)) return json(res, 404, { error: 'not found' });
+  file(res, f, TYPES[path.extname(f)] || 'application/octet-stream');
+}
 
 /* 웹 터미널: 브라우저 하나가 붙을 때마다 tmux 클라이언트 하나를 pty로 띄워 출력은 SSE로, 입력은 POST로 주고받는다 */
 const ptys = new Map(); // id -> { p, login }
@@ -476,8 +478,11 @@ http.createServer((req, res) => {
     }
   }
   if (req.method === 'GET' && url === '/login') return file(res, LOGIN_PAGE, 'text/html; charset=utf-8');
-  if (req.method === 'GET' && url === '/') return file(res, PAGE, 'text/html; charset=utf-8');
-  if (req.method === 'GET' && VENDOR[url]) return file(res, require.resolve(VENDOR[url][0]), VENDOR[url][1]);
+  if (req.method === 'GET' && url === '/') {
+    if (!fs.existsSync(path.join(DIST, 'index.html'))) return send(res, 500, 'text/plain; charset=utf-8', '화면이 아직 빌드되지 않았습니다. 저장소에서 npm run build 를 실행하세요.');
+    return file(res, path.join(DIST, 'index.html'), 'text/html; charset=utf-8');
+  }
+  if (req.method === 'GET' && url.startsWith('/assets/')) return asset(res, url);
   if (req.method === 'GET' && url === '/api/state') return json(res, 200, { ...snapshot, access: auth.status(who) });
   if (req.method === 'GET' && url === '/api/term/stream') return stream(req, res, new URLSearchParams(qs || ''), who);
   if (req.method !== 'POST') return json(res, 404, { error: 'not found' });

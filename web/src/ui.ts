@@ -1,0 +1,52 @@
+// 화면 상태(보기, 고른 세션, 열린 서랍·창). 보기는 주소 끝(#work 등)에 남겨 브라우저·마우스 뒤로가기로 돌아간다
+import { useSyncExternalStore } from 'react'
+
+export type Mode = 'work' | 'task' | 'all'
+const MODES: Mode[] = ['work', 'task', 'all']
+const get = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
+const set = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* 저장 못 해도 화면은 돈다 */ } }
+const hashMode = () => (MODES as string[]).includes(location.hash.slice(1)) ? location.hash.slice(1) as Mode : null
+
+interface UI {
+  mode: Mode
+  sel: string // 작업 보기에서 고른 세션(sid)
+  pendingSel: string // 방금 연 웹 세션(tmux 이름). 목록에 나타나면 고른다
+  openTask: string | null
+  openSess: string | null
+  newFor: string | null // 새 세션 창: null이면 닫힘, ''이면 업무 없이, 업무 id면 그 업무로
+  addTask: boolean
+  brief: boolean
+  access: boolean
+}
+let ui: UI = {
+  mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '',
+  openTask: null, openSess: null, newFor: null, addTask: false, brief: false, access: false,
+}
+history.replaceState(null, '', '#' + ui.mode)
+const subs = new Set<() => void>()
+export const useUI = () => useSyncExternalStore(f => { subs.add(f); return () => { subs.delete(f) } }, () => ui)
+export function setUI(p: Partial<UI>) { ui = { ...ui, ...p }; subs.forEach(f => f()) }
+
+export function setMode(m: Mode) {
+  if (m === ui.mode) return
+  history.pushState(null, '', '#' + m)
+  set('hq-mode', m)
+  setUI({ mode: m })
+}
+addEventListener('popstate', () => {
+  const m = hashMode()
+  if (m && m !== ui.mode) { set('hq-mode', m); setUI({ mode: m, openTask: null, openSess: null }) }
+})
+// 세션 하나를 작업 보기에서 연다
+export function pick(sid: string) {
+  set('hq-sel', sid)
+  setUI({ sel: sid, openTask: null, openSess: null })
+  setMode('work')
+}
+export function pickNew(tmux: string) {
+  setUI({ pendingSel: tmux, sel: '', openTask: null, openSess: null })
+  setMode('work')
+}
+export const rememberSel = (sid: string) => set('hq-sel', sid)
+export const lastCwd = () => get('hq-cwd') || ''
+export const rememberCwd = (cwd: string) => set('hq-cwd', cwd)

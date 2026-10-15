@@ -1,0 +1,26 @@
+/* 픽셀 그림용 색. 상태 색은 Mantine 색 변수(--mantine-color-teal-6 등)를 그대로 쓴다 */
+:root {
+  --hq-bg: #0c111d; --hq-floor: #0f1626; --hq-desk: #5c4837; --hq-desk-edge: #3d3027;
+  --hq-mon: #2c3349; --hq-screen-off: #1a2032; --hq-chair: #2f3852;
+  --hq-pixel: "Silkscreen", "IBM Plex Mono", monospace; --hq-display: "Orbit", "IBM Plex Sans KR", sans-serif;
+}
+[data-mantine-color-scheme="light"] {
+  --hq-bg: #eef1f7; --hq-floor: #e8ecf5; --hq-desk: #c9a57a; --hq-desk-edge: #a7845c;
+  --hq-mon: #3a4259; --hq-screen-off: #59617a; --hq-chair: #c3cadb;
+}
+body { background: var(--mantine-color-body); }
+.hq-pixel { font-family: var(--hq-pixel); font-size: 9.5px; letter-spacing: .1em; color: var(--mantine-color-dimmed); }
+.hq-display { font-family: var(--hq-display); }
+.hq-term { height: 100%; min-height: 0; background: #0b0f1a; border: 1px solid var(--mantine-color-default-border); border-radius: var(--mantine-radius-md); padding: 8px 4px 4px 10px; overflow: hidden; }
+.hq-term .xterm { height: 100%; }
+.hq-msg { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.hq-wrap { word-break: keep-all; overflow-wrap: anywhere; }
+.hq-drop-over { outline: 2px dashed var(--mantine-color-indigo-4); outline-offset: -2px; }
+.hq-dragging { opacity: .4; }
+
+.code { animation: hq-blink 1.1s steps(2) infinite; }
+.arm { animation: hq-wave 1.2s steps(2) infinite; }
+@keyframes hq-blink { 50% { opacity: .25; } }
+@keyframes hq-wave { 50% { transform: translateY(1px); } }
+@media (prefers-reduced-motion: reduce) { .code, .arm { animation: none; } }
+@media (max-width: 1100px) { .hq-board { grid-template-columns: minmax(0, 1fr) !important; } }

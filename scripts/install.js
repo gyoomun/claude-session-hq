@@ -84,6 +84,10 @@ function updateSkills() {
   }
 }
 
+if (!uninstall && !fs.existsSync(path.join(ROOT, 'dist', 'index.html'))) {
+  console.error('먼저 npm run build 로 화면을 만드세요.');
+  process.exit(1);
+}
 fs.chmodSync(HOOK, 0o755);
 updateSettings();
 updateSkills();
