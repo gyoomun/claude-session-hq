@@ -92,13 +92,17 @@ input,textarea{background:var(--panel-2);border:1px solid var(--line);border-rad
 .meta{color:var(--muted);font-size:12.5px;overflow-wrap:anywhere}
 .card-b{padding:12px 14px 14px;display:flex;flex-direction:column;gap:12px}
 .desks-h{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted)}
-.desks{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:8px;margin-top:6px}
-.desk{background:var(--floor);border:1px solid var(--line);border-radius:9px;padding:8px 8px 9px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;text-align:center;cursor:grab}
+.desks{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:6px}
+/* 책상은 왼쪽 그림 + 오른쪽 글. 제목은 자르지 않고 줄을 바꾼다 */
+.desk{background:var(--floor);border:1px solid var(--line);border-radius:9px;padding:8px 10px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:center;min-width:0;cursor:grab}
+.desk>svg{width:52px;height:auto}
+.desk .info{display:flex;flex-direction:column;gap:1px;min-width:0}
+.desk .assign{grid-column:1/-1}
 .desk:hover{border-color:color-mix(in srgb,var(--fg) 25%,var(--line))}
 .desk.hot{border-color:color-mix(in srgb,var(--c) 65%,var(--line))}
 .desk.dragging{opacity:.4}
 .desk svg{display:block}
-.dn{font-size:12px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dn{font-size:12.5px;font-weight:600;line-height:1.35;word-break:keep-all;overflow-wrap:anywhere}
 .dst{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .dst b{color:var(--c);font-weight:600}
 .dp{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -293,9 +297,9 @@ const person=`<svg width="12" height="14" viewBox="0 0 6 7" shape-rendering="cri
 const assignSel=(s,id='')=>`<select class="assign" ${id?`id="${id}"`:''} data-assign="${s.sid}" aria-label="${esc(s.title)} 업무 배치"><option value="">미배치</option>${S.tasks.map(t=>`<option value="${t.id}" ${s.task===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select>`;
 function deskTile(s,{sel=false,showTask=false}={}){
  return `<div class="desk ${waiting(s)?'hot':''}" style="--c:${COLOR[s.state]}" draggable="true" data-sid="${s.sid}" data-sess="${s.sid}" tabindex="0" role="button" aria-label="${esc(s.title)} 자세히">
-  ${desk(s)}<div class="dn" title="${esc(s.title)}">${esc(s.title)}</div><div class="dst"><b>${LABEL[s.state]}</b> ${since(s.since,'째')}</div>
+  ${desk(s)}<div class="info"><div class="dn">${esc(s.title)}</div><div class="dst"><b>${LABEL[s.state]}</b> ${since(s.since,'째')}</div>
   ${s.act?`<div class="act" title="${esc(s.act)}">${esc(s.act)}</div>`:`<div class="dp" title="${esc(s.cwd)}">${esc(base(s.cwd))}</div>`}
-  ${showTask?`<div class="ttag ${s.task?'':'none'}">${esc(tname(s.task))}</div>`:''}${sel?assignSel(s):''}</div>`}
+  ${showTask?`<div class="ttag ${s.task?'':'none'}">${esc(tname(s.task))}</div>`:''}</div>${sel?assignSel(s):''}</div>`}
 function counters(){
  const c=st=>S.sessions.filter(s=>s.state===st).length;
  const waits=S.tasks.flatMap(t=>t.waits),un=S.sessions.filter(s=>!s.task).length;
