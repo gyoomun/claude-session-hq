@@ -1,12 +1,13 @@
 // 작업 보기: 왼쪽 세션 목록(업무별로 묶음) + 오른쪽 고른 세션의 터미널
 import { useState } from 'react'
-import { Badge, Box, Button, Group, Paper, ScrollArea, Stack, Text, UnstyledButton } from '@mantine/core'
+import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast } from './store'
-import { pick, pickNew, setUI, useUI } from './ui'
+import { pick, setUI, useUI } from './ui'
 import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
+import { ChatView } from './Chat'
 
 function Item({ s, on }: { s: Session; on: boolean }) {
   return <UnstyledButton onClick={() => pick(s.sid)} p="7px 8px" w="100%"
@@ -45,34 +46,13 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
   </Paper>
 }
 
-function NotWeb({ s }: { s: Session }) {
-  const [busy, setBusy] = useState(false)
-  const working = s.state === 'working' || s.state === 'approval'
-  return <Paper withBorder p="xl" style={{ flex: 1, borderStyle: 'dashed', overflow: 'auto' }}>
-    <Stack gap="md" align="flex-start">
-      {s.host === 'orca' ? <>
-        <Text maw="62ch">이 세션은 Orca에서 돌고 있습니다. 웹으로 옮기면 Orca 쪽 Claude를 끝내고, 같은 대화를 원래 옵션 그대로 이어서 여기서 엽니다. 업무 배치도 그대로 따라옵니다.</Text>
-        <Group gap="xs">
-          <Button loading={busy} disabled={working} title={working ? '일이 끝난 뒤에 옮길 수 있습니다' : undefined} onClick={async () => {
-            setBusy(true); toast('Orca 쪽 Claude를 끝내고 웹으로 옮기는 중입니다…')
-            const r = await api<string>('session/migrate', { pid: s.pid })
-            setBusy(false)
-            if (r) { pickNew(r.result); toast('웹으로 옮겼습니다.') }
-          }}>웹으로 옮기기</Button>
-          <Button variant="default" onClick={async () => { if (await api('term/switch', { pid: s.pid })) toast('Orca에서 그 터미널로 옮겼습니다.') }}>Orca에서 보기</Button>
-        </Group>
-        {working && <Text size="sm" c="dimmed">지금 일하는 중이라 끝난 뒤에 옮길 수 있습니다.</Text>}
-      </> : <Text maw="62ch">다른 터미널에서 직접 띄운 세션이라 웹에서 열 수 없습니다. 그 터미널에서 <code>/exit</code>로 끝낸 뒤 새 세션으로 이어 가세요.</Text>}
-      {s.msg && <Paper withBorder p="sm" w="100%"><span className="hq-pixel">LAST REPLY</span><Text size="sm" className="hq-msg" mah={320} style={{ overflow: 'auto' }}>{s.msg}</Text></Paper>}
-    </Stack>
-  </Paper>
-}
-
 export function WorkView({ S }: { S: Snapshot }) {
   const ui = useUI()
   const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, ss: sessOf(S, t) })),
     { id: '', name: '미배치', ss: S.sessions.filter(s => !s.task).sort(bySt) }]
   const s = S.sessions.find(x => x.sid === ui.sel)
+  // 기본은 웹 대화 화면. 웹 세션은 터미널 화면으로도 볼 수 있다(Claude Code의 화면이 그대로 필요할 때)
+  const [view, setView] = useState(() => { try { return localStorage.getItem('hq-view') || 'chat' } catch { return 'chat' } })
   return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(0, 1fr)', gap: 12, height: 'calc(100vh - 250px)', minHeight: 460 }}>
     <Paper withBorder p={6} style={{ minHeight: 0, display: 'flex' }}>
       <ScrollArea style={{ flex: 1 }}>
@@ -95,7 +75,9 @@ export function WorkView({ S }: { S: Snapshot }) {
         </Stack>
       </Paper> : <>
         <Head S={S} s={s} />
-        {s.host === 'web' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <NotWeb s={s} />}
+        {s.host === 'web' && <SegmentedControl size="xs" value={view} onChange={v => { setView(v); try { localStorage.setItem('hq-view', v) } catch { /* 무시 */ } }}
+          data={[{ label: '대화', value: 'chat' }, { label: '터미널', value: 'term' }]} style={{ alignSelf: 'flex-start' }} />}
+        {s.host === 'web' && view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.sid} s={s} />}
       </>}
     </Stack>
   </Box>

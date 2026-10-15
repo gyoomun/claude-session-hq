@@ -55,7 +55,7 @@ function Queue({ S }: { S: Snapshot }) {
           {s.msg && <Text size="xs" className="hq-msg" style={{ WebkitLineClamp: 5 }}>{s.msg}</Text>}
           <ReplyForm s={s} />
           <Group gap={6}>
-            {s.host && <Button size="xs" variant="default" onClick={() => pick(s.sid)}>{s.host === 'web' ? '열기' : '웹으로 옮기기…'}</Button>}
+            <Button size="xs" variant="default" onClick={() => pick(s.sid)}>열기</Button>
             {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함 · 쉼으로</Button>}
           </Group>
         </Stack>

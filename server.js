@@ -308,6 +308,63 @@ function scan() {
   snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout };
 }
 
+/* 대화 화면: 대화 기록(jsonl)을 웹에서 그릴 수 있는 메시지로 바꾼다. 처음엔 끝부분만, 이후엔 늘어난 만큼만 읽는다 */
+const cut = (v, n) => { const t = typeof v === 'string' ? v : JSON.stringify(v); return t && t.length > n ? t.slice(0, n) + '…' : (t || ''); };
+function toolInput(name, i = {}) {
+  return cut(i.command || i.file_path || i.pattern || i.url || i.query || i.description || i.prompt || i.skill || (Object.keys(i).length ? i : ''), 400);
+}
+function chatItems(text) {
+  const out = [];
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    let d; try { d = JSON.parse(line); } catch { continue; }
+    if (d.isSidechain || d.isMeta || (d.type !== 'user' && d.type !== 'assistant')) continue;
+    const c = d.message && d.message.content, at = Date.parse(d.timestamp) || 0, id = d.uuid || String(out.length);
+    if (d.type === 'user') {
+      if (typeof c === 'string') {
+        const cmd = c.match(/<command-name>([^<]*)<\/command-name>(?:[\s\S]*<command-args>([^<]*)<\/command-args>)?/);
+        if (cmd) out.push({ id, at, t: 'user', text: (cmd[1] + ' ' + (cmd[2] || '')).trim() });
+        else if (!c.startsWith('<')) out.push({ id, at, t: 'user', text: c });
+        continue;
+      }
+      for (const [k, x] of (c || []).entries()) {
+        if (x.type === 'text' && !x.text.startsWith('<')) out.push({ id: id + k, at, t: 'user', text: x.text });
+        else if (x.type === 'image') out.push({ id: id + k, at, t: 'user', text: '[이미지]' });
+        else if (x.type === 'tool_result') {
+          const r = Array.isArray(x.content) ? x.content.filter(y => y.type === 'text').map(y => y.text).join('\n') : x.content;
+          out.push({ id: id + k, at, t: 'result', toolId: x.tool_use_id, text: cut(r, 3000), error: !!x.is_error });
+        }
+      }
+    } else {
+      for (const [k, x] of (c || []).entries()) {
+        if (x.type === 'text' && x.text.trim()) out.push({ id: id + k, at, t: 'assistant', text: x.text });
+        else if (x.type === 'tool_use') out.push({ id: id + k, at, t: 'tool', toolId: x.id, name: x.name.replace(/^mcp__(.+?)__/, '$1:'), text: toolInput(x.name, x.input) });
+      }
+    }
+  }
+  return out;
+}
+function transcript(params) {
+  const sid = params.get('sid') || '';
+  if (!/^[0-9a-f-]{36}$/.test(sid)) throw new Error('대화 ID 형식이 아닙니다');
+  const live = liveSessions().find(x => x.sessionId === sid);
+  const file = findTranscript({ cwd: live ? live.cwd : '', sessionId: sid });
+  if (!file) return { next: 0, items: [], missing: true };
+  const size = fs.statSync(file).size;
+  let from = Number(params.get('from'));
+  const first = !(from >= 0) || from > size;
+  if (first) from = Math.max(0, size - 3e6); // 처음엔 끝부분 3MB만
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(size - from);
+    fs.readSync(fd, buf, 0, buf.length, from);
+    // 처음 읽을 때는 잘린 첫 줄을 버리고, 끝의 덜 써진 줄은 다음에 읽는다(바이트 기준이라 한글이 잘리지 않는다)
+    const start = first && from > 0 ? buf.indexOf(10) + 1 : 0;
+    const end = Math.max(start, buf.lastIndexOf(10) + 1);
+    return { next: from + end, items: chatItems(buf.subarray(start, end).toString('utf8')), reset: first };
+  } finally { fs.closeSync(fd); }
+}
+
 /* 화면에서 오는 요청 */
 const task = id => db.tasks.find(t => t.id === id);
 const str = (v, n = 300) => String(v ?? '').trim().slice(0, n);
@@ -386,7 +443,8 @@ const routes = {
     if (b.task && !task(b.task)) throw new Error('없는 업무입니다');
     const open = snapshot.sessions.find(x => x.sid === sid);
     if (open && open.host === 'web') { focusReq = { name: open.tmux, at: Date.now() }; return open.tmux; }
-    if (open) throw new Error(`이 대화는 ${open.host === 'orca' ? 'Orca' : '다른 터미널'}에서 열려 있습니다. 거기서 /exit 한 뒤 다시 여세요`);
+    // 다른 곳에서 열려 있으면 막는다. 사용자가 경고를 보고 그래도 열겠다고 하면(force) 같은 대화를 하나 더 띄운다
+    if (open && !b.force) throw new Error(`이 대화는 ${open.host === 'orca' ? 'Orca' : '다른 터미널'}에서 열려 있습니다. 거기서 /exit 한 뒤 다시 여세요`);
     const file = findTranscript({ cwd: '', sessionId: sid });
     if (!file) throw new Error('그 대화 기록을 찾지 못했습니다');
     const m = readTail(file, Math.min(fs.statSync(file).size, 262144), 262144).match(/"cwd":"((?:[^"\\]|\\.)*)"/);
@@ -406,13 +464,32 @@ const routes = {
   },
   'term/switch': b => orca(b.pid, ['terminal', 'switch']),
   'term/send': async b => {
-    const text = str(b.text, 4000); if (!text) throw new Error('보낼 내용이 없습니다');
+    const text = String(b.text ?? '').replace(/\r\n?/g, '\n').trim().slice(0, 20000);
+    if (!text) throw new Error('보낼 내용이 없습니다');
     const where = handles.get(+b.pid) || {};
+    // 여러 줄은 붙여넣기로 넣어야 중간 줄바꿈이 Enter로 처리되지 않는다
     if (where.tmux) {
-      await tmux(['send-keys', '-t', where.tmux, '-l', text]);
+      if (text.includes('\n')) {
+        await tmux(['set-buffer', '-b', 'hq', '--', text]);
+        await tmux(['paste-buffer', '-p', '-d', '-b', 'hq', '-t', where.tmux]);
+      } else await tmux(['send-keys', '-t', where.tmux, '-l', text]);
+      await sleep(80);
       return tmux(['send-keys', '-t', where.tmux, 'Enter']);
     }
+    if (text.includes('\n')) {
+      await orca(b.pid, ['terminal', 'send', '--text', '\x1b[200~' + text + '\x1b[201~']);
+      return orca(b.pid, ['terminal', 'send', '--text', '', '--enter']);
+    }
     return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']);
+  },
+  // 대화 화면의 단축 키: 중단(Esc), 승인 창의 번호 고르기
+  'term/key': async b => {
+    const keys = { esc: ['Escape', '\x1b'], 1: ['1', '1'], 2: ['2', '2'], 3: ['3', '3'], enter: ['Enter', '\r'] };
+    const k = keys[b.key];
+    if (!k) throw new Error('모르는 키입니다');
+    const where = handles.get(+b.pid) || {};
+    if (where.tmux) return tmux(['send-keys', '-t', where.tmux, k[0]]);
+    return orca(b.pid, ['terminal', 'send', '--text', k[1]]);
   },
 };
 function orca(pid, args) {
@@ -493,6 +570,7 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && url.startsWith('/assets/')) return asset(res, url);
   if (req.method === 'GET' && url === '/api/state') return json(res, 200, { ...snapshot, access: auth.status(who) });
   if (req.method === 'GET' && url === '/api/term/stream') return stream(req, res, new URLSearchParams(qs || ''), who);
+  if (req.method === 'GET' && url === '/api/transcript') { try { return json(res, 200, transcript(new URLSearchParams(qs || ''))); } catch (e) { return json(res, 400, { error: e.message }); } }
   if (req.method !== 'POST') return json(res, 404, { error: 'not found' });
   // 다른 사이트가 이 주소로 몰래 요청을 보내지 못하게 전용 헤더를 요구한다(브라우저는 다른 사이트에서 이 헤더를 못 붙인다)
   if (req.headers['x-hq'] !== '1') return json(res, 403, { error: 'forbidden' });

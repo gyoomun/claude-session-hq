@@ -14,7 +14,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 
 ## 구조
 - `server.js`: 2초마다 세션 파일·대화 기록·훅 파일·tmux를 읽어 상태를 만들고, 페이지·`/api/*`·터미널 스트림을 제공
-- `web/src/`: 화면. `store.ts`(서버 상태 2초 폴링·쓰기 요청), `ui.ts`(보기·선택·창 상태, 주소 #으로 뒤로가기), `App.tsx`(머리·카운터·보기 전환), `Work.tsx`(작업 보기), `Board.tsx`(세션 전체·내 차례 큐·이벤트), `Office.tsx`(업무별 보기 = 가상 사무실), `Drawers.tsx`, `Modals.tsx`, `Terminal.tsx`(xterm), `Desk.tsx`(픽셀 책상·사람)
+- `web/src/`: 화면. `store.ts`(서버 상태 2초 폴링·쓰기 요청), `ui.ts`(보기·선택·창 상태, 주소 #으로 뒤로가기), `App.tsx`(머리·카운터·보기 전환), `Work.tsx`(작업 보기), `Chat.tsx`(대화 화면), `Board.tsx`(세션 전체·내 차례 큐·이벤트), `Office.tsx`(업무별 보기 = 가상 사무실), `Drawers.tsx`, `Modals.tsx`, `Terminal.tsx`(xterm), `Desk.tsx`(픽셀 책상·사람)
 - 디자인은 Mantine 컴포넌트를 쓰고, 상태 색은 Mantine 색 이름(`util.tsx`의 `COLOR`)으로 맞춘다. 사용자의 다른 프로젝트(moa)와 같은 조합이라 골랐다
 - `tmux.conf`: 웹 세션용 전용 tmux 설정(상태줄·단축키 끔)
 - `hooks/hook.sh`: Claude Code 훅. 이벤트를 `~/.claude/board/hooks/<pid>.json`에 덮어쓰기만 한다
@@ -35,6 +35,10 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - `focus`: 화면 밖(웹 안의 Claude 등)에서 세션을 열면 서버가 `focus`를 내보내고, 열려 있는 화면이 그 세션으로 넘어간다
 - 가상 사무실(업무별 보기): 업무 = 방, 미배치 = 로비, 세션 = 책상+사람. 내 차례·승인 필요는 멀리서도 보이게 큰 말풍선을 띄운다. 책상은 끌어서 방 안 자리를 옮기거나 다른 방으로 옮긴다(그러면 업무 배치도 바뀐다). 자리는 `db.layout[sid] = {x, y}`(바닥 기준 0~1 비율)로 저장하고, 자리가 없는 책상은 빈 칸에 차례로 앉힌다. 끌기는 HTML5 드래그가 아니라 포인터 이벤트로 직접 처리한다(자리 좌표가 필요해서). 5px 안 움직이면 클릭으로 보고 작업 보기에서 연다
 - 사무실 편집기(방 크기·벽·가구 꾸미기)는 아직 없다. 방은 업무 수만큼 격자로 자동 배치된다
+- 대화 화면(작업 보기의 기본): 서버 `/api/transcript`가 대화 기록 jsonl을 메시지(user·assistant·tool·result)로 바꿔 주고, 화면은 1.5초마다 늘어난 만큼만 받아 그린다. 처음엔 끝 3MB만 읽는다. 하위 에이전트(isSidechain)와 시스템 문구(`<`로 시작)는 뺀다
+- 대화 화면의 입력은 그 세션이 도는 곳에 그대로 넣는다: 웹 세션은 tmux, Orca 세션은 `orca terminal send`. 그래서 Orca 세션도 옮기지 않고 웹에서 바로 대화한다(Claude가 하나라 꼬이지 않는다). 여러 줄은 붙여넣기로 넣는다(tmux `paste-buffer -p`, Orca는 `ESC[200~…ESC[201~`). 중단은 Esc, 승인 창은 1·2·3 키를 보낸다
+- 다른 터미널에서 직접 띄운 세션은 입력할 길이 없어 읽기만 된다. '웹에서도 열기'는 경고를 보여 준 뒤 같은 대화를 하나 더 띄운다(`session/resume`의 `force`)
+- 웹 세션은 대화/터미널 화면을 바꿔 볼 수 있다. Orca → 웹 옮기기(`session/migrate`)는 API만 남기고 화면 버튼은 뺐다
 - 세션 제목 순서: custom-title → 탭 제목(tmux pane_title 또는 Orca) → ai-title → `name`
 
 ## 함정
@@ -55,7 +59,8 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 연결된 Claude in Chrome은 다른 PC(Windows)라 이 Mac의 localhost를 열 수 없다. 화면 확인은 Mac의 headless Chrome(DevTools로 조작)으로 한다
 
 ## 확인하지 못한 것
-- 실제 사람 손으로 웹 터미널을 오래 써 보지 않았다(스크롤·복사·한글 입력기·붙여넣기)
+- 실제 사람 손으로 웹 터미널·대화 화면을 오래 써 보지 않았다(스크롤·복사·한글 입력기·붙여넣기)
+- 대화 화면은 지금 보이는 메시지 줄기만 그린다. 되돌리기(rewind)로 갈라진 대화나 이미지·생각(thinking)은 보이지 않는다
 - 승인 대기(PermissionRequest)와 AskUserQuestion 표시는 실제 상황에서 확인하지 않았다
 - 실제 맥 재부팅 뒤 복구는 tmux를 죽여서 흉내 낸 것만 확인했다
 

@@ -21,7 +21,7 @@ export function SessionDrawer({ S }: { S: Snapshot }) {
       <Group gap={8}><StatePill state={s.state} /><Text size="xs" c="dimmed"><Since t={s.since} suf="째" /></Text>{s.act && <Text size="xs" ff="monospace" c="teal.5">{s.act}</Text>}</Group>
       <Box><Text size="xs" c="dimmed" mb={4}>업무 배치</Text><AssignSelect S={S} s={s} size="sm" /></Box>
       <Group gap={6}>
-        {s.host && <Button size="xs" variant="default" onClick={() => pick(s.sid)}>{s.host === 'web' ? '작업 보기에서 열기' : '웹으로 옮기기…'}</Button>}
+        <Button size="xs" variant="default" onClick={() => pick(s.sid)}>작업 보기에서 열기</Button>
         {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함 · 쉼으로</Button>}
         {s.task && <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: null, openTask: s.task })}>업무 보기</Button>}
       </Group>

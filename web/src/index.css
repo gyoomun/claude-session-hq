@@ -63,3 +63,25 @@ body { background: var(--mantine-color-body); }
 .hq-bubble::after { content: ''; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); border: 4px solid transparent; border-top-color: #111; }
 @keyframes hq-bounce { 50% { transform: translate(-50%, -3px); } }
 @media (prefers-reduced-motion: reduce) { .hq-bubble { animation: none; } .hq-desk { transition: none; } }
+
+/* 대화 화면 (Chat.tsx) */
+.hq-say { max-width: 100%; }
+.hq-say.me { align-self: flex-end; max-width: 85%; background: var(--mantine-color-indigo-light); border: 1px solid var(--mantine-color-indigo-8); border-radius: 12px 12px 2px 12px; padding: 8px 12px; }
+.hq-md { font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.hq-md > :first-child { margin-top: 0; } .hq-md > :last-child { margin-bottom: 0; }
+.hq-md p, .hq-md ul, .hq-md ol { margin: .4em 0; }
+.hq-md ul, .hq-md ol { padding-left: 1.4em; }
+.hq-md code { font-family: var(--mantine-font-family-monospace); font-size: .88em; background: var(--mantine-color-default); padding: 1px 4px; border-radius: 4px; }
+.hq-md pre { background: #0b0f1a; color: #e7ebf5; padding: 10px 12px; border-radius: 8px; overflow-x: auto; }
+.hq-md pre code { background: none; padding: 0; }
+.hq-md table { border-collapse: collapse; display: block; overflow-x: auto; font-size: 13px; }
+.hq-md th, .hq-md td { border: 1px solid var(--mantine-color-default-border); padding: 4px 8px; text-align: left; }
+.hq-md blockquote { margin: .4em 0; padding-left: 10px; border-left: 3px solid var(--mantine-color-default-border); color: var(--mantine-color-dimmed); }
+.hq-md a { color: var(--mantine-color-indigo-4); }
+.hq-tool { font-size: 12.5px; border-left: 2px solid var(--mantine-color-teal-8); padding-left: 8px; }
+.hq-tool.err { border-left-color: var(--mantine-color-red-7); }
+.hq-tool summary { cursor: pointer; color: var(--mantine-color-dimmed); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; list-style: none; }
+.hq-tool summary::-webkit-details-marker { display: none; }
+.hq-tool summary .name { color: var(--mantine-color-teal-4); font-weight: 600; }
+.hq-tool summary .arg { font-family: var(--mantine-font-family-monospace); }
+.hq-tool pre { margin: 6px 0 2px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--mantine-color-default); padding: 8px; border-radius: 6px; font-size: 12px; }
