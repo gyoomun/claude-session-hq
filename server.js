@@ -125,6 +125,7 @@ function toolLine(h) {
   return clip((tool + (x ? ' · ' + x : '')).replace(/\s+/g, ' '), 160);
 }
 
+const quiet = new Map(); // sid -> 마지막으로 본 쉬는 상태(idle/myturn). 압축이 끝난 뒤 되돌릴 때 쓴다
 function stateOf(s, h, now) {
   const at = s.statusUpdatedAt || s.startedAt || now;
   const fresh = h && h.at >= at - 2000;
@@ -132,7 +133,11 @@ function stateOf(s, h, now) {
   if (fresh && h.event === 'PreToolUse' && h.tool === 'AskUserQuestion') return ['myturn', h.at];
   if (s.status === 'busy') return ['working', at];
   if (s.status && s.status !== 'idle') return ['working', at];
-  return [at > (db.seen[s.sessionId] || 0) ? 'myturn' : 'idle', at];
+  let st = at > (db.seen[s.sessionId] || 0) ? 'myturn' : 'idle';
+  // Claude Code는 쉬는 동안 스스로 대화를 압축한다(PreCompact 훅이 마지막 이벤트). 끝나면 상태 시각만 바뀌고 새로 할 말은 없으니 압축 전 상태로 둔다
+  if (st === 'myturn' && h && h.event === 'PreCompact' && quiet.get(s.sessionId) === 'idle') { db.seen[s.sessionId] = at; st = 'idle'; }
+  quiet.set(s.sessionId, st);
+  return [st, at];
 }
 
 /* 세션이 어디서 돌고 있나: claude 프로세스의 환경 변수로 안다. 웹 세션은 HQ_TMUX, Orca는 ORCA_TERMINAL_HANDLE. 프로세스마다 한 번만 읽는다. */
@@ -295,7 +300,7 @@ function scan() {
     return {
       pid: s.pid, sid: s.sessionId, name: s.name, title: t.custom || (tabTitle && tabTitle !== 'Claude Code' ? tabTitle : '') || t.title || s.name,
       cwd: s.cwd.replace(HOME, '~'), dir: s.cwd, state, since, startedAt: s.startedAt,
-      act: state === 'working' ? (toolNow ? toolLine(h) : '생각 중') : '',
+      act: state === 'working' ? (toolNow ? toolLine(h) : h && h.event === 'PreCompact' && h.at >= (s.statusUpdatedAt || 0) - 2000 ? '대화 압축 중' : '생각 중') : '',
       msg, prompt: clip(t.lastPrompt, 400), task: db.assign[s.sessionId] || '',
       host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '',
     };

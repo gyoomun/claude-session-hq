@@ -12,7 +12,7 @@ const SETTINGS = path.join(HOME, '.claude', 'settings.json');
 const HOOK = path.join(ROOT, 'hooks', 'hook.sh');
 // $PPID는 훅을 실행한 claude 프로세스다. 서버는 이 번호로 ~/.claude/sessions/<pid>.json과 짝을 맞춘다
 const COMMAND = `CLAUDE_PID=$PPID '${HOOK}'`;
-const EVENTS = { UserPromptSubmit: null, PreToolUse: '*', PostToolUse: '*', PermissionRequest: '*', Stop: null };
+const EVENTS = { UserPromptSubmit: null, PreToolUse: '*', PostToolUse: '*', PermissionRequest: '*', Stop: null, PreCompact: null };
 const LABEL = 'dev.gyoomun.claude-session-hq';
 const PLIST = path.join(HOME, 'Library', 'LaunchAgents', LABEL + '.plist');
 const BOARD = path.join(HOME, '.claude', 'board');
