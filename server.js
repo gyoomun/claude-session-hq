@@ -354,6 +354,8 @@ const cut = (v, n) => { const t = typeof v === 'string' ? v : JSON.stringify(v);
 function toolInput(name, i = {}) {
   return cut(i.command || i.file_path || i.pattern || i.url || i.query || i.description || i.prompt || i.skill || (Object.keys(i).length ? i : ''), 400);
 }
+// 예전에 웹이 여러 줄을 붙여넣기로 보내 Claude Code가 <pasted_content id="…">로 감싼 내 말. 태그를 벗겨 내 말 그대로 보인다
+const unwrapPaste = t => t.replace(/<\/?pasted_content(?: id="[^"]*")?>/g, '').trim();
 function chatItems(text) {
   const out = [];
   for (const line of text.split('\n')) {
@@ -364,13 +366,14 @@ function chatItems(text) {
     const c = d.message && d.message.content, at = Date.parse(d.timestamp) || 0, id = d.uuid || String(out.length);
     if (d.type === 'user') {
       if (typeof c === 'string') {
+        const u = unwrapPaste(c);
         const cmd = c.match(/<command-name>([^<]*)<\/command-name>(?:[\s\S]*<command-args>([^<]*)<\/command-args>)?/);
         if (cmd) out.push({ id, at, t: 'user', text: (cmd[1] + ' ' + (cmd[2] || '')).trim() });
-        else if (!c.startsWith('<')) out.push({ id, at, t: 'user', text: c });
+        else if (u && !u.startsWith('<')) out.push({ id, at, t: 'user', text: u });
         continue;
       }
       // 한 메시지의 글과 이미지는 말풍선 하나로. 이미지는 글 속 [Image #N]이 자리를 표시하므로, 글이 없을 때만 따로 적는다
-      const texts = (c || []).filter(x => x.type === 'text' && !x.text.startsWith('<')).map(x => x.text);
+      const texts = (c || []).filter(x => x.type === 'text').map(x => unwrapPaste(x.text)).filter(x => x && !x.startsWith('<'));
       const imgs = (c || []).filter(x => x.type === 'image').length;
       if (texts.length || imgs) out.push({ id, at, t: 'user', text: texts.join('\n') || `[이미지 ${imgs}장]` });
       for (const [k, x] of (c || []).entries()) {
@@ -674,7 +677,8 @@ const routes = {
     const text = list.length === 1 && list[0].text;
     const where = handles.get(+b.pid) || {};
     if (!where.tmux && !where.orca) throw new Error('이 세션에는 입력을 넣을 수 없습니다');
-    // 붙여넣기로 넣는다: 여러 줄의 중간 줄바꿈이 Enter로 처리되지 않고, 이미지 경로는 이미지로 붙는다
+    // 글은 친 것처럼 넣고(줄바꿈은 Ctrl-J), 이미지 경로만 붙여넣기로 넣는다(그래야 이미지로 붙는다).
+    // 글을 붙여넣기로 넣으면 Claude Code가 <pasted_content>로 감싸 Claude가 '남이 쓴 글'로 다룬다. 내 말인데도
     const paste = async t => {
       if (where.tmux) {
         await tmux(['set-buffer', '-b', 'hq', '--', t]);
@@ -682,9 +686,11 @@ const routes = {
       } else await orca(b.pid, ['terminal', 'send', '--text', '\x1b[200~' + t + '\x1b[201~']);
       await sleep(150);
     };
-    if (!text || text.includes('\n')) { for (const x of list) await paste(x.image || x.text); }
-    else if (where.tmux) await tmux(['send-keys', '-t', where.tmux, '-l', text]);
-    else return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']);
+    // 한 번의 tmux 호출로: 줄마다 send-keys -l, 줄 사이에 C-j. 글 안의 줄바꿈 문자는 Claude Code가 버린다
+    const type = t => tmux(t.split('\n').flatMap((line, i) => [...(i ? ['send-keys', '-t', where.tmux, 'C-j', ';'] : []),
+      ...(line ? ['send-keys', '-t', where.tmux, '-l', '--', line, ';'] : [])]).slice(0, -1));
+    if (!where.tmux) { if (text && !text.includes('\n')) return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']); for (const x of list) await paste(x.image || x.text); }
+    else for (const x of list) { if (x.image) await paste(x.image); else await type(x.text); }
     await sleep(120);
     if (where.tmux) return tmux(['send-keys', '-t', where.tmux, 'Enter']);
     return orca(b.pid, ['terminal', 'send', '--text', '', '--enter']);
