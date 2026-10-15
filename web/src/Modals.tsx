@@ -1,8 +1,8 @@
-// 가운데 창들: 새 세션, 업무 추가, 상황 브리핑, 접속 관리
+// 가운데 창들: 새 세션, 업무 추가, 상황 브리핑, 접속 관리, 환경설정
 import { useEffect, useState } from 'react'
-import { Autocomplete, Badge, Button, Code, Group, List, Modal, NativeSelect, Paper, Stack, Text, TextInput, Textarea } from '@mantine/core'
+import { Autocomplete, Badge, Button, Code, Group, List, Modal, NativeSelect, Paper, SegmentedControl, Stack, Switch, Text, TextInput, Textarea } from '@mantine/core'
 import { api, toast } from './store'
-import { lastCwd, pickNew, rememberCwd, setMode, setUI, useUI } from './ui'
+import { lastCwd, pickNew, rememberCwd, setDetail, setMode, setUI, setView, useUI } from './ui'
 import type { Snapshot } from './types'
 import { Since, bySt, fmt, lastOf, overdue, stale, tname, waiting } from './util'
 
@@ -133,6 +133,34 @@ export function AccessModal({ S }: { S: Snapshot }) {
           </Group>
         </Paper>) : <Text size="sm" c="dimmed">로그인한 다른 기기가 없습니다.</Text>}
       </Stack></Paper>
+    </Stack>
+  </Modal>
+}
+
+// 웹 세션을 모두 끄고 같은 대화로 다시 띄운다(전역 CLAUDE.md·.zshrc를 바꾼 뒤). 일하는 중이어도 끊으므로 두 번 눌러야 한다
+function RestartAll({ S }: { S: Snapshot }) {
+  const [confirm, setConfirm] = useState(false)
+  const n = S.sessions.filter(s => s.host === 'web').length
+  return <Button variant="default" size="xs" color={confirm ? 'red' : undefined} disabled={!n} onBlur={() => setConfirm(false)} onClick={async () => {
+    if (!confirm) { setConfirm(true); return }
+    setConfirm(false)
+    const r = await api<number>('session/restart')
+    if (r) toast(`웹 세션 ${r.result}개를 다시 띄웁니다. 대화는 그대로 이어집니다.`)
+  }}>{confirm ? `한 번 더 누르면 ${n}개 재시작` : '모두 재시작'}</Button>
+}
+
+// 자주 바꾸지 않는 화면 설정과 관리 동작을 한곳에 모은다
+export function SettingsModal({ S }: { S: Snapshot }) {
+  const ui = useUI()
+  const row = (label: string, desc: string, control: React.ReactNode) => <Group justify="space-between" wrap="nowrap" gap="md">
+    <Stack gap={0}><Text size="sm" fw={600}>{label}</Text><Text size="xs" c="dimmed">{desc}</Text></Stack>{control}</Group>
+  return <Modal opened={ui.settings} onClose={() => setUI({ settings: false })} title="환경설정">
+    <Stack gap="lg">
+      {row('웹 세션 화면', '터미널은 Claude Code 화면 그대로입니다', <SegmentedControl size="xs" value={ui.view} onChange={v => setView(v as 'chat' | 'term')}
+        data={[{ label: '대화', value: 'chat' }, { label: '터미널', value: 'term' }]} />)}
+      {row('작업 과정 자세히', '대화 화면에서 도구 사용을 하나하나 봅니다', <Switch checked={ui.detail} onChange={e => setDetail(e.currentTarget.checked)} aria-label="작업 과정 자세히" />)}
+      {row('접속', '사내망 접속과 로그인한 기기를 관리합니다', <Button size="xs" variant="default" onClick={() => setUI({ settings: false, access: true })}>열기</Button>)}
+      {row('모두 재시작', '웹 세션을 모두 끄고 같은 대화로 다시 띄웁니다(일하는 중이어도)', <RestartAll S={S} />)}
     </Stack>
   </Modal>
 }

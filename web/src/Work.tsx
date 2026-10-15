@@ -1,6 +1,6 @@
 // 작업 보기: 왼쪽 세션 목록(업무별로 묶음) + 오른쪽 고른 세션의 터미널
 import { useState } from 'react'
-import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, Stack, Switch, Text, UnstyledButton } from '@mantine/core'
+import { Badge, Box, Button, Group, Paper, ScrollArea, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast } from './store'
 import { pick, setUI, toggleSide, useUI } from './ui'
 import type { Session, Snapshot } from './types'
@@ -79,10 +79,6 @@ export function WorkView({ S }: { S: Snapshot }) {
   const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, ss: sessOf(S, t) })),
     { id: '', name: '미배치', ss: S.sessions.filter(s => !s.task).sort(bySt) }]
   const s = S.sessions.find(x => x.sid === ui.sel)
-  // 기본은 웹 대화 화면. 웹 세션은 터미널 화면으로도 볼 수 있다(Claude Code의 화면이 그대로 필요할 때)
-  const [view, setView] = useState(() => { try { return localStorage.getItem('hq-view') || 'chat' } catch { return 'chat' } })
-  // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
-  const [detail, setDetail] = useState(() => { try { return localStorage.getItem('hq-detail') === '1' } catch { return false } })
   const side = !!s && ui.side
   return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(0, 1fr)' + (side ? ' minmax(300px, 420px)' : ''),
     gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
@@ -106,17 +102,9 @@ export function WorkView({ S }: { S: Snapshot }) {
         {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
       </Stack>
     </Paper> : <>
-      <Stack gap={8} style={{ minWidth: 0 }}>
-        <Head S={S} s={s} side={ui.side} onSide={toggleSide} />
-        <Group gap="md">
-          {s.host === 'web' && <SegmentedControl size="xs" value={view} onChange={v => { setView(v); try { localStorage.setItem('hq-view', v) } catch { /* 무시 */ } }}
-            data={[{ label: '대화', value: 'chat' }, { label: '터미널', value: 'term' }]} />}
-          {(s.host !== 'web' || view === 'chat') && <Switch size="xs" label="작업 과정 자세히" checked={detail}
-            onChange={e => { const v = e.currentTarget.checked; setDetail(v); try { localStorage.setItem('hq-detail', v ? '1' : '0') } catch { /* 무시 */ } }} />}
-        </Group>
-      </Stack>
+      <Head S={S} s={s} side={ui.side} onSide={toggleSide} />
       <Box style={{ gridColumn: 2, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {s.host === 'web' && view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={detail} />}
+        {s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
       </Box>
       {side && <Box style={{ gridColumn: 3, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>}
     </>}
