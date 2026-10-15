@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Session HQ 로그인</title>
+<style>
+:root{--bg:#0c111d;--panel:#131a2a;--panel-2:#1a2337;--line:#26314b;--fg:#e7ebf5;--muted:#8f99b4;--accent:#a3b6ff;--bad:#ff7a59;color-scheme:dark}
+@media (prefers-color-scheme: light){:root{--bg:#eef1f7;--panel:#fff;--panel-2:#f4f6fb;--line:#d9dfec;--fg:#141a2b;--muted:#5e6885;--accent:#3d58d6;--bad:#cf4426;color-scheme:light}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;padding:16px}
+main{width:min(400px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px 24px;display:flex;flex-direction:column;gap:14px}
+h1{margin:0;font-size:20px}
+p{margin:0;color:var(--muted);font-size:13.5px}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+input{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;color:var(--fg);font:inherit}
+#code{font-size:22px;letter-spacing:.3em;text-align:center;font-variant-numeric:tabular-nums}
+button{border:0;border-radius:9px;padding:11px;font:inherit;font-weight:600;background:var(--accent);color:var(--bg);cursor:pointer}
+button.ghost{background:transparent;color:var(--muted);font-weight:400;padding:4px}
+button:disabled{opacity:.6;cursor:default}
+.msg{font-size:13.5px;min-height:1.6em}
+.msg.bad{color:var(--bad)}
+input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Claude Session HQ</h1>
+  <p>이 화면은 주인의 맥에 있는 Claude 작업 공간입니다. 주인 메일로 받은 인증번호로 들어올 수 있습니다.</p>
+  <form id="ask">
+    <button type="submit" id="ask-btn">인증번호 메일 받기</button>
+  </form>
+  <form id="verify" hidden>
+    <label>인증번호 6자리<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*"></label>
+    <label>이 기기 이름 (나중에 목록에서 알아보기 쉽게, 선택)<input id="label" maxlength="60" placeholder="예: 박과장 자리 PC"></label>
+    <button type="submit">로그인</button>
+    <button type="button" class="ghost" id="again">인증번호 다시 받기</button>
+  </form>
+  <div class="msg" id="msg" role="status"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const say=(t,bad)=>{$('msg').textContent=t;$('msg').className='msg'+(bad?' bad':'')};
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','x-hq':'1'},body:JSON.stringify(body||{})});
+ const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'요청이 실패했습니다');return d}
+async function ask(){$('ask-btn').disabled=true;say('메일을 보내는 중입니다…');
+ try{const d=await post('/auth/request');$('ask').hidden=true;$('verify').hidden=false;$('code').focus();say(`${d.to} 으로 인증번호를 보냈습니다. 10분 안에 입력하세요.`)}
+ catch(e){say(e.message,true)}finally{$('ask-btn').disabled=false}}
+$('ask').addEventListener('submit',e=>{e.preventDefault();ask()});
+$('again').addEventListener('click',ask);
+$('verify').addEventListener('submit',async e=>{e.preventDefault();
+ try{await post('/auth/verify',{code:$('code').value,label:$('label').value});location.href='/'}
+ catch(err){say(err.message,true);$('code').select()}});
+</script>
+</body>
+</html>

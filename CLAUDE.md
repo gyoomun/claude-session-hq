@@ -16,6 +16,8 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - `public/index.html`: 화면 전부(빌드 없음). 보기 3개: 작업(목록+터미널), 업무별, 세션 전체
 - `tmux.conf`: 웹 세션용 전용 tmux 설정(상태줄·단축키 끔)
 - `hooks/hook.sh`: Claude Code 훅. 이벤트를 `~/.claude/board/hooks/<pid>.json`에 덮어쓰기만 한다
+- `auth.js`: 사내망 접속 인증(메일 인증번호 → 로그인 쿠키, 로그인 기기 목록·끊기). 외부 라이브러리 없이 SMTP로 메일을 보낸다
+- `public/login.html`: 다른 PC가 처음 들어올 때 보는 로그인 화면
 - `skills/hq-open`: 웹 안의 Claude가 지난 대화를 기록에서 찾아 `/api/session/resume`으로 다시 여는 스킬. install.js가 `~/.claude/skills`에 링크한다
 - `scripts/install.js`: settings.json 훅 등록 + 스킬 링크 + launchd plist
 
@@ -40,7 +42,10 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - node-pty 미리 빌드된 `spawn-helper`는 실행 권한 없이 깔린다. `postinstall`이 권한을 준다
 - 훅 명령은 `CLAUDE_PID=$PPID '<hook.sh>'` 형태여야 한다. `$PPID`가 claude 프로세스여야 세션 파일과 짝이 맞는다. 훅은 stdout에 아무것도 쓰면 안 된다
 - launchd는 nvm 경로를 모른다. Node 경로를 `/opt/homebrew/bin/node`로 고정했다
-- 쓰기 API는 Host가 localhost/127.0.0.1이고 `x-hq: 1` 헤더가 있어야 받는다. 터미널 입력도 여기에 포함되니 빼지 않는다
+- 접근 판정(`auth.identify`): 이 맥(루프백 주소 + Host가 localhost)이면 로그인 없이 통과, 아니면 로그인 쿠키가 있어야 한다. 사내망 접속(`db.settings.lan`)이 꺼져 있으면 맥 밖 요청은 모두 403. 맥에서 터널(cloudflared 등)로 들어온 요청은 Host가 달라 로그인을 요구받는다
+- 모든 쓰기 요청은 `x-hq: 1` 헤더가 있어야 받는다. 다른 사이트가 이 주소로 몰래 요청을 보내는 것을 막는 장치라 빼지 않는다. 쿠키는 HttpOnly·SameSite=Strict
+- 인증번호·로그인 토큰은 해시로만 `hq.json`에 저장한다. 메일 설정(`~/.claude/board/mail.env`)은 사용자가 직접 만든다(비밀번호가 들어가므로 Claude가 쓰지 않는다)
+- 시험할 때는 `HQ_MAIL_FILE`로 메일 설정 파일을 바꾸고, `SMTP_SECURE=0`이면 TLS 없이 붙는다(가짜 SMTP로 시험하려고 둔 것)
 - Orca → 웹 옮기기는 Orca 쪽 claude에 `/exit`를 보내고 프로세스가 끝나길 기다린 뒤 이어 띄운다. 일하는 중에는 막는다
 - 연결된 Claude in Chrome은 다른 PC(Windows)라 이 Mac의 localhost를 열 수 없다. 화면 확인은 Mac의 headless Chrome(DevTools로 조작)으로 한다
 

@@ -1,5 +1,5 @@
 // claude-session-hq: 이 Mac의 Claude Code 세션을 모아 보고, 웹 안의 터미널로 직접 일하게 하는 로컬 서버.
-// 웹에서 연 세션은 전용 tmux 서버 안에서 돌아 이 서버가 꺼져도 살아 있다. 127.0.0.1에서만 열린다.
+// 웹에서 연 세션은 전용 tmux 서버 안에서 돌아 이 서버가 꺼져도 살아 있다. 이 맥 밖(사내망)에서는 메일 인증으로 로그인해야 쓴다(auth.js).
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -415,11 +415,15 @@ function orca(pid, args) {
 }
 
 /* HTTP */
+const createAuth = require('./auth');
+const auth = createAuth({ db, save, mailFile: process.env.HQ_MAIL_FILE || path.join(BOARD_DIR, 'mail.env'), port: PORT });
+const LOGIN_PAGE = path.join(__dirname, 'public', 'login.html');
 function send(res, code, type, body) {
   res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' });
   res.end(body);
 }
 const json = (res, code, obj) => send(res, code, 'application/json; charset=utf-8', JSON.stringify(obj));
+const file = (res, f, type) => fs.readFile(f, (e, b) => e ? json(res, 404, { error: 'not found' }) : send(res, 200, type, b));
 const VENDOR = {
   '/vendor/xterm.js': ['@xterm/xterm/lib/xterm.js', 'text/javascript'],
   '/vendor/xterm.css': ['@xterm/xterm/css/xterm.css', 'text/css'],
@@ -427,9 +431,9 @@ const VENDOR = {
 };
 
 /* 웹 터미널: 브라우저 하나가 붙을 때마다 tmux 클라이언트 하나를 pty로 띄워 출력은 SSE로, 입력은 POST로 주고받는다 */
-const ptys = new Map();
+const ptys = new Map(); // id -> { p, login }
 const int = (v, lo, hi, d) => Math.min(hi, Math.max(lo, parseInt(v, 10) || d));
-function stream(req, res, params) {
+function stream(req, res, params, who) {
   const name = params.get('name') || '';
   if (!/^hq-[a-z0-9]+$/.test(name)) return json(res, 400, { error: 'bad name' });
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
@@ -437,39 +441,70 @@ function stream(req, res, params) {
     name: 'xterm-256color', cols: int(params.get('cols'), 20, 500, 120), rows: int(params.get('rows'), 5, 200, 40), cwd: HOME, env: TERM_ENV,
   });
   const id = crypto.randomUUID();
-  ptys.set(id, p);
+  ptys.set(id, { p, login: who.login ? who.login.id : '' });
   res.write(`event: ready\ndata: ${id}\n\n`);
   const out = s => { if (!res.writableEnded && !res.destroyed) res.write(s); };
   p.onData(d => out(`data: ${JSON.stringify(d)}\n\n`));
   p.onExit(() => { ptys.delete(id); out('event: end\ndata: \n\n'); if (!res.writableEnded) res.end(); });
   req.on('close', () => { ptys.delete(id); try { p.kill(); } catch {} });
 }
+// 끊은 기기의 터미널 연결은 바로 닫는다
+function dropLogins(ids) {
+  for (const [id, t] of ptys) if (t.login && ids.includes(t.login)) { ptys.delete(id); try { t.p.kill(); } catch {} }
+}
+const accessRoutes = {
+  'access/lan': (b, who) => {
+    if (!who.local) throw new Error('사내망 접속은 이 맥에서만 켜고 끌 수 있습니다');
+    db.settings.lan = !!b.on;
+    if (!b.on) dropLogins(db.logins.map(l => l.id)); // 끄면 다른 PC의 터미널도 끊는다
+  },
+  'access/revoke': b => dropLogins(auth.revoke(String(b.id || ''))),
+  'access/logout': (b, who) => { if (who.login) dropLogins(auth.revoke(who.login.id)); },
+};
 
 http.createServer((req, res) => {
-  // 다른 사이트가 localhost로 요청을 보내지 못하게 Host와 전용 헤더를 확인한다
-  if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) return json(res, 403, { error: 'forbidden' });
+  const who = auth.identify(req);
   const [url, qs] = req.url.split('?');
-  if (req.method === 'GET' && url === '/') return fs.readFile(PAGE, (e, b) => e ? json(res, 500, { error: e.message }) : send(res, 200, 'text/html; charset=utf-8', b));
-  if (req.method === 'GET' && VENDOR[url]) return fs.readFile(require.resolve(VENDOR[url][0]), (e, b) => e ? json(res, 404, { error: 'not found' }) : send(res, 200, VENDOR[url][1], b));
-  if (req.method === 'GET' && url === '/api/state') return json(res, 200, snapshot);
-  if (req.method === 'GET' && url === '/api/term/stream') return stream(req, res, new URLSearchParams(qs || ''));
-  if (req.method !== 'POST' || !url.startsWith('/api/')) return json(res, 404, { error: 'not found' });
+  if (!who || !who.local) {
+    if (!db.settings.lan) return send(res, 403, 'text/plain; charset=utf-8', '사내망 접속이 꺼져 있습니다. 이 맥에서 HQ를 열어 접속 설정에서 켜 주세요.');
+    if (req.method === 'GET' && url === '/login') return file(res, LOGIN_PAGE, 'text/html; charset=utf-8');
+    // 로그인 전에는 로그인 화면과 인증번호 요청·확인만 된다
+    if (!who && !(req.method === 'POST' && (url === '/auth/request' || url === '/auth/verify'))) {
+      if (req.method === 'GET' && url === '/') { res.writeHead(302, { Location: '/login' }); return res.end(); }
+      return json(res, 401, { error: '로그인이 필요합니다' });
+    }
+  }
+  if (req.method === 'GET' && url === '/login') return file(res, LOGIN_PAGE, 'text/html; charset=utf-8');
+  if (req.method === 'GET' && url === '/') return file(res, PAGE, 'text/html; charset=utf-8');
+  if (req.method === 'GET' && VENDOR[url]) return file(res, require.resolve(VENDOR[url][0]), VENDOR[url][1]);
+  if (req.method === 'GET' && url === '/api/state') return json(res, 200, { ...snapshot, access: auth.status(who) });
+  if (req.method === 'GET' && url === '/api/term/stream') return stream(req, res, new URLSearchParams(qs || ''), who);
+  if (req.method !== 'POST') return json(res, 404, { error: 'not found' });
+  // 다른 사이트가 이 주소로 몰래 요청을 보내지 못하게 전용 헤더를 요구한다(브라우저는 다른 사이트에서 이 헤더를 못 붙인다)
   if (req.headers['x-hq'] !== '1') return json(res, 403, { error: 'forbidden' });
   let body = '';
   req.on('data', c => { body += c; if (body.length > 1e6) req.destroy(); });
   req.on('end', async () => {
     let b; try { b = JSON.parse(body || '{}'); } catch { return json(res, 400, { error: 'bad json' }); }
+    try {
+      if (url === '/auth/request') return json(res, 200, await auth.requestCode(req));
+      if (url === '/auth/verify') { auth.verifyCode(req, res, b); return json(res, 200, { ok: true }); }
+    } catch (e) { return json(res, 400, { error: e.message }); }
     // 키 입력과 크기 조정은 자주 오므로 상태를 다시 만들지 않고 바로 답한다
-    if (url === '/api/term/input') { ptys.get(b.id)?.write(String(b.data || '')); return send(res, 204, 'text/plain', ''); }
-    if (url === '/api/term/resize') { try { ptys.get(b.id)?.resize(int(b.cols, 20, 500, 120), int(b.rows, 5, 200, 40)); } catch {} return send(res, 204, 'text/plain', ''); }
-    const route = routes[url.slice(5)];
+    if (url === '/api/term/input') { ptys.get(b.id)?.p.write(String(b.data || '')); return send(res, 204, 'text/plain', ''); }
+    if (url === '/api/term/resize') { try { ptys.get(b.id)?.p.resize(int(b.cols, 20, 500, 120), int(b.rows, 5, 200, 40)); } catch {} return send(res, 204, 'text/plain', ''); }
+    const key = url.slice(5);
+    const route = url.startsWith('/api/') && (routes[key] || accessRoutes[key]);
     if (!route) return json(res, 404, { error: 'not found' });
     try {
-      const result = await route(b);
+      const result = await route(b, who);
       save(); scan();
-      json(res, 200, { ...snapshot, result });
+      // 방금 자기 자신을 끊었으면 더 보여 줄 것이 없다
+      if (!who.local && !db.logins.includes(who.login)) return json(res, 401, { error: '로그아웃했습니다' });
+      json(res, 200, { ...snapshot, access: auth.status(who), result });
     } catch (e) { json(res, 400, { error: e.message }); }
   });
-}).listen(PORT, '127.0.0.1', () => console.log(`claude-session-hq: http://127.0.0.1:${PORT}`));
+// 모든 주소에서 받되, 사내망 접속이 꺼져 있으면 이 맥 밖의 요청은 위에서 막는다
+}).listen(PORT, () => console.log(`claude-session-hq: http://127.0.0.1:${PORT}`));
 
 restoreWeb().finally(() => { scan(); setInterval(scan, SCAN_MS); });

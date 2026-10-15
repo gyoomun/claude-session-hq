@@ -46,6 +46,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .btn:hover{border-color:color-mix(in srgb,var(--fg) 30%,var(--line))}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600}
 .btn.ghost{background:transparent;color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.danger{color:var(--approval);border-color:color-mix(in srgb,var(--approval) 45%,var(--line));background:transparent}
 .banner{background:color-mix(in srgb,var(--approval) 14%,var(--panel));border:1px solid color-mix(in srgb,var(--approval) 50%,var(--line));border-radius:10px;padding:10px 14px;font-size:13px}
 
@@ -220,6 +221,7 @@ input,textarea{background:var(--panel-2);border:1px solid var(--line);border-rad
     </div>
     <div class="top-r">
       <span class="clock" id="clock"></span>
+      <button class="btn" id="access-btn" type="button">접속</button>
       <button class="btn primary" id="brief-btn" type="button">지금 상황 브리핑</button>
     </div>
   </header>
@@ -282,6 +284,7 @@ input,textarea{background:var(--panel-2);border:1px solid var(--line);border-rad
 <div class="scrim" id="scrim" hidden></div>
 <aside class="drawer" id="drawer" hidden aria-label="자세히"></aside>
 <section class="modal" id="brief" hidden aria-label="브리핑"></section>
+<section class="modal" id="access" hidden aria-label="접속 관리"></section>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -320,7 +323,7 @@ function taskStatus(t){const ss=sessOf(t);
 
 /* 서버 */
 async function poll(){
- try{const r=await fetch('/api/state',{cache:'no-store'});const t=await r.text();
+ try{const r=await fetch('/api/state',{cache:'no-store'});if(r.status===401){location.href='/login';return}const t=await r.text();
   if(offline){offline=false;$('offline').hidden=true}
   if(t!==lastJSON){lastJSON=t;S=JSON.parse(t);
    // 웹 안의 Claude 등이 세션을 열었으면 그 세션으로 넘어간다(이 페이지를 연 뒤에 생긴 요청만)
@@ -329,6 +332,7 @@ async function poll(){
  catch(e){if(!offline){offline=true;$('offline').hidden=false}}}
 async function api(p,body){
  try{const r=await fetch('/api/'+p,{method:'POST',headers:{'Content-Type':'application/json','x-hq':'1'},body:JSON.stringify(body||{})});
+  if(r.status===401){location.href='/login';return false}
   const d=await r.json();if(!r.ok)throw new Error(d.error||'요청이 실패했습니다');
   const {result,...snap}=d;lastJSON=JSON.stringify(snap);S=snap;render(true);return {result}}
  catch(e){toast(e.message);return false}}
@@ -456,7 +460,7 @@ function render(force){
  $('work').hidden=mode!=='work';$('board').hidden=mode==='work';
  if(mode==='work')renderWork();
  else{detach();$('tasks').innerHTML=mode==='task'?S.tasks.map(card).join('')+unassignedCard():allView();queue();feed()}
- if(openTask||openSess)drawer();tick()}
+ if(openTask||openSess)drawer();accessPanel();tick()}
 
 /* 작업 보기 */
 function pick(sid){sel=sid;store.set('hq-sel',sid);mode='work';store.set('hq-mode',mode);confirmClose=null;openTask=openSess=null;drawer();render(true)}
@@ -521,7 +525,27 @@ function openNew(task){
  if(!$('n-cwd').value)$('n-cwd').value=store.get('hq-cwd')||'';
  $('n-task').innerHTML=`<option value="">업무: 미배치</option>`+S.tasks.map(t=>`<option value="${t.id}" ${t.id===task?'selected':''}>업무: ${esc(t.name)}</option>`).join('');
  openTask=openSess=null;drawer();$('newsess').hidden=false;($('n-cwd').value?$('n-prompt'):$('n-cwd')).focus()}
-function closeAll(){openTask=openSess=null;confirmDel=null;$('brief').hidden=true;drawer()}
+/* 접속 관리: 사내망 접속 켜기·끄기, 접속 주소, 로그인한 기기 목록과 끊기 */
+let confirmRevoke=null;
+function accessPanel(){
+ const a=S.access;if(!a||$('access').hidden)return;
+ const local=a.me==='local',others=a.logins.filter(l=>l.id!==a.me);
+ $('access').innerHTML=`<h2>접속 관리 <button class="btn" type="button" data-closeaccess>닫기</button></h2>
+  <div class="box"><div class="row"><b>사내망 접속</b><span class="pill" style="margin-left:0;--c:${a.lan?'var(--working)':'var(--idle)'}">${a.lan?'켜짐':'꺼짐'}</span>
+   ${local?`<button class="btn" type="button" data-lan="${a.lan?0:1}" style="margin-left:auto" ${!a.lan&&!a.mail?'disabled':''}>${a.lan?'끄기':'켜기'}</button>`:''}</div>
+   <p class="note">${a.lan?'같은 망의 다른 PC에서 아래 주소로 들어와 메일 인증번호로 로그인할 수 있습니다. 끄면 다른 기기는 모두 바로 끊깁니다.':'지금은 이 맥에서만 열립니다.'}</p>
+   ${a.lan?a.addresses.map(x=>`<code>${esc(x)}</code>`).join('<br>'):''}</div>
+  <div class="box"><b>인증 메일</b>${a.mail?`<p class="note">인증번호는 <b>${esc(a.mail)}</b>으로 갑니다. 이 메일함에 들어갈 수 있는 사람만 로그인할 수 있습니다.</p>`
+   :`<p class="note">아직 설정되지 않아 사내망 접속을 켤 수 없습니다. 아래 내용으로 <code>${esc(a.mailFile)}</code> 파일을 만드세요. Gmail이면 비밀번호 자리에 앱 비밀번호를 씁니다.</p>
+   <pre style="font-family:var(--f-mono);font-size:12px">SMTP_USER=보내는메일@gmail.com\nSMTP_PASS=앱비밀번호16자리\nMAIL_TO=인증번호받을메일@gmail.com</pre>`}</div>
+  <div class="box"><div class="row"><b>로그인한 기기</b><span class="meta">${a.logins.length}대</span>
+   ${others.length?`<button class="btn danger" type="button" data-revoke="all" style="margin-left:auto">${confirmRevoke==='all'?'한 번 더 누르면 모두 끊기':(local?'모두 끊기':'다른 기기 모두 끊기')}</button>`:''}</div>
+   ${a.logins.length?a.logins.slice().sort((x,y)=>y.lastSeenAt-x.lastSeenAt).map(l=>`<div class="wait" style="background:var(--panel)"><div style="min-width:0"><b>${esc(l.label)}</b>${l.id===a.me?' <span class="chip" style="color:var(--accent)">지금 이 기기</span>':''}
+     <div class="wm">${esc(l.device)} · ${esc(l.ip)} · 로그인 ${new Date(l.createdAt).toLocaleString('ko-KR')} · 마지막 접속 ${since(l.lastSeenAt,' 전')}</div></div>
+     <div class="end">${l.id===a.me?`<button class="btn" type="button" data-logout>로그아웃</button>`:`<button class="btn danger" type="button" data-revoke="${l.id}">끊기</button>`}</div></div>`).join('')
+    :'<p class="note">로그인한 다른 기기가 없습니다.</p>'}</div>`;
+ tick()}
+function closeAll(){openTask=openSess=null;confirmDel=null;confirmRevoke=null;$('brief').hidden=true;$('access').hidden=true;drawer()}
 
 /* 이벤트 */
 document.addEventListener('click',async e=>{
@@ -542,6 +566,12 @@ document.addEventListener('click',async e=>{
  if(ds.wdone){const [task,id]=ds.wdone.split('|');api('wait/done',{task,id});return}
  if(ds.del){if(confirmDel!==ds.del){confirmDel=ds.del;drawer();return}confirmDel=null;openTask=null;if(await api('task/delete',{id:ds.del}))toast('업무를 삭제했습니다. 배치됐던 세션은 미배치로 돌아갑니다.');return}
  if(b.id==='brief-btn'){brief();return}
+ if(b.id==='access-btn'){$('access').hidden=false;$('scrim').hidden=false;accessPanel();return}
+ if(ds.closeaccess!==undefined){$('access').hidden=true;$('scrim').hidden=!(openTask||openSess);return}
+ if(ds.lan!==undefined){api('access/lan',{on:ds.lan==='1'});return}
+ if(ds.revoke){if(ds.revoke==='all'&&confirmRevoke!=='all'){confirmRevoke='all';accessPanel();return}confirmRevoke=null;
+  if(await api('access/revoke',{id:ds.revoke}))toast(ds.revoke==='all'?'다른 기기의 로그인을 모두 끊었습니다.':'그 기기의 로그인을 끊었습니다.');return}
+ if(ds.logout!==undefined){await api('access/logout');location.href='/login';return}
  if(b.id==='add-btn'){$('addtask').hidden=false;$('t-name').focus();return}
  if(b.id==='add-cancel'){$('addtask').hidden=true;return}
  if(b.id==='new-btn'||ds.newfor!==undefined){openNew(ds.newfor||'');return}
