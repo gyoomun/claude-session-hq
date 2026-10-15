@@ -73,8 +73,15 @@ async function uploadImages(files: File[], add: (i: Img) => void) {
   }
 }
 
+// 보내기 전의 글은 세션마다 남긴다. 다른 세션·보기를 다녀오거나 새로고침해도 이어 쓴다. 붙인 이미지는 이 화면이 열려 있는 동안만
+const draftKey = (sid: string) => 'hq-draft:' + sid
+const loadDraft = (sid: string) => { try { return localStorage.getItem(draftKey(sid)) || '' } catch { return '' } }
+const saveDraft = (sid: string, v: string) => { try { if (v) localStorage.setItem(draftKey(sid), v); else localStorage.removeItem(draftKey(sid)) } catch { /* 무시 */ } }
+const draftImgs = new Map<string, Img[]>()
+
 function Composer({ s, imgs, setImgs }: { s: Session; imgs: Img[]; setImgs: React.Dispatch<React.SetStateAction<Img[]>> }) {
-  const [text, setText] = useState('')
+  const [text, setTextState] = useState(() => loadDraft(s.sid))
+  const setText = (v: string) => { setTextState(v); saveDraft(s.sid, v) }
   const [busy, setBusy] = useState(false)
   const send = async () => {
     if ((!text.trim() && !imgs.length) || busy) return
@@ -158,9 +165,9 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   useLayoutEffect(() => { if (stick.current && view.current) view.current.scrollTop = view.current.scrollHeight }, [items, s.state])
   useEffect(() => { stick.current = true }, [s.sid])
   const results = new Map(items.filter(i => i.t === 'result').map(i => [i.toolId, i]))
-  const [imgs, setImgs] = useState<Img[]>([])
+  const [imgs, setImgs] = useState<Img[]>(() => draftImgs.get(s.sid) || [])
+  useEffect(() => { draftImgs.set(s.sid, imgs) }, [s.sid, imgs])
   const [dropOver, setDropOver] = useState(false)
-  useEffect(() => { setImgs([]) }, [s.sid])
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
   return <Stack gap={8} style={{ flex: 1, minHeight: 0, position: 'relative' }}
     onDragOver={e => { if (s.host && hasFiles(e)) { e.preventDefault(); setDropOver(true) } }}
