@@ -23,6 +23,17 @@ function Tool({ it, result }: { it: Item; result?: Item }) {
   </details>
 }
 
+// 작업 과정을 접어 볼 때: 연달아 쓴 도구를 한 줄로 묶는다. 누르면 하나하나 펼친다
+function ToolGroup({ tools, results }: { tools: Item[]; results: Map<string | undefined, Item> }) {
+  const count = new Map<string, number>()
+  tools.forEach(t => count.set(t.name!, (count.get(t.name!) || 0) + 1))
+  const running = tools.some(t => !results.has(t.toolId))
+  return <details className={'hq-tool' + (tools.some(t => results.get(t.toolId)?.error) ? ' err' : '')}>
+    <summary>도구 {tools.length}번 · <span className="arg">{[...count].map(([n, c]) => c > 1 ? `${n} ${c}` : n).join(', ')}</span>{running && <Loader size={10} ml={6} />}</summary>
+    <Stack gap={4} mt={4}>{tools.map(t => <Tool key={t.id} it={t} result={results.get(t.toolId)} />)}</Stack>
+  </details>
+}
+
 function useTranscript(sid: string) {
   const [items, setItems] = useState<Item[]>([])
   const [missing, setMissing] = useState(false)
@@ -128,7 +139,19 @@ function NoInput({ s }: { s: Session }) {
   </Paper>
 }
 
-export function ChatView({ s }: { s: Session }) {
+// 연달아 쓴 도구(사이의 결과 포함)를 한 묶음으로. 말이 나오면 묶음이 끊긴다
+function grouped(items: Item[]) {
+  const out: (Item | Item[])[] = []
+  for (const it of items) {
+    if (it.t === 'result') continue
+    const last = out[out.length - 1]
+    if (it.t === 'tool' && Array.isArray(last)) last.push(it)
+    else out.push(it.t === 'tool' ? [it] : it)
+  }
+  return out
+}
+
+export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   const { items, missing } = useTranscript(s.sid)
   const view = useRef<HTMLDivElement>(null)
   const stick = useRef(true) // 맨 아래를 보고 있으면 새 메시지가 올 때 따라 내려간다
@@ -156,7 +179,8 @@ export function ChatView({ s }: { s: Session }) {
         <Stack gap={10} p="md" maw={980} mx="auto">
           {missing && <Text c="dimmed">이 세션의 대화 기록을 찾지 못했습니다.</Text>}
           {!missing && !items.length && <Group gap={8}><Loader size="xs" /><Text c="dimmed" size="sm">대화를 불러오는 중입니다…</Text></Group>}
-          {items.map(it => it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><Linkify text={it.text} /></Text></Box>
+          {(detail ? items : grouped(items)).map(it => Array.isArray(it) ? <ToolGroup key={it[0].id} tools={it} results={results} />
+            : it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><Linkify text={it.text} /></Text></Box>
             : it.t === 'assistant' ? <Box key={it.id} className="hq-say"><Md text={it.text} /></Box>
             : it.t === 'tool' ? <Tool key={it.id} it={it} result={results.get(it.toolId)} />
             : null)}
