@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Orbit&family=Silkscreen&display=swap">
+<link rel="stylesheet" href="/vendor/xterm.css">
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
 <style>
 /* layout: 상단 카운터 → 보기 전환(업무별/세션 전체) → 왼쪽 업무 카드 + 미배치 / 오른쪽 '내 차례' 큐와 이벤트. 좁으면 큐가 맨 위 */
 :root{
@@ -170,6 +173,34 @@ input,textarea{background:var(--panel-2);border:1px solid var(--line);border-rad
 .brief .k{color:var(--muted);font-size:12px;margin-top:6px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:13px;z-index:20;max-width:calc(100% - 32px)}
 
+/* 작업 보기: 왼쪽 세션 목록 + 오른쪽 터미널 */
+.work{display:grid;grid-template-columns:290px minmax(0,1fr);gap:12px;height:calc(100vh - 250px);min-height:460px}
+.wlist{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.wg{display:flex;flex-direction:column;gap:2px}
+.wg-h{all:unset;font-size:12px;color:var(--muted);font-weight:600;padding:2px 8px;display:flex;justify-content:space-between;gap:8px;cursor:pointer}
+.wg-h.plain{cursor:default}
+.wg-h:hover:not(.plain){color:var(--fg)}
+.wi{all:unset;box-sizing:border-box;display:grid;grid-template-columns:10px minmax(0,1fr);column-gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;width:100%}
+.wi:hover{background:var(--panel-2)}
+.wi:focus-visible{outline:2px solid var(--accent)}
+.wi.on{background:color-mix(in srgb,var(--accent) 16%,var(--panel-2));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 50%,transparent)}
+.wi .dot{width:8px;height:8px;border-radius:2px;background:var(--c);margin-top:6px;grid-row:span 3}
+.wi .wt{font-size:13px;font-weight:600;word-break:keep-all;overflow-wrap:anywhere;line-height:1.35}
+.wi .ws{font-size:11.5px;color:var(--muted)}
+.wi .ws b{color:var(--c);font-weight:600}
+.badge{font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:4px}
+.wmain{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0}
+.whead{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.wh-l{min-width:0;flex:1 1 260px}
+.wh-t{font-size:16px;font-weight:600;word-break:keep-all;overflow-wrap:anywhere}
+.wh-r{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.wh-r .assign{width:auto;margin:0;font-size:12.5px;padding:5px 6px;max-width:220px}
+.term{flex:1;min-height:0;background:#0b0f1a;border:1px solid var(--line);border-radius:12px;padding:8px 4px 4px 10px;overflow:hidden}
+.term .xterm{height:100%}
+.wempty{flex:1;background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px;align-items:flex-start;overflow:auto}
+.wempty p{margin:0;max-width:62ch}
+@media (max-width:900px){.work{grid-template-columns:minmax(0,1fr);height:auto}.wlist{max-height:260px}.term{height:70vh;flex:none}}
+
 .code{animation:blink 1.1s steps(2) infinite}
 .arm{animation:wave 1.2s steps(2) infinite}
 @keyframes blink{50%{opacity:.25}}
@@ -199,6 +230,7 @@ input,textarea{background:var(--panel-2);border:1px solid var(--line);border-rad
 
   <div class="toolbar">
     <div class="seg" role="group" aria-label="보기">
+      <button type="button" data-mode="work">작업</button>
       <button type="button" data-mode="task">업무별</button>
       <button type="button" data-mode="all">세션 전체</button>
     </div>
@@ -208,12 +240,22 @@ input,textarea{background:var(--panel-2);border:1px solid var(--line);border-rad
     </div>
   </div>
   <form class="inline-form" id="newsess" hidden>
-    <select id="n-cwd" aria-label="폴더"></select>
+    <input id="n-cwd" list="n-dirs" placeholder="폴더 (예: ~/01dev/13engsoft)" autocomplete="off" style="flex:1 1 220px">
+    <datalist id="n-dirs"></datalist>
     <select id="n-task" aria-label="업무"></select>
-    <input id="n-prompt" placeholder="첫 지시 (비워 두면 빈 세션)" autocomplete="off" maxlength="4000">
-    <button class="btn primary" type="submit">Orca에서 시작</button>
+    <input id="n-prompt" placeholder="첫 지시 (비워 두면 빈 세션)" autocomplete="off" maxlength="8000">
+    <button class="btn primary" type="submit">시작</button>
     <button class="btn ghost" type="button" id="new-cancel">취소</button>
   </form>
+
+  <section class="work" id="work" hidden>
+    <aside class="wlist" id="wlist" aria-label="세션 목록"></aside>
+    <div class="wmain">
+      <div class="whead" id="whead" hidden></div>
+      <div class="term" id="term" hidden></div>
+      <div class="wempty" id="wempty"></div>
+    </div>
+  </section>
   <form class="inline-form" id="addtask" hidden>
     <input id="t-name" placeholder="업무 이름 (예: VPN 장비 교체)" autocomplete="off" maxlength="120">
     <input id="t-memo" placeholder="관련 사람·메모 (선택)" autocomplete="off" maxlength="300">
@@ -221,7 +263,7 @@ input,textarea{background:var(--panel-2);border:1px solid var(--line);border-rad
     <button class="btn ghost" type="button" id="add-cancel">취소</button>
   </form>
 
-  <div class="layout">
+  <div class="layout" id="board">
     <section class="tasks" id="tasks" aria-label="업무"></section>
     <aside class="queue panel" aria-label="내 차례">
       <h2>지금 내 차례 <span class="n" id="qn"></span></h2>
@@ -249,8 +291,9 @@ const COLOR={working:'var(--working)',myturn:'var(--myturn)',approval:'var(--app
 const RANK={approval:0,myturn:1,working:2,idle:3};
 
 let S={sessions:[],tasks:[],feed:[],orca:false},lastJSON='',offline=false;
-let openTask=null,openSess=null,dragging=null,pending=false,confirmDel=null;
-let mode='task';try{mode=localStorage.getItem('hq-mode')||'task'}catch(e){}
+let openTask=null,openSess=null,dragging=null,pending=false,confirmDel=null,confirmClose=null,pendingSel=null;
+const store={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+let mode=store.get('hq-mode')||'work',sel=store.get('hq-sel')||'';
 const drafts=new Map();
 
 const $=id=>document.getElementById(id);
@@ -284,7 +327,7 @@ async function poll(){
 async function api(p,body){
  try{const r=await fetch('/api/'+p,{method:'POST',headers:{'Content-Type':'application/json','x-hq':'1'},body:JSON.stringify(body||{})});
   const d=await r.json();if(!r.ok)throw new Error(d.error||'요청이 실패했습니다');
-  lastJSON=JSON.stringify(d);S=d;render(true);return true}
+  const {result,...snap}=d;lastJSON=JSON.stringify(snap);S=snap;render(true);return {result}}
  catch(e){toast(e.message);return false}}
 
 /* 픽셀 책상 */
@@ -348,8 +391,9 @@ function allView(){
   const ss=S.sessions.filter(s=>s.state===k).sort(bySt);if(!ss.length)return'';
   return `<section class="group" style="--c:${COLOR[k]}"><h3><span class="dot"></span>${label} <span class="n">${ss.length}</span></h3>
    <div class="desks">${ss.map(s=>deskTile(s,{sel:true,showTask:true})).join('')}</div></section>`}).join('')}
-const termBtns=s=>s.term?`<button class="btn" type="button" data-term="${s.pid}">터미널 열기</button>`:'';
-const replyForm=s=>s.term?`<form class="reply" data-reply="${s.pid}" data-rsid="${s.sid}"><input name="text" placeholder="이 세션에 답 보내기" autocomplete="off" value="${esc(drafts.get(s.sid)||'')}" data-draft="${s.sid}"><button class="btn primary" type="submit">보내기</button></form>`:'';
+const termBtns=s=>s.host==='web'?`<button class="btn" type="button" data-pick="${s.sid}">열기</button>`
+ :s.host==='orca'?`<button class="btn" type="button" data-pick="${s.sid}">웹으로 옮기기…</button>`:'';
+const replyForm=s=>s.host?`<form class="reply" data-reply="${s.pid}" data-rsid="${s.sid}"><input name="text" placeholder="이 세션에 답 보내기" autocomplete="off" value="${esc(drafts.get(s.sid)||'')}" data-draft="${s.sid}"><button class="btn primary" type="submit">보내기</button></form>`:'';
 function queue(){
  const items=S.sessions.filter(waiting).sort(bySt);
  $('qn').textContent=items.length+'건';
@@ -400,25 +444,80 @@ function drawer(){
  d.innerHTML=openSess?drawerSess(sessById(openSess)):drawerTask(taskOf(openTask));
  d.hidden=false;$('scrim').hidden=false}
 
-function typing(){const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)}
+// 입력칸에 쓰는 중이면 화면을 다시 그리지 않는다. 웹 터미널(xterm)은 입력칸이 아니라 계속 그린다
+function typing(){const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!a.closest('.xterm')}
 function render(force){
  if(dragging||(!force&&typing())){pending=true;return}pending=false;
  counters();
  document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
- $('tasks').innerHTML=mode==='task'?S.tasks.map(card).join('')+unassignedCard():allView();
- queue();feed();if(openTask||openSess)drawer();tick()}
+ $('work').hidden=mode!=='work';$('board').hidden=mode==='work';
+ if(mode==='work')renderWork();
+ else{detach();$('tasks').innerHTML=mode==='task'?S.tasks.map(card).join('')+unassignedCard():allView();queue();feed()}
+ if(openTask||openSess)drawer();tick()}
+
+/* 작업 보기 */
+function pick(sid){sel=sid;store.set('hq-sel',sid);mode='work';store.set('hq-mode',mode);confirmClose=null;openTask=openSess=null;drawer();render(true)}
+function renderWork(){
+ if(pendingSel){const s=S.sessions.find(x=>x.tmux===pendingSel);if(s){sel=s.sid;store.set('hq-sel',sel);pendingSel=null}}
+ const groups=[...S.tasks.map(t=>({t,ss:sessOf(t)})),{t:null,ss:S.sessions.filter(s=>!s.task).sort(bySt)}];
+ $('wlist').innerHTML=groups.map(g=>`<div class="wg">${g.t?`<button class="wg-h" type="button" data-open="${g.t.id}"><span>${esc(g.t.name)}</span><span>${g.ss.length}</span></button>`:`<div class="wg-h plain"><span>미배치</span><span>${g.ss.length}</span></div>`}
+  ${g.ss.map(s=>`<button class="wi ${s.sid===sel?'on':''}" type="button" data-pick="${s.sid}" style="--c:${COLOR[s.state]}"><span class="dot"></span><span class="wt">${esc(s.title)}</span><span class="ws"><b>${LABEL[s.state]}</b> ${since(s.since,'째')}${s.host!=='web'?`<span class="badge">${s.host==='orca'?'Orca':'외부'}</span>`:''}</span></button>`).join('')||'<div class="empty" style="padding:2px 8px">세션 없음</div>'}</div>`).join('');
+ const s=sessById(sel);
+ if(!s){detach();$('whead').hidden=true;$('term').hidden=true;$('wempty').hidden=false;
+  $('wempty').innerHTML=pendingSel?'<p>세션을 여는 중입니다…</p>':`<p>왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.</p><button class="btn primary" type="button" data-newfor="">+ 새 세션</button>`;return}
+ $('whead').hidden=false;
+ $('whead').innerHTML=`<div class="wh-l"><div class="wh-t">${esc(s.title)}</div><div class="meta">${esc(s.cwd)} · <b style="color:${COLOR[s.state]}">${LABEL[s.state]}</b> ${since(s.since,'째')}${s.act?` · <span class="act" style="display:inline">${esc(s.act)}</span>`:''}</div></div>
+  <div class="wh-r">${assignSel(s)}${s.state==='myturn'?`<button class="btn ghost" type="button" data-seen="${s.sid}">확인함</button>`:''}<button class="btn ghost" type="button" data-info="${s.sid}">정보</button>
+  ${s.host==='web'?`<button class="btn danger" type="button" data-closesess="${s.tmux}">${confirmClose===s.tmux?'한 번 더 누르면 종료':'세션 종료'}</button>`:''}</div>`;
+ if(s.host==='web'){$('wempty').hidden=true;$('term').hidden=false;attach(s.tmux);return}
+ detach();$('term').hidden=true;$('wempty').hidden=false;
+ $('wempty').innerHTML=(s.host==='orca'
+  ?`<p>이 세션은 Orca에서 돌고 있습니다. 웹으로 옮기면 Orca 쪽 Claude를 끝내고, 같은 대화를 원래 옵션 그대로 이어서 여기서 엽니다. 업무 배치도 그대로 따라옵니다.</p>
+   <div class="row"><button class="btn primary" type="button" data-migrate="${s.pid}" ${s.state==='working'||s.state==='approval'?'disabled title="일이 끝난 뒤에 옮길 수 있습니다"':''}>웹으로 옮기기</button><button class="btn" type="button" data-term="${s.pid}">Orca에서 보기</button></div>
+   ${s.state==='working'||s.state==='approval'?'<p class="note">지금 일하는 중이라 끝난 뒤에 옮길 수 있습니다.</p>':''}`
+  :`<p>다른 터미널에서 직접 띄운 세션이라 웹에서 열 수 없습니다. 그 터미널에서 <code>/exit</code>로 끝낸 뒤 새 세션으로 이어 가세요.</p>`)
+  +(s.msg?`<div class="box" style="width:100%"><span class="px">LAST REPLY</span><pre>${esc(s.msg)}</pre></div>`:'')}
+
+/* 웹 터미널: 출력은 SSE로 받고, 입력은 차례대로 POST로 보낸다 */
+let T=null;
+const HDR={'Content-Type':'application/json','x-hq':'1'};
+function attach(name){
+ if(T&&T.name===name)return;
+ detach();
+ const el=$('term');el.innerHTML='';
+ const term=new Terminal({fontFamily:'"SF Mono", Menlo, Monaco, monospace',fontSize:13,lineHeight:1.15,cursorBlink:true,scrollback:2000,
+  macOptionClickForcesSelection:true,allowProposedApi:true,
+  theme:{background:'#0b0f1a',foreground:'#e7ebf5',cursor:'#a3b6ff',selectionBackground:'#3a4a7a'}});
+ const fit=new FitAddon.FitAddon();term.loadAddon(fit);term.open(el);
+ try{fit.fit()}catch(e){}
+ const t=T={name,term,fit,id:null,q:'',busy:false};
+ t.es=new EventSource(`/api/term/stream?name=${encodeURIComponent(name)}&cols=${term.cols}&rows=${term.rows}`);
+ t.es.addEventListener('ready',e=>{t.id=e.data;send(t)});
+ t.es.onmessage=e=>t.term.write(JSON.parse(e.data));
+ t.es.addEventListener('end',()=>{t.es.close();t.term.write('\r\n\x1b[2m[세션이 끝났습니다]\x1b[0m\r\n')});
+ term.onData(d=>{t.q+=d;send(t)});
+ term.onResize(({cols,rows})=>{if(t.id)fetch('/api/term/resize',{method:'POST',headers:HDR,body:JSON.stringify({id:t.id,cols,rows})})});
+ // 숨겨진 상태에서 크기를 맞추면 tmux 창이 아주 작아지므로, 보일 때만 맞춘다
+ t.ro=new ResizeObserver(()=>{if(el.clientWidth>100&&el.clientHeight>60)try{fit.fit()}catch(e){}});
+ t.ro.observe(el);
+ term.focus()}
+async function send(t){
+ if(t.busy||!t.q||!t.id)return;t.busy=true;
+ const data=t.q;t.q='';
+ try{await fetch('/api/term/input',{method:'POST',headers:HDR,body:JSON.stringify({id:t.id,data})})}catch(e){}
+ t.busy=false;if(t.q)send(t)}
+function detach(){if(!T)return;T.es.close();T.ro.disconnect();T.term.dispose();T=null}
 function tick(){const n=Date.now();
  document.querySelectorAll('[data-since]').forEach(el=>{el.textContent=fmt(n-+el.dataset.since)+(el.dataset.suf||'')});
  $('clock').textContent=new Date(n).toLocaleTimeString('ko-KR',{hour12:false})}
 function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,3500)}
 function openNew(task){
- const wts=S.worktrees||[];
- if(!wts.length){toast('Orca 워크스페이스 목록을 아직 못 읽었습니다. 잠시 뒤 다시 눌러 주세요.');return}
- const last=(()=>{try{return localStorage.getItem('hq-cwd')}catch(e){return null}})();
- $('n-cwd').innerHTML=wts.map(w=>`<option value="${esc(w.path)}" ${w.path===last?'selected':''}>${esc(w.name)}</option>`).join('');
+ // 폴더 후보: 지금 세션들이 쓰는 폴더 + Orca 워크스페이스. 목록에 없는 폴더도 직접 적을 수 있다
+ const dirs=[...new Set([...S.sessions.map(s=>s.cwd),...(S.worktrees||[]).map(w=>w.path.replace(/^\/Users\/[^/]+/,'~'))])].sort();
+ $('n-dirs').innerHTML=dirs.map(d=>`<option value="${esc(d)}">`).join('');
+ if(!$('n-cwd').value)$('n-cwd').value=store.get('hq-cwd')||'';
  $('n-task').innerHTML=`<option value="">업무: 미배치</option>`+S.tasks.map(t=>`<option value="${t.id}" ${t.id===task?'selected':''}>업무: ${esc(t.name)}</option>`).join('');
- openTask=openSess=null;drawer();$('newsess').hidden=false;$('n-prompt').focus()}
-document.addEventListener('change',e=>{if(e.target.id==='n-cwd')try{localStorage.setItem('hq-cwd',e.target.value)}catch(_){}});
+ openTask=openSess=null;drawer();$('newsess').hidden=false;($('n-cwd').value?$('n-prompt'):$('n-cwd')).focus()}
 function closeAll(){openTask=openSess=null;confirmDel=null;$('brief').hidden=true;drawer()}
 
 /* 이벤트 */
@@ -426,9 +525,14 @@ document.addEventListener('click',async e=>{
  if(e.target.closest('select,input,textarea'))return;
  if(e.target.closest('[data-closebrief]')){$('brief').hidden=true;$('scrim').hidden=!(openTask||openSess);return}
  const b=e.target.closest('button,[data-sess]');if(!b)return;const ds=b.dataset;
- if(ds.mode){mode=ds.mode;try{localStorage.setItem('hq-mode',mode)}catch(_){}render(true);return}
+ if(ds.mode){mode=ds.mode;store.set('hq-mode',mode);render(true);return}
  if(ds.open){openTask=ds.open;openSess=null;confirmDel=null;drawer();tick();return}
- if(ds.sess){openSess=ds.sess;openTask=null;drawer();tick();return}
+ if(ds.pick||ds.sess){pick(ds.pick||ds.sess);return}
+ if(ds.info){openSess=ds.info;openTask=null;drawer();tick();return}
+ if(ds.migrate){b.disabled=true;toast('Orca 쪽 Claude를 끝내고 웹으로 옮기는 중입니다…');
+  const r=await api('session/migrate',{pid:+ds.migrate});if(r){pendingSel=r.result;sel='';render(true);toast('웹으로 옮겼습니다.')}else b.disabled=false;return}
+ if(ds.closesess){if(confirmClose!==ds.closesess){confirmClose=ds.closesess;render(true);return}
+  confirmClose=null;detach();if(await api('session/close',{name:ds.closesess}))toast('세션을 종료했습니다. 대화 기록은 남아 있습니다.');return}
  if('close' in ds){closeAll();return}
  if(ds.seen){api('seen',{sid:ds.seen});return}
  if(ds.term){if(await api('term/switch',{pid:+ds.term}))toast('Orca에서 그 터미널로 옮겼습니다.');return}
@@ -441,8 +545,9 @@ document.addEventListener('click',async e=>{
  if(b.id==='new-cancel'){$('newsess').hidden=true;return}
 });
 document.addEventListener('keydown',e=>{
+ if(e.target.closest?.('.xterm'))return; // 터미널 안의 키(Esc 등)는 Claude가 쓴다
  if(e.key==='Escape'){closeAll();return}
- const d=e.target.closest?.('[data-sess]');if(d&&e.target===d&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openSess=d.dataset.sess;openTask=null;drawer();tick()}});
+ const d=e.target.closest?.('[data-sess]');if(d&&e.target===d&&(e.key==='Enter'||e.key===' ')){e.preventDefault();pick(d.dataset.sess)}});
 document.addEventListener('input',e=>{if(e.target.dataset.draft)drafts.set(e.target.dataset.draft,e.target.value)});
 document.addEventListener('change',e=>{const sel=e.target.closest('[data-assign]');if(!sel)return;const sid=sel.dataset.assign,task=sel.value;sel.blur();
  api('assign',{sid,task}).then(ok=>ok&&toast(task?`"${tname(task)}"에 배치했습니다.`:'미배치로 돌렸습니다.'))});
@@ -452,9 +557,9 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
   if(await api('term/send',{pid:+f.dataset.reply,text})){drafts.delete(f.dataset.rsid);input.value='';input.blur();toast('보냈습니다.')}return}
  if(f.id==='addtask'){const name=$('t-name').value.trim();if(!name){toast('업무 이름을 적어 주세요.');return}
   if(await api('task/add',{name,memo:$('t-memo').value})){$('t-name').value='';$('t-memo').value='';$('addtask').hidden=true;mode='task';render(true);toast(`"${name}" 업무를 만들었습니다. 미배치 세션을 끌어다 놓으세요.`)}return}
- if(f.id==='newsess'){const cwd=$('n-cwd').value,task=$('n-task').value;if(!cwd){toast('폴더를 골라 주세요.');return}
-  if(await api('session/new',{cwd,task,prompt:$('n-prompt').value})){$('n-prompt').value='';$('newsess').hidden=true;
-   toast(`Orca에 새 탭을 열었습니다. 몇 초 뒤 ${task?`"${tname(task)}" 카드`:'미배치 칸'}에 나타납니다.`)}return}
+ if(f.id==='newsess'){const cwd=$('n-cwd').value.trim(),task=$('n-task').value;if(!cwd){toast('폴더를 적거나 골라 주세요.');return}
+  const r=await api('session/new',{cwd,task,prompt:$('n-prompt').value});
+  if(r){store.set('hq-cwd',cwd);$('n-prompt').value='';$('newsess').hidden=true;pendingSel=r.result;sel='';mode='work';store.set('hq-mode',mode);render(true)}return}
  if(f.id==='taskform'){if(await api('task/update',{id:f.dataset.tid,name:$('tf-name').value,memo:$('tf-memo').value,next:$('tf-next').value}))toast('저장했습니다.');return}
  if(f.id==='addwait'){const who=$('w-who').value.trim(),what=$('w-what').value.trim();if(!who||!what){toast('누구와 무엇을 둘 다 적어 주세요.');return}
   api('wait/add',{task:f.dataset.tid,who,what})}});

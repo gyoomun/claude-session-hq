@@ -1,0 +1,16 @@
+{
+  "name": "claude-session-hq",
+  "version": "0.1.0",
+  "private": true,
+  "description": "이 Mac의 Claude Code 세션을 한 화면에 모아 보고, 웹 안의 터미널로 직접 일하는 로컬 관제판",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "node-pty": "1.1.0"
+  }
+}

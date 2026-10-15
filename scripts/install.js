@@ -59,6 +59,7 @@ function updateLaunchd() {
   <key>EnvironmentVariables</key><dict><key>PORT</key><string>${PORT}</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
+  <key>AbandonProcessGroup</key><true/>
   <key>StandardOutPath</key><string>${log}</string>
   <key>StandardErrorPath</key><string>${log}</string>
 </dict>
@@ -67,6 +68,10 @@ function updateLaunchd() {
   launchctl('bootstrap', domain, PLIST);
 }
 
+if (!uninstall && !fs.existsSync(path.join(ROOT, 'node_modules', 'node-pty'))) {
+  console.error('먼저 npm install 을 실행하세요. (launchd가 쓰는 Node와 같은 Node로 설치해야 합니다: ' + NODE + ')');
+  process.exit(1);
+}
 fs.chmodSync(HOOK, 0o755);
 updateSettings();
 updateLaunchd();
