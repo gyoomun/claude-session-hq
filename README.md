@@ -25,7 +25,7 @@ node scripts/install.js
 
 `npm install`과 `install.js`는 같은 Node로 실행하세요. 서버를 자동 실행하는 launchd는 Homebrew Node(`/opt/homebrew/bin/node`)가 있으면 그것을 씁니다.
 
-설치하면 두 가지가 바뀝니다.
+설치하면 세 가지가 바뀝니다.
 
 1. `~/.claude/settings.json`에 훅 5개(UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop)를 추가합니다. 다른 도구의 훅은 건드리지 않고, 바꾸기 전 파일을 `settings.json.bak-claude-session-hq`로 남깁니다.
 2. `skills/`의 스킬을 `~/.claude/skills`에 링크로 겁니다.
