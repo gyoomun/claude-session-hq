@@ -8,7 +8,7 @@ import type { Snapshot } from './types'
 import { stale } from './util'
 import { WorkView } from './Work'
 import { BoardView } from './Board'
-import { MemoView } from './Memo'
+import { MemoView, SidePanel } from './Memo'
 import { SessionDrawer, TaskDrawer } from './Drawers'
 import { AccessModal, AddTaskModal, BriefModal, NewSessionModal } from './Modals'
 
@@ -158,16 +158,19 @@ export function App() {
     return () => removeEventListener('keydown', onKey, true)
   }, [])
 
-  // 가운데 화면(최대 1600px)은 그대로 두고, 양옆 여백이 320px 이상이면 오른쪽 여백에 핀·메모·곁가지 질문을 놓는다
+  // 가운데 화면(최대 1600px)은 그대로 두고, 양옆 여백이 320px 이상이면 핀·메모·곁가지 질문 칸을 오른쪽 여백에 놓는다.
+  // 격자 2행: 위(머리·카운터·보기 전환) / 아래(내용). 오른쪽 칸은 아래 행에 있어 세션 목록과 같은 높이에서 시작한다
   const wide = useMediaQuery('(min-width: 2240px)', false, { getInitialValueInEffect: false })
-  const [right, setRight] = useState<HTMLDivElement | null>(null)
 
   if (!S) return <Center h="100vh"><Loader /></Center>
-  // 페이지 자체는 스크롤하지 않는다. 위쪽(머리·카운터·보기 전환)은 고정, 아래 내용 영역만 화면 높이를 채우고 그 안에서 스크롤한다
-  return <Box h="100dvh" style={{ display: 'grid', gridTemplateColumns: wide ? 'minmax(0, 1fr) minmax(0, 1600px) minmax(0, 1fr)' : 'minmax(0, 1fr)' }}>
-  {wide && <div />}
-  <Box px="md" py="md" maw={1600} w="100%" mx="auto" h="100dvh" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-    <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
+  const sel = ui.mode === 'work' ? S.sessions.find(x => x.sid === ui.sel) : undefined
+  const col = wide ? 2 : 1
+  // 페이지 자체는 스크롤하지 않는다. 위쪽은 고정, 아래 내용 영역만 화면 높이를 채우고 그 안에서 스크롤한다
+  return <Box h="100dvh" py="md" style={{
+    display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', rowGap: 'var(--mantine-spacing-md)',
+    gridTemplateColumns: wide ? 'minmax(0, 1fr) minmax(0, 1600px) minmax(0, 1fr)' : 'minmax(0, 1fr)',
+  }}>
+    <Stack gap="md" px="md" maw={1600} w="100%" mx="auto" style={{ gridColumn: col, gridRow: 1, minWidth: 0 }}>
       <Header S={S} />
       {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
       <Notices S={S} />
@@ -182,17 +185,16 @@ export function App() {
           <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>
         </Group>
       </Group>
-      <Box style={{ flex: 1, minHeight: 0 }}>
-        {ui.mode === 'work' ? <WorkView S={S} right={wide ? right : null} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
-      </Box>
     </Stack>
+    <Box px="md" maw={1600} w="100%" mx="auto" style={{ gridColumn: col, gridRow: 2, minHeight: 0, minWidth: 0 }}>
+      {ui.mode === 'work' ? <WorkView S={S} sideOutside={wide} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
+    </Box>
+    {wide && sel && ui.side && <Box pr="md" maw={460} style={{ gridColumn: 3, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={sel} /></Box>}
     <SessionDrawer S={S} />
     <TaskDrawer S={S} />
     <NewSessionModal S={S} />
     <AddTaskModal />
     <BriefModal S={S} />
     <AccessModal S={S} />
-  </Box>
-  {wide && <Box ref={setRight} py="md" pr="md" maw={460} h="100dvh" style={{ minHeight: 0 }} />}
   </Box>
 }

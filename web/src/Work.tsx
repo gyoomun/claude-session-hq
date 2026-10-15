@@ -1,9 +1,8 @@
 // 작업 보기: 왼쪽 세션 목록(업무별로 묶음) + 오른쪽 고른 세션의 터미널
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, Stack, Switch, Text, UnstyledButton } from '@mantine/core'
 import { api, toast } from './store'
-import { pick, setUI, useUI } from './ui'
+import { pick, setUI, toggleSide, useUI } from './ui'
 import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
@@ -74,8 +73,8 @@ function ClosedList({ S }: { S: Snapshot }) {
   </Stack>
 }
 
-// right: 화면이 넓을 때 App이 내주는 오른쪽 여백. 있으면 핀·메모·곁가지 질문을 거기에 놓고, 없으면 대화 옆 셋째 칸에 놓는다
-export function WorkView({ S, right }: { S: Snapshot; right: HTMLElement | null }) {
+// sideOutside: 화면이 넓어 App이 핀·메모·곁가지 질문 칸을 가운데 화면 오른쪽 여백에 놓을 때. 아니면 여기서 대화 옆 셋째 칸으로 놓는다
+export function WorkView({ S, sideOutside }: { S: Snapshot; sideOutside: boolean }) {
   const ui = useUI()
   const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, ss: sessOf(S, t) })),
     { id: '', name: '미배치', ss: S.sessions.filter(s => !s.task).sort(bySt) }]
@@ -84,10 +83,8 @@ export function WorkView({ S, right }: { S: Snapshot; right: HTMLElement | null 
   const [view, setView] = useState(() => { try { return localStorage.getItem('hq-view') || 'chat' } catch { return 'chat' } })
   // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
   const [detail, setDetail] = useState(() => { try { return localStorage.getItem('hq-detail') === '1' } catch { return false } })
-  // 오른쪽 칸(핀·메모·곁가지 질문). 기본으로 펼쳐 두고, 좁은 화면에서는 접는다
-  const [side, setSide] = useState(() => { try { return localStorage.getItem('hq-side-open') !== '0' } catch { return true } })
-  const toggleSide = () => setSide(v => { try { localStorage.setItem('hq-side-open', v ? '0' : '1') } catch { /* 무시 */ } return !v })
-  const cols = 'minmax(220px, 290px) minmax(0, 1fr)' + (s && side && !right ? ' minmax(300px, 380px)' : '')
+  const inline = !!s && ui.side && !sideOutside
+  const cols = 'minmax(220px, 290px) minmax(0, 1fr)' + (inline ? ' minmax(300px, 380px)' : '')
   return <Box style={{ display: 'grid', gridTemplateColumns: cols, gap: 12, height: '100%' }}>
     <Paper withBorder p={6} style={{ minHeight: 0, display: 'flex' }}>
       <ScrollArea style={{ flex: 1 }}>
@@ -110,7 +107,7 @@ export function WorkView({ S, right }: { S: Snapshot; right: HTMLElement | null 
           {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
         </Stack>
       </Paper> : <>
-        <Head S={S} s={s} side={side} onSide={toggleSide} />
+        <Head S={S} s={s} side={ui.side} onSide={toggleSide} />
         <Group gap="md">
           {s.host === 'web' && <SegmentedControl size="xs" value={view} onChange={v => { setView(v); try { localStorage.setItem('hq-view', v) } catch { /* 무시 */ } }}
             data={[{ label: '대화', value: 'chat' }, { label: '터미널', value: 'term' }]} />}
@@ -122,6 +119,6 @@ export function WorkView({ S, right }: { S: Snapshot; right: HTMLElement | null 
         </Box>
       </>}
     </Stack>
-    {s && side && (right ? createPortal(<SidePanel S={S} s={s} />, right) : <SidePanel S={S} s={s} />)}
+    {inline && <SidePanel S={S} s={s} />}
   </Box>
 }

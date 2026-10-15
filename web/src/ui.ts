@@ -17,10 +17,11 @@ interface UI {
   addTask: boolean
   brief: boolean
   access: boolean
+  side: boolean // 핀·메모·곁가지 질문 칸을 펼쳤는지
 }
 let ui: UI = {
   mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '',
-  openTask: null, openSess: null, newFor: null, addTask: false, brief: false, access: false,
+  openTask: null, openSess: null, newFor: null, addTask: false, brief: false, access: false, side: get('hq-side-open') !== '0',
 }
 history.replaceState(null, '', '#' + ui.mode)
 const subs = new Set<() => void>()
@@ -47,6 +48,7 @@ export function pickNew(tmux: string) {
   setUI({ pendingSel: tmux, sel: '', openTask: null, openSess: null })
   setMode('work')
 }
+export function toggleSide() { set('hq-side-open', ui.side ? '0' : '1'); setUI({ side: !ui.side }) }
 export const rememberSel = (sid: string) => set('hq-sel', sid)
 export const lastCwd = () => get('hq-cwd') || ''
 export const rememberCwd = (cwd: string) => set('hq-cwd', cwd)
