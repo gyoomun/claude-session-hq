@@ -356,11 +356,9 @@ function toolInput(name, i = {}) {
 }
 // 예전에 웹이 여러 줄을 붙여넣기로 보내 Claude Code가 <pasted_content id="…">로 감싼 내 말. 태그를 벗겨 내 말 그대로 보인다
 const unwrapPaste = t => t.replace(/<\/?pasted_content(?: id="[^"]*")?>/g, '').trim();
-function chatItems(text) {
+function chatItems(entries) {
   const out = [];
-  for (const line of text.split('\n')) {
-    if (!line) continue;
-    let d; try { d = JSON.parse(line); } catch { continue; }
+  for (const d of entries) {
     // 자동 압축 요약(isCompactSummary)은 Claude Code가 내 말처럼 넣은 긴 글이라 보이지 않는다(터미널에서도 접혀 있다)
     if (d.isSidechain || d.isMeta || d.isCompactSummary || (d.type !== 'user' && d.type !== 'assistant')) continue;
     const c = d.message && d.message.content, at = Date.parse(d.timestamp) || 0, id = d.uuid || String(out.length);
@@ -391,6 +389,26 @@ function chatItems(text) {
   }
   return out;
 }
+// 되감기(rewind)나 '답 전에 Esc → 고쳐서 다시 보내기'를 하면 버린 말도 파일에 남고, 새 말은 그 앞 지점(parentUuid)에 이어 붙는다.
+// 그래서 내가 친 말의 부모가 그보다 앞서 친 말보다 앞에 있으면, 그 사이(버린 갈래)는 보이지 않는다.
+// parentUuid 사슬 전체를 따라가면 안 된다: 병렬 도구 결과 등 사슬 밖에 있는 정상 항목이 많다
+const typed = d => d.type === 'user' && !d.isMeta && !d.isCompactSummary && !d.isSidechain &&
+  (typeof d.message?.content === 'string' || !(d.message?.content || []).some(x => x.type === 'tool_result'));
+function dropRewound(entries) {
+  const at = new Map(entries.map((d, i) => [d.uuid, i]));
+  const hidden = new Set();
+  entries.forEach((d, i) => {
+    const from = at.get(d.parentUuid);
+    if (!typed(d) || from === undefined) return;
+    for (let j = from + 1; j < i; j++) if (typed(entries[j]) && !hidden.has(j)) { for (let k = j; k < i; k++) hidden.add(k); break; }
+  });
+  return entries.filter((_, i) => !hidden.has(i));
+}
+// 마지막으로 친 말부터 끝까지의 uuid. 이어 읽을 때 새로 친 말의 부모가 여기 없으면 갈래가 바뀐 것이다(처음부터 다시 그린다)
+const sinceTyped = (entries, set = new Set()) => { for (const d of entries) { if (typed(d)) set.clear(); if (d.uuid) set.add(d.uuid); } return set; };
+const turns = new Map(); // `${sid}:${next}` -> sinceTyped
+const parseLines = text => text.split('\n').flatMap(l => { if (!l) return []; try { return [JSON.parse(l)]; } catch { return []; } });
+
 function transcript(params) {
   const sid = params.get('sid') || '';
   if (!/^[0-9a-f-]{36}$/.test(sid)) throw new Error('대화 ID 형식이 아닙니다');
@@ -398,18 +416,36 @@ function transcript(params) {
   const file = findTranscript({ cwd: live ? live.cwd : '', sessionId: sid });
   if (!file) return { next: 0, items: [], missing: true };
   const size = fs.statSync(file).size;
+  const read = (from, first) => {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(size - from);
+      fs.readSync(fd, buf, 0, buf.length, from);
+      // 처음 읽을 때는 잘린 첫 줄을 버리고, 끝의 덜 써진 줄은 다음에 읽는다(바이트 기준이라 한글이 잘리지 않는다)
+      const start = first && from > 0 ? buf.indexOf(10) + 1 : 0;
+      const end = Math.max(start, buf.lastIndexOf(10) + 1);
+      return { end: from + end, entries: parseLines(buf.subarray(start, end).toString('utf8')) };
+    } finally { fs.closeSync(fd); }
+  };
+  const reply = (end, entries, turn, reset) => {
+    turns.set(sid + ':' + end, turn);
+    if (turns.size > 200) turns.delete(turns.keys().next().value); // 닫힌 화면이 남긴 것
+    return { next: end, items: chatItems(reset ? dropRewound(entries) : entries), reset };
+  };
   let from = Number(params.get('from'));
-  const first = !(from >= 0) || from > size;
-  if (first) from = Math.max(0, size - 3e6); // 처음엔 끝부분 3MB만
-  const fd = fs.openSync(file, 'r');
-  try {
-    const buf = Buffer.alloc(size - from);
-    fs.readSync(fd, buf, 0, buf.length, from);
-    // 처음 읽을 때는 잘린 첫 줄을 버리고, 끝의 덜 써진 줄은 다음에 읽는다(바이트 기준이라 한글이 잘리지 않는다)
-    const start = first && from > 0 ? buf.indexOf(10) + 1 : 0;
-    const end = Math.max(start, buf.lastIndexOf(10) + 1);
-    return { next: from + end, items: chatItems(buf.subarray(start, end).toString('utf8')), reset: first };
-  } finally { fs.closeSync(fd); }
+  const turn = turns.get(sid + ':' + from);
+  turns.delete(sid + ':' + from);
+  if (from >= 0 && from <= size && turn) {
+    const { end, entries } = read(from, false);
+    const branched = entries.some(d => {
+      const off = typed(d) && d.parentUuid && !turn.has(d.parentUuid);
+      sinceTyped([d], turn);
+      return off;
+    });
+    if (!branched) return reply(end, entries, turn, false);
+  }
+  const { end, entries } = read(Math.max(0, size - 3e6), true); // 처음(또는 갈래가 바뀌면) 끝부분 3MB를 새로 그린다
+  return reply(end, entries, sinceTyped(entries), true);
 }
 
 /* 이미지 올리기: 대화 화면에 붙여넣거나 끌어다 놓은 이미지를 파일로 저장하고, 그 경로를 Claude에 붙여넣는다(Claude Code는 붙여넣은 이미지 경로를 이미지로 받는다) */
