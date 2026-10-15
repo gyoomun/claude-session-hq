@@ -87,10 +87,13 @@ function sendMail(cfg, subject, text) {
   })();
 }
 
-module.exports = function createAuth({ db, save, mailFile, port }) {
+module.exports = function createAuth({ db, save, mailFile, ipNamesFile, port }) {
   db.logins = db.logins || [];
   db.settings = db.settings || {};
   db.deviceNames = db.deviceNames || {}; // IP -> 주인이 붙인 이름. 같은 PC가 다시 로그인하면 그 이름을 쓴다
+  // 사내 고정 IP 명단(IP -> 사람 이름). 회사 IP 목록에서 뽑아 만든 파일이라 저장소 밖에 둔다
+  const ipName = ip => { try { return JSON.parse(fs.readFileSync(ipNamesFile, 'utf8'))[ip] || ''; } catch { return ''; } };
+  const knownName = ip => db.deviceNames[ip] || ipName(ip);
   let code = null; // { hash, exp, tries }
   let lastSent = 0;
   const fails = [];
@@ -121,7 +124,7 @@ module.exports = function createAuth({ db, save, mailFile, port }) {
     lastSent = Date.now();
     await sendMail(cfg, `[Claude Session HQ] 로그인 인증번호 ${value}`, [
       `인증번호: ${value}`, '', '10분 동안 쓸 수 있습니다.',
-      `요청한 곳: ${db.deviceNames[ipOf(req)] ? db.deviceNames[ipOf(req)] + ' · ' : ''}${pc ? pc + ' · ' : ''}${ipOf(req)} (${deviceOf(req.headers['user-agent'])})`, `요청 시각: ${new Date().toLocaleString('ko-KR')}`, '',
+      `요청한 곳: ${knownName(ipOf(req)) ? knownName(ipOf(req)) + ' · ' : ''}${pc ? pc + ' · ' : ''}${ipOf(req)} (${deviceOf(req.headers['user-agent'])})`, `요청 시각: ${new Date().toLocaleString('ko-KR')}`, '',
       '직접 요청한 것이 아니라면 이 메일을 무시하세요. 인증번호 없이는 들어올 수 없습니다.',
     ].join('\n'));
     code = { hash: sha(value), exp: Date.now() + CODE_TTL, tries: 0 };
@@ -140,9 +143,9 @@ module.exports = function createAuth({ db, save, mailFile, port }) {
     }
     code = null;
     const token = crypto.randomBytes(32).toString('base64url');
-    // 로그인하는 사람에게 이름을 묻지 않는다. 주인이 전에 붙인 이름 → PC 이름 → 기기 종류 순으로 정하고, 주인이 나중에 고친다
+    // 로그인하는 사람에게 이름을 묻지 않는다. 주인이 붙인 이름 → 사내 IP 명단 → PC 이름 → 기기 종류 순으로 정하고, 주인이 나중에 고친다
     const ip = ipOf(req), pc = await pcName(ip);
-    const label = db.deviceNames[ip] || pc || deviceOf(req.headers['user-agent']);
+    const label = knownName(ip) || pc || deviceOf(req.headers['user-agent']);
     db.logins.push({ id: crypto.randomBytes(4).toString('hex'), hash: sha(token), label, ip, pc,
       device: deviceOf(req.headers['user-agent']), createdAt: now, lastSeenAt: now });
     save();

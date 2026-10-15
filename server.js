@@ -416,7 +416,7 @@ function orca(pid, args) {
 
 /* HTTP */
 const createAuth = require('./auth');
-const auth = createAuth({ db, save, mailFile: process.env.HQ_MAIL_FILE || path.join(BOARD_DIR, 'mail.env'), port: PORT });
+const auth = createAuth({ db, save, mailFile: process.env.HQ_MAIL_FILE || path.join(BOARD_DIR, 'mail.env'), ipNamesFile: path.join(BOARD_DIR, 'ip-names.json'), port: PORT });
 const LOGIN_PAGE = path.join(__dirname, 'public', 'login.html');
 function send(res, code, type, body) {
   res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' });

@@ -295,8 +295,10 @@ const RANK={approval:0,myturn:1,working:2,idle:3};
 
 let S={sessions:[],tasks:[],feed:[],orca:false},lastJSON='',offline=false;
 let openTask=null,openSess=null,dragging=null,pending=false,confirmDel=null,confirmClose=null,pendingSel=null,focusSeen=Date.now();
+let skew=0; // 서버 시각 - 이 브라우저 시각. 다른 PC에서 봐도 맥(서버) 시각을 보여 주려고 쓴다
 const store={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
-let mode=store.get('hq-mode')||'work',sel=store.get('hq-sel')||'';
+const MODES=['work','task','all'];
+let mode=MODES.includes(location.hash.slice(1))?location.hash.slice(1):(store.get('hq-mode')||'work'),sel=store.get('hq-sel')||'';
 const drafts=new Map();
 
 const $=id=>document.getElementById(id);
@@ -323,11 +325,11 @@ function taskStatus(t){const ss=sessOf(t);
 
 /* 서버 */
 async function poll(){
- try{const r=await fetch('/api/state',{cache:'no-store'});if(r.status===401){location.href='/login';return}const t=await r.text();
+ try{const r=await fetch('/api/state',{cache:'no-store'});if(r.status===401){location.href='/login';return}const sd=Date.parse(r.headers.get('Date'));if(sd)skew=sd-Date.now();const t=await r.text();
   if(offline){offline=false;$('offline').hidden=true}
   if(t!==lastJSON){lastJSON=t;S=JSON.parse(t);
    // 웹 안의 Claude 등이 세션을 열었으면 그 세션으로 넘어간다(이 페이지를 연 뒤에 생긴 요청만)
-   if(S.focus&&S.focus.at>focusSeen){focusSeen=S.focus.at;pendingSel=S.focus.name;mode='work';store.set('hq-mode',mode);render(true);return}
+   if(S.focus&&S.focus.at>focusSeen){focusSeen=S.focus.at;pendingSel=S.focus.name;setMode('work');render(true);return}
    render()}}
  catch(e){if(!offline){offline=true;$('offline').hidden=false}}}
 async function api(p,body){
@@ -462,8 +464,13 @@ function render(force){
  else{detach();$('tasks').innerHTML=mode==='task'?S.tasks.map(card).join('')+unassignedCard():allView();queue();feed()}
  if(openTask||openSess)drawer();accessPanel();tick()}
 
+/* 보기 전환: 주소 끝(#work 등)에 남겨서 브라우저·마우스 뒤로가기로 앞 화면으로 돌아가게 한다 */
+function setMode(m){if(!MODES.includes(m)||m===mode)return;mode=m;store.set('hq-mode',m);history.pushState(null,'','#'+m)}
+history.replaceState(null,'','#'+mode);
+addEventListener('popstate',()=>{const m=location.hash.slice(1);if(MODES.includes(m)&&m!==mode){mode=m;store.set('hq-mode',m);closeAll();render(true)}});
+
 /* 작업 보기 */
-function pick(sid){sel=sid;store.set('hq-sel',sid);mode='work';store.set('hq-mode',mode);confirmClose=null;openTask=openSess=null;drawer();render(true)}
+function pick(sid){sel=sid;store.set('hq-sel',sid);setMode('work');confirmClose=null;openTask=openSess=null;drawer();render(true)}
 function renderWork(){
  if(pendingSel){const s=S.sessions.find(x=>x.tmux===pendingSel);if(s){sel=s.sid;store.set('hq-sel',sel);pendingSel=null}}
  const groups=[...S.tasks.map(t=>({t,ss:sessOf(t)})),{t:null,ss:S.sessions.filter(s=>!s.task).sort(bySt)}];
@@ -516,7 +523,7 @@ async function send(t){
 function detach(){if(!T)return;T.es.close();T.ro.disconnect();T.term.dispose();T=null}
 function tick(){const n=Date.now();
  document.querySelectorAll('[data-since]').forEach(el=>{el.textContent=fmt(n-+el.dataset.since)+(el.dataset.suf||'')});
- $('clock').textContent=new Date(n).toLocaleTimeString('ko-KR',{hour12:false})}
+ $('clock').textContent='server time '+new Date(n+skew).toLocaleTimeString('en-GB',{hour12:false})}
 function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,3500)}
 function openNew(task){
  // 폴더 후보: 지금 세션들이 쓰는 폴더 + Orca 워크스페이스. 목록에 없는 폴더도 직접 적을 수 있다
@@ -554,7 +561,7 @@ document.addEventListener('click',async e=>{
  if(e.target.closest('select,input,textarea'))return;
  if(e.target.closest('[data-closebrief]')){$('brief').hidden=true;$('scrim').hidden=!(openTask||openSess);return}
  const b=e.target.closest('button,[data-sess]');if(!b)return;const ds=b.dataset;
- if(ds.mode){mode=ds.mode;store.set('hq-mode',mode);render(true);return}
+ if(ds.mode){setMode(ds.mode);render(true);return}
  if(ds.open){openTask=ds.open;openSess=null;confirmDel=null;drawer();tick();return}
  if(ds.pick||ds.sess){pick(ds.pick||ds.sess);return}
  if(ds.info){openSess=ds.info;openTask=null;drawer();tick();return}
@@ -592,10 +599,10 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
  if(f.dataset.reply){const input=f.querySelector('input'),text=input.value.trim();if(!text)return;
   if(await api('term/send',{pid:+f.dataset.reply,text})){drafts.delete(f.dataset.rsid);input.value='';input.blur();toast('보냈습니다.')}return}
  if(f.id==='addtask'){const name=$('t-name').value.trim();if(!name){toast('업무 이름을 적어 주세요.');return}
-  if(await api('task/add',{name,memo:$('t-memo').value})){$('t-name').value='';$('t-memo').value='';$('addtask').hidden=true;mode='task';render(true);toast(`"${name}" 업무를 만들었습니다. 미배치 세션을 끌어다 놓으세요.`)}return}
+  if(await api('task/add',{name,memo:$('t-memo').value})){$('t-name').value='';$('t-memo').value='';$('addtask').hidden=true;setMode('task');render(true);toast(`"${name}" 업무를 만들었습니다. 미배치 세션을 끌어다 놓으세요.`)}return}
  if(f.id==='newsess'){const cwd=$('n-cwd').value.trim(),task=$('n-task').value;if(!cwd){toast('폴더를 적거나 골라 주세요.');return}
   const r=await api('session/new',{cwd,task,prompt:$('n-prompt').value});
-  if(r){store.set('hq-cwd',cwd);$('n-prompt').value='';$('newsess').hidden=true;pendingSel=r.result;sel='';mode='work';store.set('hq-mode',mode);render(true)}return}
+  if(r){store.set('hq-cwd',cwd);$('n-prompt').value='';$('newsess').hidden=true;pendingSel=r.result;sel='';setMode('work');render(true)}return}
  if(f.dataset.renamefor){const id=f.dataset.renamefor;renaming=null;
   if(await api('access/rename',{id,label:$('rn-'+id).value}))toast('이름을 바꿨습니다. 같은 PC가 다시 로그인해도 이 이름으로 보입니다.');return}
  if(f.id==='taskform'){if(await api('task/update',{id:f.dataset.tid,name:$('tf-name').value,memo:$('tf-memo').value,next:$('tf-next').value}))toast('저장했습니다.');return}
