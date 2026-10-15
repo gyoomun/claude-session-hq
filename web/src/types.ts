@@ -46,4 +46,5 @@ export interface Snapshot {
   worktrees: { path: string; name: string }[]
   focus: { name: string; at: number } | null
   access: Access
+  layout: Record<string, { x: number; y: number }> // 가상 사무실의 책상 위치(방 안 0~1 비율)
 }

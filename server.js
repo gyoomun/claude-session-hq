@@ -34,7 +34,7 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 function save() {
   fs.mkdirSync(BOARD_DIR, { recursive: true });
@@ -305,7 +305,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq };
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout };
 }
 
 /* 화면에서 오는 요청 */
@@ -332,6 +332,14 @@ const routes = {
     if (b.task) { db.assign[b.sid] = b.task; task(b.task).updatedAt = Date.now(); } else delete db.assign[b.sid];
   },
   'seen': b => { db.seen[b.sid] = Date.now(); },
+  // 가상 사무실에서 책상을 옮겼을 때: 방 안 위치(0~1 비율)를 남기고, 다른 방(업무)으로 옮겼으면 배치도 바꾼다
+  'layout': b => {
+    const n = v => Math.min(0.97, Math.max(0.03, Number(v) || 0.5));
+    if (!b.sid || typeof b.sid !== 'string') throw new Error('세션이 없습니다');
+    if (b.reset) { delete db.layout[b.sid]; return; } // 자동 배치로 되돌리기
+    if ('task' in b) routes.assign({ sid: b.sid, task: b.task || '' });
+    db.layout[b.sid] = { x: n(b.x), y: n(b.y) };
+  },
   'wait/add': b => {
     const t = task(b.task); const who = str(b.who, 60), what = str(b.what);
     if (!t || !who || !what) throw new Error('누구와 무엇을 둘 다 적어 주세요');
