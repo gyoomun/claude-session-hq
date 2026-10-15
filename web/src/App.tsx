@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMediaQuery } from '@mantine/hooks'
 import { Alert, Box, Button, Center, Code, CopyButton, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
@@ -8,7 +7,7 @@ import type { Snapshot } from './types'
 import { stale } from './util'
 import { WorkView } from './Work'
 import { BoardView } from './Board'
-import { MemoView, SidePanel } from './Memo'
+import { MemoView } from './Memo'
 import { SessionDrawer, TaskDrawer } from './Drawers'
 import { AccessModal, AddTaskModal, BriefModal, NewSessionModal } from './Modals'
 
@@ -158,19 +157,13 @@ export function App() {
     return () => removeEventListener('keydown', onKey, true)
   }, [])
 
-  // 가운데 화면(최대 1600px)은 그대로 두고, 양옆 여백이 320px 이상이면 핀·메모·곁가지 질문 칸을 오른쪽 여백에 놓는다.
-  // 격자 2행: 위(머리·카운터·보기 전환) / 아래(내용). 오른쪽 칸은 아래 행에 있어 세션 목록과 같은 높이에서 시작한다
-  const wide = useMediaQuery('(min-width: 2240px)', false, { getInitialValueInEffect: false })
-
   if (!S) return <Center h="100vh"><Loader /></Center>
-  const sel = ui.mode === 'work' ? S.sessions.find(x => x.sid === ui.sel) : undefined
-  const col = wide ? 2 : 1
-  // 페이지 자체는 스크롤하지 않는다. 위쪽은 고정, 아래 내용 영역만 화면 높이를 채우고 그 안에서 스크롤한다
-  return <Box h="100dvh" py="md" style={{
-    display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', rowGap: 'var(--mantine-spacing-md)',
-    gridTemplateColumns: wide ? 'minmax(0, 1fr) minmax(0, 1600px) minmax(0, 1fr)' : 'minmax(0, 1fr)',
-  }}>
-    <Stack gap="md" px="md" maw={1600} w="100%" mx="auto" style={{ gridColumn: col, gridRow: 1, minWidth: 0 }}>
+  // 화면 전체를 한 덩어리로 가운데에 놓는다(좌우 여백이 같다). 작업 보기에서 핀·메모·btw 칸을 펼치면 그만큼 넓어진다.
+  // 격자 2행: 위(머리·카운터·보기 전환) / 아래(내용). 페이지 자체는 스크롤하지 않고 아래 내용 영역이 화면 높이를 채운다
+  const side = ui.mode === 'work' && ui.side && S.sessions.some(x => x.sid === ui.sel)
+  return <Box h="100dvh" py="md" px="md" maw={side ? 1600 + 432 : 1600} mx="auto"
+    style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', rowGap: 'var(--mantine-spacing-md)' }}>
+    <Stack gap="md" style={{ minWidth: 0 }}>
       <Header S={S} />
       {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
       <Notices S={S} />
@@ -186,10 +179,9 @@ export function App() {
         </Group>
       </Group>
     </Stack>
-    <Box px="md" maw={1600} w="100%" mx="auto" style={{ gridColumn: col, gridRow: 2, minHeight: 0, minWidth: 0 }}>
-      {ui.mode === 'work' ? <WorkView S={S} sideOutside={wide} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
+    <Box style={{ minHeight: 0, minWidth: 0 }}>
+      {ui.mode === 'work' ? <WorkView S={S} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
     </Box>
-    {wide && sel && ui.side && <Box pr="md" maw={460} style={{ gridColumn: 3, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={sel} /></Box>}
     <SessionDrawer S={S} />
     <TaskDrawer S={S} />
     <NewSessionModal S={S} />

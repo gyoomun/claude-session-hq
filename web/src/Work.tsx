@@ -73,8 +73,8 @@ function ClosedList({ S }: { S: Snapshot }) {
   </Stack>
 }
 
-// sideOutside: 화면이 넓어 App이 핀·메모·곁가지 질문 칸을 가운데 화면 오른쪽 여백에 놓을 때. 아니면 여기서 대화 옆 셋째 칸으로 놓는다
-export function WorkView({ S, sideOutside }: { S: Snapshot; sideOutside: boolean }) {
+// 세 칸: 세션 목록 | 고른 세션(머리 + 대화) | 핀·메모·btw. 격자 2행이라 셋째 칸은 머리 아래, 대화창과 같은 높이에서 시작한다
+export function WorkView({ S }: { S: Snapshot }) {
   const ui = useUI()
   const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, ss: sessOf(S, t) })),
     { id: '', name: '미배치', ss: S.sessions.filter(s => !s.task).sort(bySt) }]
@@ -83,10 +83,10 @@ export function WorkView({ S, sideOutside }: { S: Snapshot; sideOutside: boolean
   const [view, setView] = useState(() => { try { return localStorage.getItem('hq-view') || 'chat' } catch { return 'chat' } })
   // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
   const [detail, setDetail] = useState(() => { try { return localStorage.getItem('hq-detail') === '1' } catch { return false } })
-  const inline = !!s && ui.side && !sideOutside
-  const cols = 'minmax(220px, 290px) minmax(0, 1fr)' + (inline ? ' minmax(300px, 380px)' : '')
-  return <Box style={{ display: 'grid', gridTemplateColumns: cols, gap: 12, height: '100%' }}>
-    <Paper withBorder p={6} style={{ minHeight: 0, display: 'flex' }}>
+  const side = !!s && ui.side
+  return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(0, 1fr)' + (side ? ' minmax(300px, 420px)' : ''),
+    gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
+    <Paper withBorder p={6} style={{ gridRow: '1 / -1', minHeight: 0, display: 'flex' }}>
       <ScrollArea style={{ flex: 1 }}>
         <Stack gap="md" p={4}>
           {groups.map(g => <Stack key={g.id || 'none'} gap={2}>
@@ -100,13 +100,13 @@ export function WorkView({ S, sideOutside }: { S: Snapshot; sideOutside: boolean
         </Stack>
       </ScrollArea>
     </Paper>
-    <Stack gap={8} style={{ minWidth: 0, minHeight: 0 }}>
-      {!s ? <Paper withBorder p="xl" style={{ flex: 1, borderStyle: 'dashed' }}>
-        <Stack align="flex-start">
-          <Text>{ui.pendingSel ? '세션을 여는 중입니다…' : '왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.'}</Text>
-          {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
-        </Stack>
-      </Paper> : <>
+    {!s ? <Paper withBorder p="xl" style={{ gridRow: '1 / -1', borderStyle: 'dashed' }}>
+      <Stack align="flex-start">
+        <Text>{ui.pendingSel ? '세션을 여는 중입니다…' : '왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.'}</Text>
+        {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
+      </Stack>
+    </Paper> : <>
+      <Stack gap={8} style={{ minWidth: 0 }}>
         <Head S={S} s={s} side={ui.side} onSide={toggleSide} />
         <Group gap="md">
           {s.host === 'web' && <SegmentedControl size="xs" value={view} onChange={v => { setView(v); try { localStorage.setItem('hq-view', v) } catch { /* 무시 */ } }}
@@ -114,11 +114,11 @@ export function WorkView({ S, sideOutside }: { S: Snapshot; sideOutside: boolean
           {(s.host !== 'web' || view === 'chat') && <Switch size="xs" label="작업 과정 자세히" checked={detail}
             onChange={e => { const v = e.currentTarget.checked; setDetail(v); try { localStorage.setItem('hq-detail', v ? '1' : '0') } catch { /* 무시 */ } }} />}
         </Group>
-        <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          {s.host === 'web' && view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={detail} />}
-        </Box>
-      </>}
-    </Stack>
-    {inline && <SidePanel S={S} s={s} />}
+      </Stack>
+      <Box style={{ gridColumn: 2, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {s.host === 'web' && view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={detail} />}
+      </Box>
+      {side && <Box style={{ gridColumn: 3, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>}
+    </>}
   </Box>
 }
