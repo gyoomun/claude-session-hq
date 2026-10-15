@@ -107,8 +107,9 @@ export function App() {
   }, [])
 
   if (!S) return <Center h="100vh"><Loader /></Center>
-  return <Box px="md" py="md" maw={1600} mx="auto">
-    <Stack gap="md">
+  // 페이지 자체는 스크롤하지 않는다. 위쪽(머리·카운터·보기 전환)은 고정, 아래 내용 영역만 화면 높이를 채우고 그 안에서 스크롤한다
+  return <Box px="md" py="md" maw={1600} mx="auto" h="100dvh" style={{ display: 'flex', flexDirection: 'column' }}>
+    <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
       <Header S={S} />
       {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
       <Counters S={S} />
@@ -122,7 +123,9 @@ export function App() {
           <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>
         </Group>
       </Group>
-      {ui.mode === 'work' ? <WorkView S={S} /> : <BoardView S={S} mode={ui.mode} />}
+      <Box style={{ flex: 1, minHeight: 0 }}>
+        {ui.mode === 'work' ? <WorkView S={S} /> : <BoardView S={S} mode={ui.mode} />}
+      </Box>
     </Stack>
     <SessionDrawer S={S} />
     <TaskDrawer S={S} />

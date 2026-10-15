@@ -36,7 +36,7 @@ function AllGroups({ S }: { S: Snapshot }) {
     if (!ss.length) return null
     return <Paper key={k} withBorder p="12px 14px 14px">
       <Group gap={8} mb={8}><Box w={8} h={8} style={{ borderRadius: 2, background: cssColor(k) }} /><Text fw={600} size="sm">{LABEL[k]}</Text><Text size="xs" c="dimmed">{ss.length}</Text></Group>
-      <Box style={deskGrid}>{ss.map(s => <DeskTile key={s.sid} S={S} s={s} sel showTask />)}</Box>
+      <Box style={deskGrid}>{ss.map(s => <DeskTile key={s.pid} S={S} s={s} sel showTask />)}</Box>
     </Paper>
   })}</Stack>
 }
@@ -47,7 +47,7 @@ function Queue({ S }: { S: Snapshot }) {
   return <Paper withBorder p="md">
     <Stack gap="sm">
       <Group gap={8}><Text fw={600} size="sm">지금 내 차례</Text><Text size="xs" c="dimmed" ff="monospace">{items.length}건</Text></Group>
-      {items.length ? items.map(s => <Paper key={s.sid} p="10px 12px" bg={tint(s.state, 8)} style={{ border: `1px solid ${cssColor(s.state, 8)}` }}>
+      {items.length ? items.map(s => <Paper key={s.pid} p="10px 12px" bg={tint(s.state, 8)} style={{ border: `1px solid ${cssColor(s.state, 8)}` }}>
         <Stack gap={5}>
           <Group gap={8} wrap="nowrap"><StatePill state={s.state} /><Text size="xs" c="dimmed" truncate style={{ minWidth: 0 }}>{tname(S, s.task)}</Text>
             <Text size="xs" c="dimmed" ml="auto" style={{ flex: 'none' }}><Since t={s.since} suf="째" /></Text></Group>
@@ -68,17 +68,16 @@ function Queue({ S }: { S: Snapshot }) {
 }
 
 export function BoardView({ S, mode }: { S: Snapshot; mode: 'task' | 'all' }) {
-  return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 16, alignItems: 'start' }} className="hq-board">
-    <Box style={{ minWidth: 0 }}>
-      {mode === 'task'
-        ? <Office S={S} />
-        : <AllGroups S={S} />}
+  // 왼쪽(사무실·세션 전체)과 오른쪽(내 차례·이벤트)이 각자 자기 영역 안에서 스크롤한다
+  return <Box className="hq-board" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 16, height: '100%' }}>
+    <Box className="hq-pane">
+      {mode === 'task' ? <Office S={S} /> : <AllGroups S={S} />}
     </Box>
-    <Stack gap="md">
+    <Stack gap="md" className="hq-pane">
       <Queue S={S} />
       <Paper withBorder p="md">
         <Group gap={8} mb="xs"><Text fw={600} size="sm">이벤트</Text><Text size="xs" c="dimmed">서버가 켜진 뒤 상태가 바뀐 순서</Text></Group>
-        <FeedList S={S} items={S.feed} />
+        <FeedList S={S} items={S.feed} max={10000} />
       </Paper>
     </Stack>
   </Box>

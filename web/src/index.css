@@ -8,7 +8,10 @@
   --hq-bg: #eef1f7; --hq-floor: #e8ecf5; --hq-desk: #c9a57a; --hq-desk-edge: #a7845c;
   --hq-mon: #3a4259; --hq-screen-off: #59617a; --hq-chair: #c3cadb;
 }
-body { background: var(--mantine-color-body); }
+html, body, #root { height: 100%; }
+body { background: var(--mantine-color-body); overflow: hidden; }
+/* 내용 영역의 각 칸은 자기 안에서만 스크롤한다 */
+.hq-pane { min-width: 0; min-height: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .hq-pixel { font-family: var(--hq-pixel); font-size: 9.5px; letter-spacing: .1em; color: var(--mantine-color-dimmed); }
 .hq-display { font-family: var(--hq-display); }
 .hq-term { height: 100%; min-height: 0; background: #0b0f1a; border: 1px solid var(--mantine-color-default-border); border-radius: var(--mantine-radius-md); padding: 8px 4px 4px 10px; overflow: hidden; }
@@ -23,7 +26,8 @@ body { background: var(--mantine-color-body); }
 @keyframes hq-blink { 50% { opacity: .25; } }
 @keyframes hq-wave { 50% { transform: translateY(1px); } }
 @media (prefers-reduced-motion: reduce) { .code, .arm { animation: none; } }
-@media (max-width: 1100px) { .hq-board { grid-template-columns: minmax(0, 1fr) !important; } }
+/* 좁은 화면: 두 칸을 위아래로 쌓고, 내용 영역 하나만 스크롤한다 */
+@media (max-width: 1100px) { .hq-board { grid-template-columns: minmax(0, 1fr) !important; overflow-y: auto; } .hq-board .hq-pane { height: auto; overflow: visible; } }
 
 /* 가상 사무실 (Office.tsx). 방 = 업무, 로비 = 미배치. 바닥 무늬와 벽은 CSS로만 그린다 */
 :root {

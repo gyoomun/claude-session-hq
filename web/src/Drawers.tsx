@@ -81,7 +81,7 @@ export function TaskDrawer({ S }: { S: Snapshot }) {
         <Text size="xs" c="dimmed">마지막 진행 <Since t={lastOf(S, t)} suf=" 전" /></Text></Group>
       <TaskForm t={t} />
       <Group justify="space-between"><span className="hq-pixel">SESSIONS · {ss.length}</span><Button size="xs" variant="default" onClick={() => setUI({ openTask: null, newFor: t.id })}>+ 이 업무로 새 세션</Button></Group>
-      {ss.length ? ss.map(s => <UnstyledButton key={s.sid} onClick={() => pick(s.sid)}>
+      {ss.length ? ss.map(s => <UnstyledButton key={s.pid} onClick={() => pick(s.sid)}>
         <Paper withBorder p="8px 10px"><Group gap="sm" wrap="nowrap">
           <Desk s={s} size={56} />
           <Stack gap={1} style={{ minWidth: 0 }}>

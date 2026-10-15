@@ -16,15 +16,15 @@ const SLOT_W = 150, SLOT_H = 136 // 책상 한 칸 크기(px)
 function place(ss: Session[], layout: Snapshot['layout'], cols: number) {
   const rows = Math.max(1, Math.ceil(ss.length / cols))
   const slot = (i: number) => ({ x: (i % cols + 0.5) / cols, y: (Math.floor(i / cols) + 0.5) / rows })
-  const pos = new Map<string, { x: number; y: number }>()
+  const pos = new Map<number, { x: number; y: number }>() // 프로세스(pid) 기준: 같은 대화가 둘로 돌 때도 겹치지 않게
   const used: { x: number; y: number }[] = []
-  for (const s of ss) if (layout[s.sid]) { pos.set(s.sid, layout[s.sid]); used.push(layout[s.sid]) }
+  for (const s of ss) if (layout[s.sid] && ![...pos.values()].includes(layout[s.sid])) { pos.set(s.pid, layout[s.sid]); used.push(layout[s.sid]) }
   let i = 0
   for (const s of ss) {
-    if (pos.has(s.sid)) continue
+    if (pos.has(s.pid)) continue
     let p = slot(i++)
     while (i < cols * rows * 2 && used.some(u => Math.abs(u.x - p.x) < 0.5 / cols && Math.abs(u.y - p.y) < 0.5 / rows)) p = slot(i++)
-    pos.set(s.sid, p); used.push(p)
+    pos.set(s.pid, p); used.push(p)
   }
   return { pos, rows }
 }
@@ -88,7 +88,7 @@ function Room({ S, t, ss, over, drag, onDown }: {
       <Box className="hq-plant" style={{ left: 6, bottom: 4 }}><Plant /></Box>
       <Box className="hq-plant" style={{ right: 6, bottom: 4 }}><Plant /></Box>
       {!ss.length && <Text size="sm" c="dimmed" className="hq-empty">빈 방입니다. 세션을 끌어다 놓으세요.</Text>}
-      {ss.map(s => { const p = pos.get(s.sid)!; return <DeskSprite key={s.sid} s={s} x={p.x} y={p.y} ghost={drag === s.sid} onDown={onDown} /> })}
+      {ss.map(s => { const p = pos.get(s.pid)!; return <DeskSprite key={s.pid} s={s} x={p.x} y={p.y} ghost={drag === s.sid} onDown={onDown} /> })}
     </Box>
   </Box>
 }

@@ -179,8 +179,11 @@ function loadTmuxPanes() {
 async function restoreWeb() {
   let names = [];
   try { names = (await tmux(['list-sessions', '-F', '#{session_name}'])).split('\n'); } catch {}
+  const openSids = new Set(liveSessions().map(x => x.sessionId));
   for (const w of db.web) {
     if (names.includes(w.name) || !w.sid) continue;
+    // 그 대화가 이미 다른 곳(Orca 등)에서 열려 있으면 다시 띄우지 않는다. 같은 대화가 둘로 돌면 엉킨다
+    if (openSids.has(w.sid)) { console.log('복구 건너뜀(다른 곳에서 열려 있음):', w.name, w.sid); w.sid = ''; w.createdAt = 0; continue; }
     // 꺼지기 전에 나를 기다리던 세션만 '내 차례'로 남기고, 나머지는 다시 띄운 것만으로 '내 차례'가 되지 않게 한다
     if (w.state !== 'myturn' && w.state !== 'approval') db.seen[w.sid] = Date.now() + 30e3;
     try { await startTmux(w.name, w.cwd, [...w.args, '--resume', w.sid]); console.log('복구:', w.name, w.sid); }

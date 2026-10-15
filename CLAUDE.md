@@ -27,7 +27,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 열린 세션의 기준은 `~/.claude/sessions/<pid>.json` 중 프로세스가 살아 있고 `kind`가 interactive인 것. `status`는 `busy`/`idle`
 - 세션이 어디서 도는지(`host`)는 claude 프로세스 환경 변수로 안다(`ps -E`). `HQ_TMUX=hq-…`면 웹, `ORCA_TERMINAL_HANDLE`이면 Orca
 - 웹 세션 = 전용 tmux 세션 하나. `$SHELL -lic 'exec claude …'`로 띄워서 claude가 끝나면 tmux 세션도 끝난다. `db.web`에 이름·폴더·옵션·대화 ID·마지막 상태를 남긴다
-- 복구: 서버가 켜질 때 `db.web`에 있는데 tmux에 없는 세션을 `claude <args> --resume <sid>`로 다시 띄운다. 스스로 끝난 세션은 scan이 `db.web`에서 빼서 다시 띄우지 않는다
+- 복구: 서버가 켜질 때 `db.web`에 있는데 tmux에 없는 세션을 `claude <args> --resume <sid>`로 다시 띄운다. 단, 그 대화가 이미 다른 곳(Orca 등)에서 열려 있으면 띄우지 않는다(실제로 같은 대화가 둘로 돈 적이 있다). 스스로 끝난 세션은 scan이 `db.web`에서 빼서 다시 띄우지 않는다
 - 상태 판정(`stateOf`): 승인 요청 훅 → 승인 필요, AskUserQuestion → 내 차례, busy → 작업중, idle이면서 `statusUpdatedAt > seen` → 내 차례, 아니면 쉼
 - `seen[sessionId]`: 확인함을 누른 시각. 처음 보는 세션이 30분 넘게 쉬던 중이면 쉼으로 시작. 복구한 세션은 꺼지기 전 상태가 내 차례가 아니었으면 쉼으로 시작
 - 업무 배치는 sessionId 기준(`db.assign`). 폴더(cwd)로 묶지 않는다. 사용자가 폴더 단위 묶음을 짐으로 느껴서 일부러 뺐다
@@ -56,6 +56,8 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 접근 판정(`auth.identify`): 이 맥(루프백 주소 + Host가 localhost)이면 로그인 없이 통과, 아니면 로그인 쿠키가 있어야 한다. 사내망 접속(`db.settings.lan`)이 꺼져 있으면 맥 밖 요청은 모두 403. 맥에서 터널(cloudflared 등)로 들어온 요청은 Host가 달라 로그인을 요구받는다
 - 모든 쓰기 요청은 `x-hq: 1` 헤더가 있어야 받는다. 다른 사이트가 이 주소로 몰래 요청을 보내는 것을 막는 장치라 빼지 않는다. 쿠키는 HttpOnly·SameSite=Strict
 - 기기 이름: 주인이 붙인 이름(`db.deviceNames`, IP별) → `~/.claude/board/ip-names.json`(회사 IP 목록 `04note/work/engsoft/handover/trilium/network/office-lan/attachments/engsoft-ip-list.xlsx`의 '내부' 시트에서 사용 중인 IP·이름·부서를 뽑아 만든 것. 동료 이름이 들어 있어 저장소에 넣지 않는다) → NetBIOS PC 이름 → 기기 종류. 엑셀이 바뀌면 파일을 다시 뽑는다
+- 화면 규칙: 페이지 자체는 스크롤하지 않는다(body overflow hidden, 앱이 100dvh). 머리·카운터·보기 전환은 고정이고, 내용 영역의 각 칸(`.hq-pane`, ScrollArea)이 자기 안에서 스크롤한다. 새 화면을 만들 때도 지킨다
+- 같은 대화(sid)가 두 프로세스로 돌 수 있으므로 화면 목록의 key와 사무실 자리 표는 pid 기준이다
 - 보기 전환 단축키 F1·F2·F3(작업·업무별·세션 전체). 입력칸·터미널에 커서가 있어도 먹게 `App.tsx`에서 capture 단계로 가로채고 브라우저 기본 동작(도움말·찾기)을 막는다
 - 보기 전환은 주소 끝(`#work`·`#task`·`#all`)에 남겨 브라우저·마우스 뒤로가기로 돌아간다. 보기를 바꿀 때는 `ui.ts`의 `setMode()`/`pick()`을 쓴다
 - 인증번호·로그인 토큰은 해시로만 `hq.json`에 저장한다. 메일 설정(`~/.claude/board/mail.env`)은 사용자가 직접 만든다(비밀번호가 들어가므로 Claude가 쓰지 않는다)
