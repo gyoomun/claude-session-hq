@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useMediaQuery } from '@mantine/hooks'
 import { Alert, Box, Button, Center, Code, CopyButton, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
@@ -157,9 +158,15 @@ export function App() {
     return () => removeEventListener('keydown', onKey, true)
   }, [])
 
+  // 가운데 화면(최대 1600px)은 그대로 두고, 양옆 여백이 320px 이상이면 오른쪽 여백에 핀·메모·곁가지 질문을 놓는다
+  const wide = useMediaQuery('(min-width: 2240px)', false, { getInitialValueInEffect: false })
+  const [right, setRight] = useState<HTMLDivElement | null>(null)
+
   if (!S) return <Center h="100vh"><Loader /></Center>
   // 페이지 자체는 스크롤하지 않는다. 위쪽(머리·카운터·보기 전환)은 고정, 아래 내용 영역만 화면 높이를 채우고 그 안에서 스크롤한다
-  return <Box px="md" py="md" h="100dvh" style={{ display: 'flex', flexDirection: 'column' }}>
+  return <Box h="100dvh" style={{ display: 'grid', gridTemplateColumns: wide ? 'minmax(0, 1fr) minmax(0, 1600px) minmax(0, 1fr)' : 'minmax(0, 1fr)' }}>
+  {wide && <div />}
+  <Box px="md" py="md" maw={1600} w="100%" mx="auto" h="100dvh" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
     <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
       <Header S={S} />
       {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
@@ -176,7 +183,7 @@ export function App() {
         </Group>
       </Group>
       <Box style={{ flex: 1, minHeight: 0 }}>
-        {ui.mode === 'work' ? <WorkView S={S} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
+        {ui.mode === 'work' ? <WorkView S={S} right={wide ? right : null} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
       </Box>
     </Stack>
     <SessionDrawer S={S} />
@@ -185,5 +192,7 @@ export function App() {
     <AddTaskModal />
     <BriefModal S={S} />
     <AccessModal S={S} />
+  </Box>
+  {wide && <Box ref={setRight} py="md" pr="md" maw={460} h="100dvh" style={{ minHeight: 0 }} />}
   </Box>
 }
