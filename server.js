@@ -87,7 +87,7 @@ function scanLines(text, info) {
     let d; try { d = JSON.parse(line); } catch { continue; }
     if (d.type === 'ai-title' && d.aiTitle) info.title = d.aiTitle;
     else if (d.type === 'custom-title' && d.customTitle) info.custom = d.customTitle;
-    else if (d.isSidechain || d.isMeta) continue;
+    else if (d.isSidechain || d.isMeta || d.isCompactSummary) continue; // 자동 압축 요약은 Claude Code가 넣은 글이라 내 말로 치지 않는다
     else if (d.type === 'assistant') { const t = textOf(d.message?.content).trim(); if (t) info.lastText = t; }
     else if (d.type === 'user') {
       // 핀보드 플러그인은 바꿀 때마다 보드 전체를 도구 결과로 남긴다("Pinboard now: …"). 그 마지막 것이 지금 보드다
@@ -359,7 +359,8 @@ function chatItems(text) {
   for (const line of text.split('\n')) {
     if (!line) continue;
     let d; try { d = JSON.parse(line); } catch { continue; }
-    if (d.isSidechain || d.isMeta || (d.type !== 'user' && d.type !== 'assistant')) continue;
+    // 자동 압축 요약(isCompactSummary)은 Claude Code가 내 말처럼 넣은 긴 글이라 보이지 않는다(터미널에서도 접혀 있다)
+    if (d.isSidechain || d.isMeta || d.isCompactSummary || (d.type !== 'user' && d.type !== 'assistant')) continue;
     const c = d.message && d.message.content, at = Date.parse(d.timestamp) || 0, id = d.uuid || String(out.length);
     if (d.type === 'user') {
       if (typeof c === 'string') {
