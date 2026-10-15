@@ -16,7 +16,8 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - `public/index.html`: 화면 전부(빌드 없음). 보기 3개: 작업(목록+터미널), 업무별, 세션 전체
 - `tmux.conf`: 웹 세션용 전용 tmux 설정(상태줄·단축키 끔)
 - `hooks/hook.sh`: Claude Code 훅. 이벤트를 `~/.claude/board/hooks/<pid>.json`에 덮어쓰기만 한다
-- `scripts/install.js`: settings.json 훅 등록 + launchd plist
+- `skills/hq-open`: 웹 안의 Claude가 지난 대화를 기록에서 찾아 `/api/session/resume`으로 다시 여는 스킬. install.js가 `~/.claude/skills`에 링크한다
+- `scripts/install.js`: settings.json 훅 등록 + 스킬 링크 + launchd plist
 
 ## 핵심 개념
 - 열린 세션의 기준은 `~/.claude/sessions/<pid>.json` 중 프로세스가 살아 있고 `kind`가 interactive인 것. `status`는 `busy`/`idle`
@@ -26,6 +27,8 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 상태 판정(`stateOf`): 승인 요청 훅 → 승인 필요, AskUserQuestion → 내 차례, busy → 작업중, idle이면서 `statusUpdatedAt > seen` → 내 차례, 아니면 쉼
 - `seen[sessionId]`: 확인함을 누른 시각. 처음 보는 세션이 30분 넘게 쉬던 중이면 쉼으로 시작. 복구한 세션은 꺼지기 전 상태가 내 차례가 아니었으면 쉼으로 시작
 - 업무 배치는 sessionId 기준(`db.assign`). 폴더(cwd)로 묶지 않는다. 사용자가 폴더 단위 묶음을 짐으로 느껴서 일부러 뺐다
+- 대화(파일)와 세션(돌고 있는 claude 프로그램)은 다르다. Orca든 웹이든 같은 `~/.claude` 기록을 쓰고, 웹에서 키보드를 꽂을 수 있는 건 웹 tmux에서 돈 프로그램뿐이다. 그래서 지난 대화는 옮기지 않고 `--resume`으로 다시 띄운다
+- `focus`: 화면 밖(웹 안의 Claude 등)에서 세션을 열면 서버가 `focus`를 내보내고, 열려 있는 화면이 그 세션으로 넘어간다
 - 세션 제목 순서: custom-title → 탭 제목(tmux pane_title 또는 Orca) → ai-title → `name`
 
 ## 함정

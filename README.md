@@ -7,6 +7,7 @@ Claude Code 세션 여러 개를 동시에 굴리면서, 터미널 탭을 오가
 - **세션 유지**: 웹에서 연 세션은 전용 tmux 안에서 돕니다. 브라우저를 닫거나 서버가 재시작돼도 살아 있고, 맥을 재부팅하면 같은 명령(`claude <원래 옵션> --resume <대화 ID>`)으로 자동 복구됩니다
 - **한눈에 보기**: 열린 세션 수, 세션별 상태(작업중 / 내 차례 / 승인 필요 / 쉼), 나를 기다리는 세션을 모아 보여 줍니다
 - **업무 단위**: 업무를 만들고 세션을 끌어다 놓아 묶습니다. 업무마다 "박과장 답 기다림" 같은 사람 대기를 적어 둡니다
+- **지난 대화 다시 열기**: 웹 안의 Claude에게 "조신혜 대리랑 ssh 연결했던 거 찾아서 열어줘"처럼 말하면, Claude가 대화 기록을 뒤져 찾은 뒤 웹에 그 대화를 이어 엽니다(`skills/hq-open`)
 - **Orca에서 옮기기**: Orca에서 띄운 세션은 버튼 하나로 웹으로 옮깁니다. Orca 쪽 Claude를 끝내고 같은 대화를 원래 옵션 그대로 이어 띄웁니다
 
 서버는 `127.0.0.1`에서만 열립니다.
@@ -27,7 +28,8 @@ node scripts/install.js
 설치하면 두 가지가 바뀝니다.
 
 1. `~/.claude/settings.json`에 훅 5개(UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop)를 추가합니다. 다른 도구의 훅은 건드리지 않고, 바꾸기 전 파일을 `settings.json.bak-claude-session-hq`로 남깁니다.
-2. 로그인하면 서버가 자동으로 뜨도록 launchd에 등록합니다(`~/Library/LaunchAgents/dev.gyoomun.claude-session-hq.plist`).
+2. `skills/`의 스킬을 `~/.claude/skills`에 링크로 겁니다.
+3. 로그인하면 서버가 자동으로 뜨도록 launchd에 등록합니다(`~/Library/LaunchAgents/dev.gyoomun.claude-session-hq.plist`).
 
 그다음 http://127.0.0.1:7420 을 엽니다. 포트를 바꾸려면 `PORT=8000 node scripts/install.js`로 설치합니다.
 

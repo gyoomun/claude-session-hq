@@ -234,6 +234,8 @@ function loadWorktrees(now) {
 }
 // 화면에서 연 세션: tmux 이름으로 기억해 두었다가 세션이 나타나면 고른 업무에 배치한다
 const pendingAssign = new Map();
+// 화면 밖에서(예: 웹 안의 Claude가) 세션을 열었을 때, 열려 있는 화면이 그 세션으로 넘어가게 하는 신호
+let focusReq = null;
 
 /* 2초마다 전체 상태를 만들고, 상태가 바뀐 세션은 이벤트로 남긴다 */
 let snapshot = { now: Date.now(), sessions: [], tasks: [], feed: [] };
@@ -303,7 +305,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees };
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq };
 }
 
 /* 화면에서 오는 요청 */
@@ -367,6 +369,25 @@ const routes = {
     db.web.push({ name, cwd: s.dir, args, sid: s.sid, createdAt: Date.now() });
     if (db.assign[s.sid]) pendingAssign.set(name, db.assign[s.sid]);
     run(ORCA, ['terminal', 'close', '--terminal', where.orca, '--json']).catch(() => {});
+    return name;
+  },
+  'session/resume': async b => {
+    // 닫힌 대화를 웹에서 다시 연다. 보통 웹 안의 Claude가 대화 기록을 뒤져 찾은 뒤 이 API를 부른다(skills/hq-open)
+    const sid = String(b.sid || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(sid)) throw new Error('대화 ID 형식이 아닙니다');
+    if (b.task && !task(b.task)) throw new Error('없는 업무입니다');
+    const open = snapshot.sessions.find(x => x.sid === sid);
+    if (open && open.host === 'web') { focusReq = { name: open.tmux, at: Date.now() }; return open.tmux; }
+    if (open) throw new Error(`이 대화는 ${open.host === 'orca' ? 'Orca' : '다른 터미널'}에서 열려 있습니다. 거기서 /exit 한 뒤 다시 여세요`);
+    const file = findTranscript({ cwd: '', sessionId: sid });
+    if (!file) throw new Error('그 대화 기록을 찾지 못했습니다');
+    const m = readTail(file, Math.min(fs.statSync(file).size, 262144), 262144).match(/"cwd":"((?:[^"\\]|\\.)*)"/);
+    const cwd = m && fs.existsSync(JSON.parse(`"${m[1]}"`)) ? JSON.parse(`"${m[1]}"`) : HOME;
+    const name = newName();
+    await startTmux(name, cwd, [...db.claudeArgs, '--resume', sid]);
+    db.web.push({ name, cwd, args: db.claudeArgs, sid, createdAt: Date.now() });
+    if (b.task) db.assign[sid] = b.task;
+    focusReq = { name, at: Date.now() };
     return name;
   },
   'session/close': async b => {

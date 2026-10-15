@@ -72,8 +72,21 @@ if (!uninstall && !fs.existsSync(path.join(ROOT, 'node_modules', 'node-pty'))) {
   console.error('먼저 npm install 을 실행하세요. (launchd가 쓰는 Node와 같은 Node로 설치해야 합니다: ' + NODE + ')');
   process.exit(1);
 }
+// 이 저장소의 스킬을 ~/.claude/skills에 링크로 건다(지난 대화를 찾아 웹에서 다시 여는 hq-open 등)
+function updateSkills() {
+  const dir = path.join(HOME, '.claude', 'skills');
+  for (const name of fs.readdirSync(path.join(ROOT, 'skills'))) {
+    const link = path.join(dir, name), target = path.join(ROOT, 'skills', name);
+    const cur = fs.lstatSync(link, { throwIfNoEntry: false });
+    if (cur && !cur.isSymbolicLink()) { console.error(`건너뜀: ${link}가 링크가 아닌 실제 폴더입니다`); continue; }
+    if (cur) fs.unlinkSync(link);
+    if (!uninstall) { fs.mkdirSync(dir, { recursive: true }); fs.symlinkSync(target, link); }
+  }
+}
+
 fs.chmodSync(HOOK, 0o755);
 updateSettings();
+updateSkills();
 updateLaunchd();
 console.log(uninstall
   ? '제거했습니다. 훅과 자동 실행을 뺐고, 데이터(~/.claude/board)는 남겼습니다.'

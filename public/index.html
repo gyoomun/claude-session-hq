@@ -291,7 +291,7 @@ const COLOR={working:'var(--working)',myturn:'var(--myturn)',approval:'var(--app
 const RANK={approval:0,myturn:1,working:2,idle:3};
 
 let S={sessions:[],tasks:[],feed:[],orca:false},lastJSON='',offline=false;
-let openTask=null,openSess=null,dragging=null,pending=false,confirmDel=null,confirmClose=null,pendingSel=null;
+let openTask=null,openSess=null,dragging=null,pending=false,confirmDel=null,confirmClose=null,pendingSel=null,focusSeen=Date.now();
 const store={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
 let mode=store.get('hq-mode')||'work',sel=store.get('hq-sel')||'';
 const drafts=new Map();
@@ -322,7 +322,10 @@ function taskStatus(t){const ss=sessOf(t);
 async function poll(){
  try{const r=await fetch('/api/state',{cache:'no-store'});const t=await r.text();
   if(offline){offline=false;$('offline').hidden=true}
-  if(t!==lastJSON){lastJSON=t;S=JSON.parse(t);render()}}
+  if(t!==lastJSON){lastJSON=t;S=JSON.parse(t);
+   // 웹 안의 Claude 등이 세션을 열었으면 그 세션으로 넘어간다(이 페이지를 연 뒤에 생긴 요청만)
+   if(S.focus&&S.focus.at>focusSeen){focusSeen=S.focus.at;pendingSel=S.focus.name;mode='work';store.set('hq-mode',mode);render(true);return}
+   render()}}
  catch(e){if(!offline){offline=true;$('offline').hidden=false}}}
 async function api(p,body){
  try{const r=await fetch('/api/'+p,{method:'POST',headers:{'Content-Type':'application/json','x-hq':'1'},body:JSON.stringify(body||{})});
