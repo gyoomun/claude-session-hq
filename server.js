@@ -354,10 +354,12 @@ function chatItems(text) {
         else if (!c.startsWith('<')) out.push({ id, at, t: 'user', text: c });
         continue;
       }
+      // 한 메시지의 글과 이미지는 말풍선 하나로. 이미지는 글 속 [Image #N]이 자리를 표시하므로, 글이 없을 때만 따로 적는다
+      const texts = (c || []).filter(x => x.type === 'text' && !x.text.startsWith('<')).map(x => x.text);
+      const imgs = (c || []).filter(x => x.type === 'image').length;
+      if (texts.length || imgs) out.push({ id, at, t: 'user', text: texts.join('\n') || `[이미지 ${imgs}장]` });
       for (const [k, x] of (c || []).entries()) {
-        if (x.type === 'text' && !x.text.startsWith('<')) out.push({ id: id + k, at, t: 'user', text: x.text });
-        else if (x.type === 'image') out.push({ id: id + k, at, t: 'user', text: '[이미지]' });
-        else if (x.type === 'tool_result') {
+        if (x.type === 'tool_result') {
           const r = Array.isArray(x.content) ? x.content.filter(y => y.type === 'text').map(y => y.text).join('\n') : x.content;
           out.push({ id: id + k, at, t: 'result', toolId: x.tool_use_id, text: cut(r, 3000), error: !!x.is_error });
         }
