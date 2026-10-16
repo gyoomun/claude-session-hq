@@ -1,15 +1,15 @@
 // 작업 보기: 왼쪽 세션 목록(업무별로 묶음) | 즐겨찾기 | 고른 세션(머리 + 대화) | 핀·메모·btw
 import { useEffect, useRef, useState } from 'react'
-import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
-import { api, toast } from './store'
+import { Badge, Box, Button, Group, Paper, Progress, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
+import { api, toast, useNow } from './store'
 import { pick, setUI, useUI } from './ui'
 import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
-import { ChatView, copyText } from './Chat'
+import { ChatView, copyName, useFlash } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
-import { IconCopy, IconPinFilled } from '@tabler/icons-react'
+import { IconCheck, IconCopy, IconPinFilled } from '@tabler/icons-react'
 import { KeyRec, areaKeys } from './Keys'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 
@@ -37,9 +37,15 @@ function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; 
 // 줄 오른쪽의 세션 이름 복사(다른 Claude에게 이름을 알려 줄 일이 많아서). 줄을 고르지 않는다. 키보드로는 줄에서 ⌘C(Ctrl+C)
 // 줄이 button이라 안에 button을 넣지 못해 span으로 만든다
 function CopyName({ name }: { name: string }) {
-  return <span role="button" tabIndex={-1} className="hq-rowcopy" title={`세션 이름 복사: ${name}`} aria-label="세션 이름 복사"
-    onMouseDown={e => e.stopPropagation()} onClick={async e => { e.stopPropagation(); e.preventDefault(); if (await copyText(name)) toast(`세션 이름 ${name}을 복사했습니다.`) }}>
-    <IconCopy size={14} stroke={1.6} />
+  const [done, flash] = useFlash()
+  useEffect(() => {
+    const on = (e: Event) => { if ((e as CustomEvent).detail === name) flash() }
+    addEventListener('hq-copied', on)
+    return () => removeEventListener('hq-copied', on)
+  }, [name])
+  return <span role="button" tabIndex={-1} className={'hq-rowcopy' + (done ? ' done' : '')} title={done ? '복사됨' : `세션 이름 복사: ${name}`} aria-label="세션 이름 복사"
+    onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); e.preventDefault(); copyName(name) }}>
+    {done ? <IconCheck size={18} stroke={2.2} /> : <IconCopy size={18} stroke={1.6} />}
   </span>
 }
 
@@ -72,6 +78,7 @@ function Title({ s }: { s: Session }) {
 
 function Head({ S, s }: { S: Snapshot; s: Session }) {
   const [confirm, setConfirm] = useState(false)
+  const [named, flashName] = useFlash()
   return <Paper withBorder p="10px 12px">
     <Group gap="sm" wrap="wrap">
       <Stack gap={0} style={{ minWidth: 0, flex: '1 1 260px' }}>
@@ -80,7 +87,7 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         {/* 한 줄로 고정: 실행 중인 명령(act)이 길어도 머리가 두꺼워지지 않게 끝을 줄이고, 마우스를 올리면 전체가 보인다 */}
         <Text size="xs" c="dimmed" truncate title={s.act || undefined}>{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
           {/* 세션 이름: 상태줄에 보이고 다른 Claude가 이 세션을 부르는 이름. 제목과 같아도 늘 보이고 누르면 복사한다(같은 자리에서 늘 복사하게) */}
-          {s.sid && s.name && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyText(s.name)) toast(`세션 이름 ${s.name}을 복사했습니다.`) }}> · @{s.name}</UnstyledButton>}
+          {s.sid && s.name && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyName(s.name)) flashName() }}> · @{s.name}{named && <Text span c="teal.4" ff="inherit"> ✓ 복사됨</Text>}</UnstyledButton>}
           {s.act && <Text span ff="monospace" c="teal.5"> · {s.act}</Text>}</Text>
       </Stack>
       <Group gap={6}>
@@ -147,6 +154,45 @@ function SessionArea({ S, s }: { S: Snapshot; s: Session }) {
     </Box>
     <Box style={{ gridColumn: 2, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
   </Box>
+}
+
+// 즐겨찾기 칸 아래 사용량 칸(핀·메모·btw처럼 위아래로 나누고 경계를 끌어 높이를 바꾼다). 즐겨찾기가 높이를 다 채울 일은 드물어서
+function FavColumn({ S, sel }: { S: Snapshot; sel: string }) {
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-work-favcol' })
+  return <Split orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
+    <Panel id="favlist" minSize={160}><Favs S={S} sel={sel} /></Panel>
+    <Separator className="hq-split" />
+    <Panel id="usage" defaultSize={128} minSize={84}><UsagePanel S={S} /></Panel>
+  </Split>
+}
+
+// Claude 사용량 한도: 세션(5시간)·주간 창이 얼마나 찼고 언제 초기화되는지. 플러그인 hq-usage가 응답마다 남긴 값(계정 단위)
+const LIMIT: Record<string, string> = { five_hour: '세션', seven_day: '주간', spend_limit: '사용 한도' }
+const left = (ms: number) => {
+  const m = Math.max(0, Math.round(ms / 60e3)), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60)
+  return d ? `${d}일 ${h}시간` : h ? `${h}시간 ${m % 60}분` : `${m}분`
+}
+function UsagePanel({ S }: { S: Snapshot }) {
+  useNow()
+  const u = S.usage
+  const old = u && Date.now() - u.at > 3 * 3600e3 // 오래 응답이 없어 낡은 값
+  return <Paper withBorder p="8px 10px" h="100%" style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
+    <Group justify="space-between" gap={4} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">사용량</Text>
+      {old && <Text size="xs" c="dimmed" title={new Date(u.at).toLocaleString('ko-KR')}><Since t={u.at} suf=" 전 값" /></Text>}</Group>
+    {!u?.limits?.length ? <Text size="xs" c="dimmed">세션에서 답을 한 번 받으면 보입니다(hq-usage 플러그인)</Text>
+      : u.limits.map(l => {
+        const color = l.percentUsed >= 90 ? 'red' : l.percentUsed >= 70 ? 'yellow' : 'teal'
+        const reset = l.resetsAt ? Date.parse(l.resetsAt) : 0
+        return <Stack key={l.kind} gap={3} style={{ opacity: old ? .55 : 1 }}>
+          <Group gap={6} wrap="nowrap">
+            <Text size="xs" fw={600} w={30} style={{ flex: 'none' }}>{LIMIT[l.kind] || l.kind}</Text>
+            <Progress value={Math.min(100, l.percentUsed)} color={color} size="sm" radius="xl" style={{ flex: 1 }} />
+            <Text size="xs" ff="monospace" c={`${color}.4`} w={36} ta="right" style={{ flex: 'none' }}>{Math.round(l.percentUsed)}%</Text>
+          </Group>
+          {reset > 0 && <Text size="xs" c="dimmed" pl={36} title={new Date(reset).toLocaleString('ko-KR')}>{left(reset - Date.now())} 뒤 초기화</Text>}
+        </Stack>
+      })}
+  </Paper>
 }
 
 // 일반 목록에 남는 즐겨찾기 세션의 자리: 흐린 한 줄. 누르면 그 세션을 연다(고른 표시는 즐겨찾기 칸에)
@@ -297,7 +343,7 @@ export function WorkView({ S }: { S: Snapshot }) {
     </Paper>
     </Panel>
     <Separator className="hq-split-v" />
-    <Panel id="favs" defaultSize={240} minSize={210} maxSize={480}><Favs S={S} sel={ui.sel} /></Panel>
+    <Panel id="favs" defaultSize={240} minSize={210} maxSize={480}><FavColumn S={S} sel={ui.sel} /></Panel>
     <Separator className="hq-split-v" />
     <Panel id="main" minSize={480}>
     {/* 나머지: 2행 격자. 위: 세션 머리(두 칸에 걸침) / 아래: 대화 | 핀·메모·btw. 오른쪽 칸이 대화창과 같은 높이에서 시작한다 */}

@@ -201,6 +201,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-today { padding: 4px 8px; border-radius: 8px; min-width: 0; overflow: hidden; transition: background-color .12s ease; }
 .hq-today:hover { background: var(--mantine-color-default-hover); }
 /* 세션 줄 오른쪽 이름 복사 아이콘: 늘 보이되 흐리게, 올리면 또렷하게 */
-.hq-rowcopy { flex: none; display: grid; place-items: center; width: 22px; height: 22px; margin-top: 1px; border-radius: 5px; color: var(--mantine-color-dimmed); opacity: .55; cursor: pointer; transition: opacity .12s ease, background-color .12s ease; }
+.hq-rowcopy { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: -2px -2px 0 0; border-radius: 6px; color: var(--mantine-color-dimmed); opacity: .55; cursor: pointer; transition: opacity .12s ease, background-color .12s ease; }
 .hq-rowcopy:hover { opacity: 1; background: var(--mantine-color-default-hover); color: var(--mantine-color-text); }
+.hq-rowcopy.done { opacity: 1; color: var(--mantine-color-teal-4); }
 [data-area]:focus { outline: none; }

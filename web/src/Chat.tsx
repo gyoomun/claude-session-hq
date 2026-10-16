@@ -23,12 +23,24 @@ export async function copyText(t: string) {
   document.body.appendChild(el); el.select()
   const ok = document.execCommand('copy'); el.remove(); return ok
 }
+// 복사했다는 표시는 토스트가 아니라 누른 그 자리에서 잠깐(✓, '복사됨'). [보이는지, 켜기]
+export function useFlash(ms = 1200) {
+  const [on, set] = useState(false)
+  const t = useRef(0)
+  return [on, () => { set(true); clearTimeout(t.current); t.current = window.setTimeout(() => set(false), ms) }] as const
+}
+// 세션 이름을 복사하고, 그 이름의 줄(CopyName)에 복사됐다고 알린다(⌘C로 복사해도 그 줄에 ✓가 뜨게)
+export async function copyName(name: string) {
+  const ok = await copyText(name)
+  if (ok) dispatchEvent(new CustomEvent('hq-copied', { detail: name }))
+  return ok
+}
 function Pre(p: React.HTMLAttributes<HTMLPreElement>) {
   const ref = useRef<HTMLPreElement>(null)
-  const [done, setDone] = useState(false)
+  const [done, flash] = useFlash()
   return <div className="hq-code">
     <pre ref={ref} {...p} />
-    <button type="button" className="hq-copy" onClick={async () => { if (await copyText(ref.current?.innerText.replace(/\n$/, '') || '')) { setDone(true); setTimeout(() => setDone(false), 1500) } }}>{done ? '복사됨' : '복사'}</button>
+    <button type="button" className="hq-copy" onClick={async () => { if (await copyText(ref.current?.innerText.replace(/\n$/, '') || '')) flash() }}>{done ? '✓ 복사됨' : '복사'}</button>
   </div>
 }
 const Md = memo(({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab, pre: Pre }}>{text}</ReactMarkdown></div>)

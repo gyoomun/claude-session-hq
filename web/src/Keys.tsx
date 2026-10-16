@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { ActionIcon, Group, Kbd, Text, Tooltip } from '@mantine/core'
 import { IconKeyboard } from '@tabler/icons-react'
 import { toast } from './store'
-import { copyText } from './Chat'
+import { copyName } from './Chat'
 import { AREAS, type Area, type Combo, setKeys, setMode, useUI } from './ui'
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform)
@@ -98,7 +98,7 @@ export function areaKeys(list = false) {
     else if (e.key === 'Home') go(0)
     else if (e.key === 'End') go(items.length - 1)
     else if (e.key === 'Enter' && i >= 0) { items[i].click(); setTimeout(() => focusArea('chat'), 80) }
-    else if ((e.metaKey || e.ctrlKey) && e.code === 'KeyC' && i >= 0 && items[i].dataset.name) { const n = items[i].dataset.name!; copyText(n).then(ok => ok && toast(`세션 이름 ${n}을 복사했습니다.`)) }
+    else if ((e.metaKey || e.ctrlKey) && e.code === 'KeyC' && i >= 0 && items[i].dataset.name) copyName(items[i].dataset.name)
     else return
     e.preventDefault()
   }
