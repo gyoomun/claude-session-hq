@@ -980,7 +980,8 @@ const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
 async function inputBox(name) {
   const raw = (await tmux(['capture-pane', '-p', '-e', '-t', name])).split('\n');
   const plain = raw.map(l => l.replace(ANSI, ''));
-  const borders = plain.map((l, i) => /^─{20,}$/.test(l.trim()) ? i : -1).filter(i => i >= 0);
+  // 위 테두리에는 세션 이름이 들어갈 수 있다(/rename 뒤: '──── 이름 ─')
+  const borders = plain.map((l, i) => /^─{20,}(?: .+ ─+)?$/.test(l.trim()) ? i : -1).filter(i => i >= 0);
   if (borders.length < 2) return '';
   const [a, b] = borders.slice(-2);
   const at = plain[a + 1]?.indexOf('❯\u00a0') ?? -1;
