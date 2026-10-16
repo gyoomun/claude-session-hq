@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Box, Button, Center, Code, CopyButton, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { Alert, Box, Button, Center, Code, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
 import { type Mode, pickNew, rememberSel, setMode, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
 import { stale } from './util'
 import { WorkView } from './Work'
+import { copyText } from './Chat'
 import { BoardView } from './Board'
 import { MemoView } from './Memo'
 import { SessionDrawer, TaskDrawer } from './Drawers'
@@ -35,8 +36,9 @@ function LanAddress({ S }: { S: Snapshot }) {
   if (!a.lan) return <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ settings: true, settingsPage: 'access' })}>사내망 접속 꺼짐</Button>
   return <Group gap={6} wrap="nowrap">
     <Text size="xs" c="dimmed">사내망 주소</Text>
-    <Code fz="sm">{primary || '네트워크 없음'}</Code>
-    {primary && <CopyButton value={primary}>{({ copied, copy }) => <Button size="compact-xs" variant="subtle" onClick={copy}>{copied ? '복사됨' : '복사'}</Button>}</CopyButton>}
+    {/* 주소를 누르면 복사한다 */}
+    <Code fz="sm" className={primary ? 'hq-copyable' : undefined} title={primary ? '누르면 복사' : undefined}
+      onClick={async () => { if (primary && await copyText(primary)) toast(`${primary} 를 복사했습니다.`) }}>{primary || '네트워크 없음'}</Code>
   </Group>
 }
 
