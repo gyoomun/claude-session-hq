@@ -354,7 +354,7 @@ const cut = (v, n) => { const t = typeof v === 'string' ? v : JSON.stringify(v);
 function toolInput(name, i = {}) {
   return cut(i.command || i.file_path || i.pattern || i.url || i.query || i.description || i.prompt || i.skill || (Object.keys(i).length ? i : ''), 400);
 }
-// 예전에 웹이 여러 줄을 붙여넣기로 보내 Claude Code가 <pasted_content id="…">로 감싼 내 말. 태그를 벗겨 내 말 그대로 보인다
+// 붙여넣은 긴 글은 Claude Code가 <pasted_content id="…">로 감싼다. 시스템 문구(<로 시작)인지는 태그를 벗기고 본다. 태그는 남겨 화면이 붙여넣은 칸으로 그린다
 const unwrapPaste = t => t.replace(/<\/?pasted_content(?: id="[^"]*")?>/g, '').trim();
 function chatItems(entries) {
   const out = [];
@@ -367,11 +367,11 @@ function chatItems(entries) {
         const u = unwrapPaste(c);
         const cmd = c.match(/<command-name>([^<]*)<\/command-name>(?:[\s\S]*<command-args>([^<]*)<\/command-args>)?/);
         if (cmd) out.push({ id, at, t: 'user', text: (cmd[1] + ' ' + (cmd[2] || '')).trim() });
-        else if (u && !u.startsWith('<')) out.push({ id, at, t: 'user', text: u });
+        else if (u && !u.startsWith('<')) out.push({ id, at, t: 'user', text: c.trim() });
         continue;
       }
       // 한 메시지의 글과 이미지는 말풍선 하나로. 이미지는 글 속 [Image #N]이 자리를 표시하므로, 글이 없을 때만 따로 적는다
-      const texts = (c || []).filter(x => x.type === 'text').map(x => unwrapPaste(x.text)).filter(x => x && !x.startsWith('<'));
+      const texts = (c || []).filter(x => x.type === 'text' && (u => u && !u.startsWith('<'))(unwrapPaste(x.text))).map(x => x.text.trim());
       const imgs = (c || []).filter(x => x.type === 'image').length;
       if (texts.length || imgs) out.push({ id, at, t: 'user', text: texts.join('\n') || `[이미지 ${imgs}장]` });
       for (const [k, x] of (c || []).entries()) {
@@ -703,11 +703,13 @@ const routes = {
   'term/send': async b => {
     // 글과 이미지를 쓴 순서대로 받는다: [{ text }, { image: 올린 파일 경로 }, …]. 이미지를 붙인 자리가 Claude에게도 그대로 간다
     const parts = (Array.isArray(b.parts) ? b.parts : [{ text: b.text }]).slice(0, 60)
-      .map(x => isUpload(x && x.image) ? { image: x.image } : { text: String((x && x.text) ?? '').replace(/\r\n?/g, '\n').slice(0, 20000) });
+      .map(x => isUpload(x && x.image) ? { image: x.image }
+        : typeof (x && x.paste) === 'string' ? { paste: x.paste.replace(/\r\n?/g, '\n').slice(0, 500000) } // 붙여넣은 긴 글: 붙여넣기로 넣는다
+        : { text: String((x && x.text) ?? '').replace(/\r\n?/g, '\n').slice(0, 20000) });
     const first = parts[0], last = parts[parts.length - 1];
     if (first && 'text' in first) first.text = first.text.trimStart();
     if (last && 'text' in last) last.text = last.text.trimEnd();
-    const list = parts.filter(x => x.image || x.text);
+    const list = parts.filter(x => x.image || x.text || x.paste);
     if (!list.length) throw new Error('보낼 내용이 없습니다');
     if (list.filter(x => x.image).length > 10) throw new Error('이미지는 한 번에 10장까지 보낼 수 있습니다');
     const text = list.length === 1 && list[0].text;
@@ -715,8 +717,8 @@ const routes = {
     if (!where.tmux && !where.orca) throw new Error('이 세션에는 입력을 넣을 수 없습니다');
     // 되감기 창이 떠 있으면 친 글과 Enter가 그 창의 항목을 고른다(되감기가 실행될 수 있다)
     if (where.tmux && await rewindScreen(where.tmux)) throw new Error('Claude 쪽에 되감기 창이 열려 있습니다. 되감기를 마치거나 취소한 뒤 보내세요');
-    // 글은 친 것처럼 넣고(줄바꿈은 Ctrl-J), 이미지 경로만 붙여넣기로 넣는다(그래야 이미지로 붙는다).
-    // 글을 붙여넣기로 넣으면 Claude Code가 <pasted_content>로 감싸 Claude가 '남이 쓴 글'로 다룬다. 내 말인데도
+    // 친 글은 친 것처럼 넣고(줄바꿈은 Ctrl-J), 이미지 경로와 붙여넣은 긴 글만 붙여넣기로 넣는다(터미널에서 붙여넣은 것과 똑같이).
+    // 친 글까지 붙여넣기로 넣으면 Claude Code가 <pasted_content>로 감싸 Claude가 내 말을 '남이 쓴 글'로 다룬다
     const paste = async t => {
       if (where.tmux) {
         await tmux(['set-buffer', '-b', 'hq', '--', t]);
@@ -727,8 +729,8 @@ const routes = {
     // 한 번의 tmux 호출로: 줄마다 send-keys -l, 줄 사이에 C-j. 글 안의 줄바꿈 문자는 Claude Code가 버린다
     const type = t => tmux(t.split('\n').flatMap((line, i) => [...(i ? ['send-keys', '-t', where.tmux, 'C-j', ';'] : []),
       ...(line ? ['send-keys', '-t', where.tmux, '-l', '--', line, ';'] : [])]).slice(0, -1));
-    if (!where.tmux) { if (text && !text.includes('\n')) return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']); for (const x of list) await paste(x.image || x.text); }
-    else for (const x of list) { if (x.image) await paste(x.image); else await type(x.text); }
+    if (!where.tmux) { if (text && !text.includes('\n')) return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']); for (const x of list) await paste(x.image || x.paste || x.text); }
+    else for (const x of list) { if (x.image || x.paste) await paste(x.image || x.paste); else await type(x.text); }
     await sleep(120);
     if (where.tmux) return tmux(['send-keys', '-t', where.tmux, 'Enter']);
     return orca(b.pid, ['terminal', 'send', '--text', '', '--enter']);

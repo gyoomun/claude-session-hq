@@ -17,6 +17,13 @@ const NewTab = (p: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...p} t
 // 마크다운 해석이 가장 무겁다. 같은 글은 다시 해석하지 않는다
 const Md = memo(({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab }}>{text}</ReactMarkdown></div>)
 // 내 말풍선은 마크다운이 아니라 그대로 보이되, 주소만 링크로
+// 붙여넣은 긴 글(Claude Code가 <pasted_content>로 감싼 것)은 접을 수 있는 칸으로 따로 보인다. 짧으면 펼쳐 둔다
+const PASTED = /<pasted_content(?: id="[^"]*")?>\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/
+const UserText = ({ text }: { text: string }) => <>{text.split(PASTED).map((x, i) => {
+  if (i % 2 === 0) { const t = x.replace(/^\n+|\n+$/g, ''); return t && <div key={i}><Linkify text={t} /></div> }
+  const n = x.split('\n').length
+  return <details key={i} className="hq-paste" open={n <= 10}><summary>붙여넣은 글 · {n}줄</summary><div><Linkify text={x} /></div></details>
+})}</>
 const Linkify = ({ text }: { text: string }) => <>{text.split(/(https?:\/\/[^\s<>"')\]]*[^\s<>"')\].,])/).map((x, i) => i % 2 ? <NewTab key={i} href={x} className="hq-link">{x}</NewTab> : x)}</>
 
 function Tool({ it, result }: { it: Item; result?: Item }) {
@@ -65,12 +72,18 @@ function useTranscript(sid: string) {
 }
 
 interface Img { n: number; path: string; url: string }
-// 입력칸에 이미지를 붙인 자리 표시. 터미널의 Claude Code처럼 [Image #N]이고, 보낼 때 이 자리에 이미지가 들어간다.
-// 번호는 이 메시지 안에서 1부터. Claude Code의 실제 번호는 붙여넣는 순간 정해지고(긴 글 붙여넣기와 번호를 같이 써서) 미리 알 수 없다.
+interface Paste { n: number; text: string }
+export interface Sent { text: string; imgs: Img[]; pastes: Paste[]; at: number }
+// 입력칸에 이미지·긴 글을 붙인 자리 표시. 터미널의 Claude Code처럼 [Image #N], [Pasted text #N +L lines]이고, 보낼 때 이 자리에 그대로 붙여넣는다.
+// 번호는 이 메시지 안에서 1부터(이미지·글이 번호를 같이 쓴다, Claude Code처럼). Claude Code의 실제 번호는 붙여넣는 순간 정해져 미리 알 수 없다.
 // 보낸 뒤 말풍선에는 Claude Code가 매긴 실제 번호가 보인다
 const tok = (n: number) => `[Image #${n}]`
-const TOK = /(\[Image #\d+\])/
-const IMG_NO = /\[Image #(\d+)\]/g
+const ptok = (p: Paste) => { const l = p.text.split('\n').length - 1; return `[Pasted text #${p.n}${l ? ` +${l} lines` : ''}]` }
+const TOK = /(\[Image #\d+\]|\[Pasted text #\d+(?: \+\d+ lines)?\])/
+const NUM = /\[(?:Image|Pasted text) #(\d+)/g
+// 붙여넣은 글을 접는 기준은 Claude Code와 같다(800자 넘거나 4줄 이상). 접은 글만 붙여넣기로 보내 Claude Code가 <pasted_content>로 감싼다.
+// 짧은 글은 터미널에서도 친 글과 똑같이 들어가므로 그냥 입력칸에 넣는다
+const bigPaste = (t: string) => t.length > 800 || t.split('\n').length > 3
 
 async function upload(f: File) {
   const r = await fetch('/api/upload', { method: 'POST', headers: { 'x-hq': '1', 'Content-Type': f.type }, body: f })
@@ -79,27 +92,32 @@ async function upload(f: File) {
   return d.path as string
 }
 
-// 보내기 전의 글은 세션마다 남긴다. 다른 세션·보기를 다녀오거나 새로고침해도 이어 쓴다. 붙인 이미지는 이 화면이 열려 있는 동안만
-const draftKey = (sid: string) => 'hq-draft:' + sid
-const loadDraft = (sid: string) => { try { return localStorage.getItem(draftKey(sid)) || '' } catch { return '' } }
-const saveDraft = (sid: string, v: string) => { try { if (v) localStorage.setItem(draftKey(sid), v); else localStorage.removeItem(draftKey(sid)) } catch { /* 무시 */ } }
+// 보내기 전의 글과 붙여넣은 긴 글은 세션마다 남긴다. 다른 세션·보기를 다녀오거나 새로고침해도 이어 쓴다. 붙인 이미지는 이 화면이 열려 있는 동안만
+const store = {
+  get: (k: string) => { try { return localStorage.getItem(k) } catch { return null } },
+  set: (k: string, v: string) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k) } catch { /* 무시 */ } },
+}
 const draftImgs = new Map<string, Img[]>()
 
-// 입력칸의 글과 붙인 이미지. 끌어다 놓기는 대화 화면 전체에서 받으므로 ChatView가 만들어 Composer에 넘긴다
+// 입력칸의 글·이미지·붙여넣은 긴 글. 끌어다 놓기는 대화 화면 전체에서 받으므로 ChatView가 만들어 Composer에 넘긴다
 function useDraft(sid: string) {
-  const [text, setTextState] = useState(() => loadDraft(sid))
-  const setText = (v: string | ((p: string) => string)) => setTextState(p => { const x = typeof v === 'function' ? v(p) : v; saveDraft(sid, x); return x })
+  const [text, setTextState] = useState(() => store.get('hq-draft:' + sid) || '')
+  const setText = (v: string | ((p: string) => string)) => setTextState(p => { const x = typeof v === 'function' ? v(p) : v; store.set('hq-draft:' + sid, x); return x })
   const [imgs, setImgs] = useState<Img[]>(() => draftImgs.get(sid) || [])
   useEffect(() => { draftImgs.set(sid, imgs) }, [sid, imgs])
+  const [pastes, setPastesState] = useState<Paste[]>(() => { try { return JSON.parse(store.get('hq-draft-paste:' + sid) || '[]') } catch { return [] } })
+  const setPastes = (v: Paste[] | ((p: Paste[]) => Paste[])) => setPastesState(p => { const x = typeof v === 'function' ? v(p) : v; store.set('hq-draft-paste:' + sid, x.length ? JSON.stringify(x) : ''); return x })
   const [uploading, setUploading] = useState(0)
-  // 이미지를 [이미지 N] 표시로 붙인 자리(at, 없으면 끝)에 넣고 올린다. 넣은 표시의 길이를 돌려준다(커서를 그 뒤로 옮기려고)
+  const next = () => Math.max(0, ...imgs.map(i => i.n), ...pastes.map(p => p.n), ...[...text.matchAll(NUM)].map(m => +m[1])) + 1
+  const insert = (ins: string, at?: [number, number]) => setText(p => at ? p.slice(0, at[0]) + ins + p.slice(at[1]) : p + (p && !/\s$/.test(p) ? ' ' : '') + ins)
+  // 이미지를 표시로 붙인 자리(at, 없으면 끝)에 넣고 올린다. 넣은 표시의 길이를 돌려준다(커서를 그 뒤로 옮기려고)
   const attach = (files: File[], at?: [number, number]) => {
     const list = files.filter(f => f.type.startsWith('image/'))
     if (!list.length) return 0
-    let n = Math.max(0, ...imgs.map(i => i.n), ...[...text.matchAll(IMG_NO)].map(m => +m[1]))
+    let n = next() - 1
     const items = list.map(f => ({ f, n: ++n }))
     const ins = items.map(x => tok(x.n)).join(' ')
-    setText(p => at ? p.slice(0, at[0]) + ins + p.slice(at[1]) : p + (p && !/\s$/.test(p) ? ' ' : '') + ins)
+    insert(ins, at)
     for (const { f, n } of items) {
       setUploading(u => u + 1)
       upload(f).then(path => setImgs(p => [...p, { n, path, url: URL.createObjectURL(f) }]))
@@ -108,28 +126,41 @@ function useDraft(sid: string) {
     }
     return ins.length
   }
-  return { text, setText, imgs, setImgs, uploading, attach }
+  const addPaste = (t: string, at: [number, number]) => {
+    const p = { n: next(), text: t.replace(/\r\n?/g, '\n') }
+    setPastes(x => [...x, p]); insert(ptok(p), at)
+    return ptok(p).length
+  }
+  return { text, setText, imgs, setImgs, pastes, setPastes, uploading, attach, addPaste }
 }
 type Draft = ReturnType<typeof useDraft>
 
-function Composer({ s, d, working, onSent, interrupt, onRewind }: { s: Session; d: Draft; working: boolean; onSent: () => void; interrupt: () => void; onRewind: () => void }) {
-  const { text, setText, imgs, setImgs, uploading, attach } = d
+function Composer({ s, d, working, onSent, interrupt, onRewind }: {
+  s: Session; d: Draft; working: boolean; onSent: (x: Sent, done: Promise<unknown>) => void; interrupt: () => void; onRewind: () => void
+}) {
+  const { text, setText, imgs, setImgs, pastes, setPastes, uploading, attach, addPaste } = d
   const [busy, setBusy] = useState(false)
   const box = useRef<HTMLTextAreaElement>(null)
-  const shown = imgs.filter(i => text.includes(tok(i.n))) // 표시를 지운 이미지는 보내지 않는다
+  const shown = imgs.filter(i => text.includes(tok(i.n))) // 표시를 지운 이미지·글은 보내지 않는다
+  const shownPastes = pastes.filter(p => text.includes(ptok(p)))
   const send = async () => {
     if (!text.trim() || busy || uploading) return
-    // 글과 이미지를 쓴 순서대로 나눈다. 올린 이미지가 없는 표시(앞서 보낸 이미지를 글로 가리킨 것 등)는 글 그대로 보낸다
-    const parts = text.split(TOK).flatMap((x, i): { text?: string; image?: string }[] => {
+    // 쓴 순서대로 나눈다. 짝이 없는 표시(앞서 보낸 것을 글로 가리킨 것 등)는 글 그대로 보낸다
+    const parts = text.split(TOK).flatMap((x, i): { text?: string; image?: string; paste?: string }[] => {
       const img = i % 2 ? imgs.find(m => tok(m.n) === x) : undefined
-      return img ? [{ image: img.path }] : x ? [{ text: x }] : []
+      const pa = i % 2 ? pastes.find(m => ptok(m) === x) : undefined
+      return img ? [{ image: img.path }] : pa ? [{ paste: pa.text }] : x ? [{ text: x }] : []
     })
+    const x = { text, imgs, pastes, at: serverNow() }
     setBusy(true)
-    const ok = await api('term/send', { pid: s.pid, parts })
+    const req = api('term/send', { pid: s.pid, parts })
+    onSent(x, req) // 보내는 중에도(글을 넣는 데 시간이 걸린다) 바로 '일하는 중'으로 본다
+    const ok = await req
     setBusy(false)
-    if (ok) { setText(''); setImgs([]); onSent() }
+    if (ok) { setText(''); setImgs([]); setPastes([]) }
   }
   const key = (k: string) => api('term/key', { pid: s.pid, key: k })
+  const place = (len: number, at: number) => requestAnimationFrame(() => box.current?.setSelectionRange(at + len, at + len))
   return <Paper withBorder p="sm">
     <Stack gap={8}>
       {s.state === 'approval' && <Group gap={6} wrap="wrap">
@@ -138,19 +169,24 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: { s: Session; 
         <Button size="xs" variant="default" onClick={() => key('2')}>2 · 이번 세션 동안 허용</Button>
         <Button size="xs" variant="outline" color="red" onClick={() => key('3')}>3 · 거부</Button>
       </Group>}
-      {shown.length > 0 && <Group gap={6}>{shown.map(i => <Box key={i.n} pos="relative">
-        <img src={i.url} alt={tok(i.n)} style={{ height: 64, borderRadius: 6, display: 'block', border: '1px solid var(--mantine-color-default-border)' }} />
-        <Text fz={10} pos="absolute" bottom={2} left={4} px={4} style={{ background: 'rgba(0,0,0,.6)', color: '#fff', borderRadius: 4 }}>{i.n}</Text>
-        <CloseButton size="xs" variant="filled" pos="absolute" top={2} right={2} aria-label="이미지 빼기" onClick={() => setText(p => p.replace(tok(i.n), ''))} />
-      </Box>)}</Group>}
+      {(shown.length > 0 || shownPastes.length > 0) && <Group gap={6} align="flex-end">
+        {shown.map(i => <Box key={i.n} pos="relative">
+          <img src={i.url} alt={tok(i.n)} style={{ height: 64, borderRadius: 6, display: 'block', border: '1px solid var(--mantine-color-default-border)' }} />
+          <Text fz={10} pos="absolute" bottom={2} left={4} px={4} style={{ background: 'rgba(0,0,0,.6)', color: '#fff', borderRadius: 4 }}>{i.n}</Text>
+          <CloseButton size="xs" variant="filled" pos="absolute" top={2} right={2} aria-label="이미지 빼기" onClick={() => setText(p => p.replace(tok(i.n), ''))} />
+        </Box>)}
+        {shownPastes.map(p => <Group key={p.n} gap={4} wrap="nowrap" className="hq-paste-chip" title={p.text.slice(0, 600)}>
+          <Text size="xs">{p.n} · 붙여넣은 글 {p.text.split('\n').length}줄</Text>
+          <CloseButton size="xs" aria-label="붙여넣은 글 빼기" onClick={() => setText(x => x.replace(ptok(p), ''))} />
+        </Group>)}
+      </Group>}
       <Textarea ref={box} autosize minRows={2} maxRows={10} value={text} onChange={e => setText(e.currentTarget.value)}
         onPaste={e => {
+          const el = e.currentTarget, at = el.selectionStart, sel: [number, number] = [at, el.selectionEnd]
           const files = [...e.clipboardData.files].filter(f => f.type.startsWith('image/'))
-          if (!files.length) return
-          e.preventDefault()
-          const el = e.currentTarget, at = el.selectionStart
-          const len = attach(files, [at, el.selectionEnd])
-          requestAnimationFrame(() => box.current?.setSelectionRange(at + len, at + len))
+          if (files.length) { e.preventDefault(); place(attach(files, sel), at); return }
+          const t = e.clipboardData.getData('text/plain')
+          if (bigPaste(t)) { e.preventDefault(); place(addPaste(t, sel), at) }
         }}
         placeholder={`${s.title}에게 말하기`} aria-label="보낼 말"
         onKeyDown={e => {
@@ -214,7 +250,7 @@ const Messages = memo(function Messages({ items, detail }: { items: Item[]; deta
   return <>
     {all.length > list.length && <Button size="xs" variant="subtle" color="gray" onClick={() => setLimit(l => l + PAGE)}>이전 대화 더 보기 ({all.length - list.length}개 남음)</Button>}
     {list.map(it => Array.isArray(it) ? <ToolGroup key={it[0].id} tools={it} results={results} />
-      : it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><Linkify text={it.text} /></Text></Box>
+      : it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><UserText text={it.text} /></Text></Box>
       : it.t === 'assistant' ? <Box key={it.id} className="hq-say"><Md text={it.text} /></Box>
       : <Tool key={it.id} it={it} result={results.get(it.toolId)} />)}
   </>
@@ -228,24 +264,42 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   useEffect(() => { stick.current = true }, [s.sid])
   const draft = useDraft(s.sid)
   // 보낸 직후에는 상태가 '작업중'으로 바뀌기까지 1~2초 걸린다. 그 사이에도 중단할 수 있게, 보낸 뒤 상태가 아직 안 바뀌었으면 일하는 중으로 본다
+  const sent = useRef<Sent | null>(null) // 이 화면에서 마지막으로 보낸 것(중단하면 그대로 되살린다)
   const [sentAt, setSentAt] = useState(0)
   const working = s.state === 'working' || s.state === 'compact' || s.state === 'approval' || (serverNow() - sentAt < 15000 && s.since < sentAt)
+  // 버린 말 가리기: [from, to] 사이에 기록된 항목을 보이지 않는다. Claude Code는 중단·되감기 때 기록 파일에 아무것도 쓰지 않아서,
+  // 다음 말이 와서 대화가 새로 그려질 때까지(서버 dropRewound) 화면에서 가린다. 그 뒤에 새로 보낸 말은 to보다 늦어 보인다
+  const [cut, setCut] = useState<{ from: number; to: number } | null>(null)
+  const shown = useMemo(() => cut ? items.filter(x => x.at < cut.from || x.at > cut.to) : items, [items, cut])
+  const restore = (text: string) => {
+    const x = sent.current
+    // 이 화면에서 보낸 것이면 이미지·붙여넣은 글까지 그대로 되살린다. 아니면(다른 데서 보냄) Claude 입력칸에서 읽은 글로
+    if (x && !draft.text.trim()) { draft.setText(x.text); draft.setImgs(x.imgs); draft.setPastes(x.pastes) }
+    else draft.setText(p => text + (p ? '\n' + p : ''))
+  }
+  const sending = useRef<Promise<unknown> | null>(null)
   const interrupt = async () => {
+    // 아직 보내는 중이면 다 들어간 뒤에 멈춘다(안 그러면 Esc가 먼저 가고 말은 그대로 보내진다)
+    if (sending.current && !await sending.current) return
     const r = await api<{ restored?: string } | undefined>('term/key', { pid: s.pid, key: 'esc' })
-    // 답을 시작하기 전에 멈추면 보낸 말이 돌아온다(터미널의 Claude Code와 같다). 웹 입력칸에 되살린다
+    // 답을 시작하기 전에 멈추면 보낸 말이 돌아온다(터미널의 Claude Code와 같다). 웹 입력칸에 되살리고 대화에서는 가린다
     const back = r?.result?.restored
-    if (back) { draft.setText(p => back + (p ? '\n' + p : '')); toast('중단했습니다. 보낸 말이 입력칸으로 돌아왔습니다.') }
+    if (!back) return
+    if (sent.current) setCut({ from: sent.current.at - 3000, to: serverNow() + 1000 })
+    restore(back); sent.current = null
+    toast('중단했습니다. 보낸 말이 입력칸으로 돌아왔습니다.')
   }
-  // 되감기: 고른 말부터 아래는 새 말이 와서 대화가 새로 그려질 때까지 가린다(Claude Code는 되감을 때 기록 파일에 아무것도 쓰지 않는다)
+  // 되감기: 고른 말부터 아래를 가린다
   const [rewind, setRewind] = useState(false)
-  const [cutAt, setCutAt] = useState('')
   const rewound = (r: { restored: string; picked: string; label: string }) => {
-    const head = r.picked.replace(/…$/, '')
-    const hit = [...items].reverse().find(i => i.t === 'user' && i.text.startsWith(head))
-    if (r.restored) { if (hit) setCutAt(hit.id); draft.setText(p => r.restored + (p ? '\n' + p : '')); toast('되감았습니다. 그때 보낸 말이 입력칸에 있습니다.') }
-    else toast('되감기를 했습니다.')
+    const flat = (t: string) => t.replace(/<\/?pasted_content[^>]*>/g, '').replace(/\s+/g, '')
+    const head = flat(r.picked.replace(/…$/, '')).slice(0, 40)
+    const hit = [...items].reverse().find(i => i.t === 'user' && flat(i.text).startsWith(head))
+    if (!r.restored) { toast('되감기를 했습니다.'); return }
+    if (hit) setCut({ from: hit.at, to: serverNow() + 1000 })
+    sent.current = null; draft.setText(p => r.restored + (p ? '\n' + p : ''))
+    toast('되감았습니다. 그때 보낸 말이 입력칸에 있습니다.')
   }
-  const shown = useMemo(() => { const i = cutAt ? items.findIndex(x => x.id === cutAt) : -1; return i >= 0 ? items.slice(0, i) : items }, [items, cutAt])
   // Esc 키: 일하는 중이면 중단. 쉬는 중에 두 번 빨리 누르면 되감기(터미널의 Claude Code와 같다). 쉬는 중 한 번은 아무것도 보내지 않는다.
   // 창(설정 등)이 떠 있으면 그 창을 닫는 Esc다
   const esc = useRef(() => {})
@@ -287,7 +341,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
         </Stack>
       </ScrollArea>
     </Paper>
-    {s.host ? <Composer s={s} d={draft} working={working} onSent={() => setSentAt(serverNow())} interrupt={interrupt} onRewind={() => setRewind(true)} /> : <NoInput s={s} />}
+    {s.host ? <Composer s={s} d={draft} working={working} onSent={(x, req) => { sent.current = x; sending.current = req; setSentAt(x.at); req.then(ok => { if (!ok) sent.current = null }) }} interrupt={interrupt} onRewind={() => setRewind(true)} /> : <NoInput s={s} />}
     {s.host === 'web' && <RewindModal s={s} opened={rewind} onClose={() => setRewind(false)} onDone={rewound} />}
   </Stack>
 }

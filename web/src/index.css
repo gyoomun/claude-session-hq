@@ -104,3 +104,6 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-split[data-separator="hover"]::after, .hq-split[data-separator="active"]::after, .hq-split[data-separator="focus"]::after { width: 100%; background: var(--mantine-color-indigo-5); }
 .hq-rewind-item { display: block; width: 100%; border-radius: 8px; border: 1px solid var(--mantine-color-default-border); }
 .hq-rewind-item:hover { background: var(--mantine-color-indigo-light); border-color: var(--mantine-color-indigo-5); }
+.hq-paste { margin: 4px 0; border-left: 3px solid var(--mantine-color-indigo-4); padding-left: 8px; }
+.hq-paste summary { cursor: pointer; font-size: 12px; color: var(--mantine-color-indigo-2); }
+.hq-paste-chip { border: 1px solid var(--mantine-color-default-border); border-radius: 6px; padding: 2px 4px 2px 8px; background: var(--mantine-color-default); }
