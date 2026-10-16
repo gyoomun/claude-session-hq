@@ -3,9 +3,9 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Box, Button, CloseButton, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
+import { Box, Button, UnstyledButton, CloseButton, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
-import { pickNew } from './ui'
+import { pickNew, setView } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
 import { RewindPanel } from './Rewind'
@@ -182,8 +182,15 @@ function useDraft(sid: string) {
 }
 type Draft = ReturnType<typeof useDraft>
 
-function Composer({ s, d, working, onSent, interrupt, onRewind }: {
-  s: Session; d: Draft; working: boolean; onSent: (x: Sent, done: Promise<unknown>) => void; interrupt: () => void; onRewind: () => void
+// 입력칸 아래 권한 모드·모델·effort: 누르면 권한 모드는 다음 모드로 돌고, 모델·effort는 터미널 화면으로 바꿔 /model·/effort 창을 띄운다(고르고 확인은 사용자가)
+function Pick({ kind, pid, web, tip, color, children }: { kind: 'mode' | 'model' | 'effort'; pid: number; web: boolean; tip: string; color: string; children: React.ReactNode }) {
+  if (!web) return <Text size="sm" fw={600} c={color} title={tip} style={{ whiteSpace: 'nowrap' }}>{children}</Text>
+  return <UnstyledButton onClick={async () => { if (await api('session/menu', { pid, kind }) && kind !== 'mode') setView('term') }} title={tip} className="hq-item" p="2px 6px" m="-2px -6px" style={{ borderRadius: 6 }}>
+    <Text size="sm" fw={600} c={color} style={{ whiteSpace: 'nowrap' }}>{children}</Text>
+  </UnstyledButton>
+}
+function Composer({ s, d, working, onSent, interrupt }: {
+  s: Session; d: Draft; working: boolean; onSent: (x: Sent, done: Promise<unknown>) => void; interrupt: () => void
 }) {
   const { text, setText, imgs, setImgs, pastes, setPastes, uploading, attach, addPaste } = d
   const box = useRef<HTMLTextAreaElement>(null)
@@ -235,24 +242,20 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
           const t = e.clipboardData.getData('text/plain')
           if (bigPaste(t)) { e.preventDefault(); place(addPaste(t, sel), at) }
         }}
-        placeholder={s.sid ? `${s.title}에게 말하기` : "새 세션을 여는 중…"} aria-label="보낼 말"
+        placeholder={s.sid ? `${s.title}에게 말하기 · Enter 보내기 · Shift+Enter 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기 · Esc 두 번 되감기` : "새 세션을 여는 중…"} aria-label="보낼 말"
         onKeyDown={e => {
           // 한글 입력 중(조합 중)의 Enter는 글자 확정이라 보내지 않는다
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
         }} />
       <Group justify="space-between" gap={6}>
         <Group gap={14} wrap="nowrap" style={{ minWidth: 0 }}>
-          {s.mode && MODE[s.mode] && <Text size="sm" fw={600} c={MODE[s.mode][1] === 'dimmed' ? 'gray.4' : MODE[s.mode][1]} title={`권한 모드: ${s.mode}`} style={{ whiteSpace: 'nowrap' }}>{MODE[s.mode][0]}</Text>}
-          {s.model && <Text size="sm" fw={600} c="gray.3" title={`모델 ${s.model} (마지막 답 기준)`} style={{ whiteSpace: 'nowrap' }}>{modelName(s.model)}</Text>}
-          {s.model && s.effort && <Text size="sm" fw={600} c="gray.5" title={`effort ${s.effort} (마지막 답 기준)`} style={{ whiteSpace: 'nowrap' }}>{s.effort}</Text>}
+          <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">대화</Text><KeyRec area="chat" /></Group>
+          {s.mode && MODE[s.mode] && <Pick kind="mode" pid={s.pid} web={s.host === 'web'} tip={`권한 모드: ${s.mode} (누르면 다음 모드로)`} color={MODE[s.mode][1] === 'dimmed' ? 'gray.4' : MODE[s.mode][1]}>{MODE[s.mode][0]}</Pick>}
+          {s.model && <Pick kind="model" pid={s.pid} web={s.host === 'web'} tip={`모델 ${s.model} (누르면 터미널에서 /model)`} color="gray.3">{modelName(s.model)}</Pick>}
+          {s.model && s.effort && <Pick kind="effort" pid={s.pid} web={s.host === 'web'} tip={`effort ${s.effort} (누르면 터미널에서 /effort)`} color="gray.5">{s.effort}</Pick>}
           {bgCount(s) > 0 && <Text size="xs" c="teal.4" title={bgText(s)} style={{ whiteSpace: 'nowrap' }}>뒤 작업 {[s.bg.shells && `셸 ${s.bg.shells}`, s.bg.agents.length && `에이전트 ${s.bg.agents.length}`].filter(Boolean).join(' · ')}</Text>}
         </Group>
-        <Group gap={8} wrap="nowrap">
-          <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">대화</Text><KeyRec area="chat" /></Group>
-          {working && <Button size="xs" variant="default" onClick={interrupt}>중단 (Esc)</Button>}
-          {!working && s.host === 'web' && <Button size="xs" variant="subtle" color="gray" onClick={onRewind} title="Claude Code의 되감기(Esc 두 번)">되감기 (Esc Esc)</Button>}
-          <Button size="xs" loading={uploading > 0} onClick={send}>보내기</Button>
-        </Group>
+        {working && <Button size="xs" variant="default" onClick={interrupt}>중단 (Esc)</Button>}
       </Group>
     </Stack>
   </Paper>
@@ -431,6 +434,6 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
     {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : <Composer s={s} d={draft} working={working} onSent={(x, req) => {
       sent.current = x; sending.current = req; setSentAt(x.at); setPending(x); stick.current = true
       req.then(ok => { if (ok) poke.current(); else { sent.current = null; setPending(null) } })
-    }} interrupt={interrupt} onRewind={() => setRewind(true)} />}
+    }} interrupt={interrupt} />}
   </Stack>
 }

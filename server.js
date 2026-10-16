@@ -937,6 +937,20 @@ const routes = {
     save(); scanSoon();
     return out;
   },
+  // 입력칸 아래 권한 모드·모델·effort를 누를 때: mode는 Shift+Tab 한 번(Claude Code가 모드를 순환한다),
+  // model·effort는 /model·/effort 선택창을 띄운다. 고르고 확인하는 것은 사용자가 터미널 화면에서 한다.
+  // '/model 이름'처럼 이름까지 치면 새 세션의 기본값까지 바뀌므로 창만 띄운다(창 안에서 s를 누르면 이 세션만)
+  'session/menu': async b => {
+    const { name, s } = webPane(b.pid);
+    if (!['mode', 'model', 'effort'].includes(b.kind)) throw new Error('모르는 메뉴입니다');
+    if (['working', 'compact', 'approval'].includes(s.state)) throw new Error('일하는 중에는 바꿀 수 없습니다. 먼저 중단하세요');
+    if (await rewindScreen(name)) throw new Error('Claude 쪽에 되감기 창이 열려 있습니다');
+    if (b.kind === 'mode') return void await tmux(['send-keys', '-t', name, 'BTab']);
+    if (await inputBox(name)) throw new Error('Claude 입력칸에 글이 남아 있습니다. 터미널 화면에서 비운 뒤 다시 하세요');
+    await tmux(['send-keys', '-t', name, '-l', '--', '/' + b.kind]);
+    await sleep(300);
+    await tmux(['send-keys', '-t', name, 'Enter']);
+  },
   // 세션 이름 바꾸기: 그 세션에 Claude Code의 /rename을 쳐 넣는다. 세션 이름(상태줄, 다른 Claude가 부르는 이름)과
   // 대화 제목이 함께 바뀌고, 화면 제목은 대화 기록의 custom-title을 따라 바뀐다
   'session/rename': async b => {
