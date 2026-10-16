@@ -10,6 +10,7 @@ import { TerminalView } from './Terminal'
 import { ChatView, copyText } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
 import { IconPinFilled } from '@tabler/icons-react'
+import { KeyRec, areaKeys } from './Keys'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 
 // 목록·즐겨찾기의 세션 한 줄. 끌어서 즐겨찾기에 넣고 빼고, 즐겨찾기 안에서 자리를 옮긴다(HTML 끌어다 놓기, 넘기는 값은 대화 ID)
@@ -20,7 +21,7 @@ function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; 
   // 고른 세션은 목록에서 보이게 스크롤한다(새로고침·Ctrl+Tab·다른 데서 열기). 고른 순간에만 해서, 손으로 스크롤한 목록을 되돌리지 않는다
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (on) ref.current?.scrollIntoView({ block: 'nearest' }) }, [on])
-  return <UnstyledButton ref={ref} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%" className="hq-item"
+  return <UnstyledButton ref={ref} data-on={on} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%" className="hq-item"
     style={{ borderRadius: 8, background: on ? 'var(--mantine-color-indigo-light)' : undefined, boxShadow: on ? 'inset 0 0 0 1px var(--mantine-color-indigo-5)' : undefined }}>
     <Group gap={8} wrap="nowrap" align="flex-start">
       <Box w={8} h={8} mt={6} className={'hq-dot' + (s.state === 'working' || s.state === 'compact' ? ' busy' : '')} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} />
@@ -194,10 +195,11 @@ function Favs({ S, sel }: { S: Snapshot; sel: string }) {
   }
   const rows = f.mode === 'free' ? Math.max(0, ...live.map(x => x.slot + 1), (hover ?? -1) + 1) : 0
   return <Paper withBorder p={6} h="100%" style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
+    data-area="favs" onKeyDown={areaKeys(true)}
     onDragOver={e => { if (!dragging(e)) return; e.preventDefault(); setHover(target(e, dragSid)) }}
     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHover(null) }} onDrop={drop}>
-    <Group justify="space-between" px={4} gap={4} wrap="nowrap">
-      <Text size="xs" fw={600} c="dimmed">즐겨찾기</Text>
+    <Group justify="space-between" px={4} gap={4} wrap="wrap">
+      <Group gap={6} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">즐겨찾기</Text><KeyRec area="favs" /></Group>
       <SegmentedControl size="xs" value={f.mode} onChange={mode} data={[{ label: '자동 정렬', value: 'auto' }, { label: '자유 배치', value: 'free' }]} />
     </Group>
     <ScrollArea style={{ flex: 1 }}>
@@ -257,7 +259,8 @@ export function WorkView({ S }: { S: Snapshot }) {
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-work' })
   return <Split key={ui.layoutKey} orientation="horizontal" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
     <Panel id="list" defaultSize={290} minSize={180} maxSize={560}>
-    <Paper withBorder p={6} h="100%" className={unfav ? 'hq-drop-over' : undefined} style={{ minHeight: 0, display: 'flex' }}
+    <Paper withBorder p={6} h="100%" className={unfav ? 'hq-drop-over' : undefined} style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
+      data-area="list" onKeyDown={areaKeys(true)}
       onDragOver={e => { if (!dragging(e)) return; e.preventDefault(); setUnfav(true) }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setUnfav(false) }}
       onDrop={e => {
@@ -267,6 +270,7 @@ export function WorkView({ S }: { S: Snapshot }) {
         e.preventDefault()
         api('favs', { mode: S.favs.mode, items: S.favs.items.filter(x => x.sid !== sid) })
       }}>
+      <Group justify="space-between" px={4} gap={4} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">세션 목록</Text><KeyRec area="list" /></Group>
       <ScrollArea style={{ flex: 1 }}>
         <Stack gap="md" p={4}>
           {groups.map(g => <Stack key={g.id || 'none'} gap={2}>

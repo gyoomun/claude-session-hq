@@ -9,6 +9,7 @@ import { pickNew } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
 import { RewindPanel } from './Rewind'
+import { KeyRec } from './Keys'
 
 interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'result'; text: string; name?: string; toolId?: string; error?: boolean }
 
@@ -218,7 +219,10 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
         }} />
       <Group justify="space-between" gap={6}>
-        <Text size="xs" c="dimmed"><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
+        <Group gap={10} wrap="nowrap" style={{ minWidth: 0 }}>
+          <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">대화</Text><KeyRec area="chat" /></Group>
+          <Text size="xs" c="dimmed" truncate><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
+        </Group>
         <Group gap={6}>
           {working && <Button size="xs" variant="default" onClick={interrupt}>중단 (Esc)</Button>}
           {!working && s.host === 'web' && <Button size="xs" variant="subtle" color="gray" onClick={onRewind} title="Claude Code의 되감기(Esc 두 번)">되감기 (Esc Esc)</Button>}
@@ -363,6 +367,8 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.isComposing || document.querySelector('.mantine-Modal-content, .mantine-Drawer-content, .hq-window, .hq-rewind')) return
+      // 다른 영역(목록·메모·btw 등)에서 누른 Esc는 그 영역이 대화 입력칸으로 돌아가는 데 쓴다. Claude를 멈추지 않는다
+      if ((e.target as Element | null)?.closest?.('[data-area]:not([data-area="chat"])')) return
       esc.current()
     }
     addEventListener('keydown', on)
@@ -370,7 +376,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   }, [])
   const [dropOver, setDropOver] = useState(false)
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
-  return <Stack gap={8} className="hq-fade" style={{ flex: 1, minHeight: 0, position: 'relative' }}
+  return <Stack gap={8} className="hq-fade" data-area="chat" style={{ flex: 1, minHeight: 0, position: 'relative' }}
     onDragOver={e => { if (s.host && hasFiles(e)) { e.preventDefault(); setDropOver(true) } }}
     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(false) }}
     onDrop={e => {

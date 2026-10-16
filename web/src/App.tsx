@@ -7,6 +7,7 @@ import type { Snapshot } from './types'
 import { stale } from './util'
 import { WorkView } from './Work'
 import { copyText } from './Chat'
+import { isRecording, useAreaKeys } from './Keys'
 import { BoardView } from './Board'
 import { MemoView } from './Memo'
 import { SessionDrawer, TaskDrawer } from './Drawers'
@@ -140,10 +141,12 @@ export function App() {
     if (s) { rememberSel(s.sid); setUI({ sel: s.sid, pendingSel: '' }) }
   }, [S, ui.pendingSel])
 
+  useAreaKeys() // 영역 단축키(⌥1~⌥6 등, 영역 이름 옆에서 녹화)
   // F1~F4로 보기 전환. 터미널에 글을 쓰는 중에도 먹도록 가장 먼저(capture) 가로채고, 브라우저 기본 동작(도움말·찾기)은 막는다
   useEffect(() => {
     const keys: Record<string, Mode> = { F1: 'work', F2: 'task', F3: 'all', F4: 'memo' }
     const onKey = (e: KeyboardEvent) => {
+      if (isRecording()) return // 단축키를 녹화하는 중
       // Cmd+T(윈도우는 Ctrl+T): 새 세션. 브라우저·터미널에서 새 탭 열던 손버릇 그대로. 크롬 일반 탭에서는 크롬이 먼저 가져가고, 앱 창에서는 여기로 온다
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') { e.preventDefault(); e.stopPropagation(); setUI({ newFor: '' }); return }
       const m = keys[e.key]

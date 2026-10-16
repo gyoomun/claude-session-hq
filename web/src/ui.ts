@@ -4,6 +4,11 @@ import { burst } from './store'
 
 export const TOAST_POS = ['top-left', 'top-center', 'top-right', 'right-center', 'bottom-right', 'bottom-center', 'bottom-left', 'left-center'] as const
 export type ToastPos = typeof TOAST_POS[number]
+// 영역 단축키: 영역마다 키 하나. 이 브라우저에 남는다(localStorage hq-keys). 처음 값은 ⌥1~⌥6
+export const AREAS = [['list', '세션 목록'], ['favs', '즐겨찾기'], ['chat', '대화'], ['pin', '핀'], ['memo', '메모'], ['btw', 'btw']] as const
+export type Area = typeof AREAS[number][0]
+export type Combo = { code: string; ctrl: boolean; alt: boolean; shift: boolean; meta: boolean }
+export const DEFAULT_KEYS = Object.fromEntries(AREAS.map(([a], i) => [a, { code: `Digit${i + 1}`, ctrl: false, alt: true, shift: false, meta: false }])) as Record<Area, Combo | null>
 export type Mode = 'work' | 'task' | 'all' | 'memo'
 const MODES: Mode[] = ['work', 'task', 'all', 'memo']
 const get = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
@@ -28,12 +33,13 @@ interface UI {
   detail: boolean // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
   motion: 'system' | 'on' // 움직임: 컴퓨터의 '동작 줄이기'를 따를지, 항상 켤지
   toast: ToastPos // 알림(토스트)이 뜨는 자리: 네 꼭짓점과 네 변의 가운데
+  keys: Record<Area, Combo | null>
   layoutKey: number // 칸 경계를 기본값으로 되돌릴 때 올린다(경계 묶음은 처음 그릴 때만 저장값을 읽어서, 다시 그리게 한다)
 }
 let ui: UI = {
   mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '', pendingTask: '', pendingCwd: '', pendingWorking: false,
   openTask: null, openSess: null, newFor: null, addTask: false, brief: false,
-  settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', layoutKey: 0, toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system',
+  settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system',
 }
 history.replaceState(null, '', '#' + ui.mode)
 const subs = new Set<() => void>()
@@ -65,6 +71,7 @@ export function setView(v: UI['view']) { set('hq-view', v); setUI({ view: v }) }
 export function setMotion(v: UI['motion']) { set('hq-motion', v === 'on' ? 'on' : ''); document.documentElement.dataset.motion = v; setUI({ motion: v }) }
 document.documentElement.dataset.motion = ui.motion
 document.documentElement.dataset.toast = ui.toast
+export function setKeys(k: Record<Area, Combo | null>) { set('hq-keys', JSON.stringify(k)); setUI({ keys: k }) }
 export function setToast(v: ToastPos) { set('hq-toast', v); document.documentElement.dataset.toast = v; setUI({ toast: v }) }
 export function setDetail(v: boolean) { set('hq-detail', v ? '1' : '0'); setUI({ detail: v }) }
 // 칸 경계(react-resizable-panels가 localStorage에 저장한 비율)를 지우고 기본값으로 다시 그린다. id: 'hq-side'(핀·메모·btw 높이), 'hq-work'(목록·즐겨찾기·대화 너비)

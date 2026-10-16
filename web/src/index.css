@@ -189,3 +189,11 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-name:hover { color: var(--mantine-color-text); }
 .hq-copyable { cursor: pointer; transition: background-color .12s ease; }
 .hq-copyable:hover { background: var(--mantine-color-default-hover); }
+/* 영역 단축키(Keys.tsx): 옮겨 간 영역 테두리가 잠깐 빛나고, 녹화 중 글은 깜빡인다. 키보드로 다니는 칸은 커서가 있으면 테두리 */
+.hq-flash { animation: hq-flash .7s ease-out; }
+@keyframes hq-flash { 0% { box-shadow: 0 0 0 2px var(--mantine-color-indigo-4); } 100% { box-shadow: 0 0 0 2px transparent; } }
+.hq-recording { animation: hq-breathe 1.2s ease-in-out infinite; }
+.hq-scrollfocus:focus-visible, .hq-memo-row:focus-visible { outline: 2px solid var(--mantine-color-indigo-4); outline-offset: -2px; border-radius: 6px; }
+.hq-memo-row { border-radius: 6px; padding: 2px; }
+.hq-memo-row.del { background: color-mix(in srgb, var(--mantine-color-red-7) 18%, transparent); }
+.hq-item:focus-visible { outline: 2px solid var(--mantine-color-indigo-4); outline-offset: -2px; }

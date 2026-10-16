@@ -4,17 +4,19 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Box, Button, CloseButton, Group, SegmentedControl, Stack, Switch, Text, TextInput, UnstyledButton } from '@mantine/core'
-import { IconAccessPoint, IconLayoutColumns, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconAccessPoint, IconKeyboard, IconLayoutColumns, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { api, toast } from './store'
-import { TOAST_POS, type ToastPos, resetLayout, setDetail, setMotion, setToast, setUI, setView, useUI } from './ui'
+import { AREAS, DEFAULT_KEYS, TOAST_POS, type ToastPos, resetLayout, setKeys, setDetail, setMotion, setToast, setUI, setView, useUI } from './ui'
 import type { Snapshot } from './types'
 import { AccessPanel } from './Modals'
+import { KeyRec, isRecording } from './Keys'
 
 interface Draft { view: 'chat' | 'term'; detail: boolean; motion: 'system' | 'on'; toast: ToastPos }
 // 분류와 그 안의 항목 글(검색에 쓴다)
 const PAGES = [
   { id: 'view', name: '화면', icon: IconPalette, words: '웹 세션 화면 대화 터미널 작업 과정 자세히 도구 움직임 애니메이션 동작 줄이기 알림 토스트 위치 자리' },
   { id: 'layout', name: '배치', icon: IconLayoutColumns, words: '칸 높이 너비 핀 메모 btw 세션 목록 즐겨찾기 대화 경계 되돌리기 기본값' },
+  { id: 'keys', name: '단축키', icon: IconKeyboard, words: '단축키 키보드 영역 세션 목록 즐겨찾기 대화 핀 메모 btw 녹화 F1 F2 F3 F4 Ctrl Tab Cmd T Esc 되감기' },
   { id: 'session', name: '세션', icon: IconRefresh, words: '모두 재시작 웹 세션 CLAUDE.md zshrc' },
   { id: 'access', name: '접속', icon: IconAccessPoint, words: '사내망 접속 인증 메일 로그인 기기 끊기 로그아웃' },
 ] as const
@@ -93,6 +95,20 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
       <Button size="xs" variant="default" onClick={() => { resetLayout('hq-work'); toast('목록·즐겨찾기·대화 너비를 처음으로 되돌렸습니다.') }}>기본값으로</Button>
     </Row>
   </Section>
+  if (id === 'keys') {
+    const fixed: [string, string][] = [['F1 · F2 · F3 · F4', '작업 · 업무별 · 세션 전체 · 메모 보기'], ['Ctrl+Tab · Ctrl+Shift+Tab', '같은 목록(즐겨찾기 또는 세션 목록) 안에서 다음·이전 세션'],
+      ['⌘T (Ctrl+T)', '새 세션'], ['Esc', '대화에서: Claude 중단 · 다른 영역에서: 대화 입력칸으로'], ['Esc Esc', '대화에서 Claude가 쉴 때: 되감기'],
+      ['↑ ↓ · Enter', '세션 목록·즐겨찾기: 옮기기 · 열고 입력칸으로'], ['스페이스 · Enter · ⌫⌫', '메모 줄: 끝남 표시 · 고치기 · 지우기']]
+    return <>
+      <Section title="영역 옮기기">
+        {AREAS.map(([a, label]) => <Row key={a} label={label} help={`${label}(으)로 커서를 옮깁니다. 영역 이름 옆 ⌨로도 바꿉니다`}><KeyRec area={a} /></Row>)}
+        <Row label="처음 값으로" help="영역 단축키를 ⌥1~⌥6으로 되돌립니다"><Button size="xs" variant="default" onClick={() => { setKeys(DEFAULT_KEYS); toast('영역 단축키를 처음 값으로 되돌렸습니다.') }}>기본값으로</Button></Row>
+      </Section>
+      <Section title="정해진 키">
+        {fixed.map(([k, what]) => <Row key={k} label={what}><Text size="xs" ff="monospace" c="dimmed">{k}</Text></Row>)}
+      </Section>
+    </>
+  }
   if (id === 'session') return <Section title="웹 세션">
     <Row label="모두 재시작" help="전역 CLAUDE.md·.zshrc를 바꾼 뒤. 웹 세션을 모두 끄고 같은 대화로 다시 띄웁니다(일하는 중이어도 끊습니다)"><RestartAll S={S} /></Row>
   </Section>
@@ -123,7 +139,7 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
   }
   useEffect(() => {
     if (!ui.settings) return
-    const on = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.isComposing) { e.stopPropagation(); close() } }
+    const on = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.isComposing && !isRecording()) { e.stopPropagation(); close() } }
     addEventListener('keydown', on, true)
     return () => removeEventListener('keydown', on, true)
   }, [ui.settings])

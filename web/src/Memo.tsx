@@ -7,6 +7,8 @@ import { pick, useUI } from './ui'
 import type { Memo, Session, Snapshot } from './types'
 import { Since } from './util'
 import { BtwTab } from './Btw'
+import { KeyRec, areaKeys } from './Keys'
+import type { Area } from './ui'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 
 const enter = (f: () => void) => (e: React.KeyboardEvent) => {
@@ -14,15 +16,32 @@ const enter = (f: () => void) => (e: React.KeyboardEvent) => {
 }
 export const hasMemo = (S: Snapshot, sid: string) => !!S.memos?.[sid]?.items.some(m => !m.done)
 
+// 메모 한 줄. 키보드로: 스페이스 끝남 표시, Enter 고치기, ⌫ 두 번 지우기(↑↓ 옮기기는 MemoList)
 function MemoRow({ sid, m }: { sid: string; m: Memo }) {
   const [edit, setEdit] = useState<string | null>(null)
+  const [del, setDel] = useState(false)
   const save = async () => { if (edit !== null && edit.trim() && edit !== m.text && !await api('memo/update', { sid, id: m.id, text: edit })) return; setEdit(null) }
-  return <Group gap={8} wrap="nowrap" align="flex-start">
+  const key = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === ' ') { e.preventDefault(); api('memo/update', { sid, id: m.id, done: !m.done }) }
+    else if (e.key === 'Enter') { e.preventDefault(); setEdit(m.text) }
+    else if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault()
+      if (!del) { setDel(true); return }
+      // 지운 줄과 함께 커서가 사라지지 않게 다음 줄(없으면 앞 줄, 그다음 입력칸)로 옮긴다
+      const stops = [...(e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('.hq-memo-row, textarea[aria-label="메모 적기"]') || [])]
+      const i = stops.indexOf(e.currentTarget)
+      ;(stops[i + 1] || stops[i - 1])?.focus()
+      api('memo/delete', { sid, id: m.id })
+    }
+  }
+  return <Group gap={8} wrap="nowrap" align="flex-start" tabIndex={0} className={'hq-memo-row' + (del ? ' del' : '')} onKeyDown={key} onBlur={() => setDel(false)}
+    title={del ? '한 번 더 누르면 지웁니다' : undefined}>
     <Checkbox size="xs" mt={3} checked={m.done} onChange={e => api('memo/update', { sid, id: m.id, done: e.currentTarget.checked })} aria-label="끝남 표시" />
     <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
       {edit !== null
         ? <Textarea size="xs" autosize minRows={1} maxRows={6} autoFocus value={edit} onChange={e => setEdit(e.currentTarget.value)} onBlur={save}
-            onKeyDown={e => { if (e.key === 'Escape') setEdit(null); else enter(save)(e) }} aria-label="메모 고치기" />
+            onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setEdit(null) } else enter(save)(e) }} aria-label="메모 고치기" />
         : <UnstyledButton onClick={() => setEdit(m.text)} title="눌러서 고치기">
             <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', textDecoration: m.done ? 'line-through' : undefined }} c={m.done ? 'dimmed' : undefined}>{m.text}</Text>
           </UnstyledButton>}
@@ -36,7 +55,16 @@ export function MemoList({ S, sid }: { S: Snapshot; sid: string }) {
   const items = S.memos?.[sid]?.items || []
   const [text, setText] = useState('')
   const add = async () => { if (text.trim() && await api('memo/add', { sid, text })) setText('') }
-  return <Stack gap={10}>
+  // ↑↓로 메모 줄과 입력칸 사이를 옮긴다(입력칸에서는 비었거나 커서가 맨 앞일 때만 위로)
+  const nav = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+    const t = e.target as HTMLElement
+    if (t.tagName === 'TEXTAREA' && (e.key === 'ArrowDown' || (t as HTMLTextAreaElement).selectionStart > 0) || t.getAttribute('aria-label') === '메모 고치기') return
+    const stops = [...e.currentTarget.querySelectorAll<HTMLElement>('.hq-memo-row, textarea[aria-label="메모 적기"]')]
+    const i = stops.indexOf(t), next = stops[i + (e.key === 'ArrowUp' ? -1 : 1)]
+    if (next) { e.preventDefault(); next.focus(); next.scrollIntoView({ block: 'nearest' }) }
+  }
+  return <Stack gap={10} onKeyDown={nav}>
     {items.map(m => <MemoRow key={m.id} sid={sid} m={m} />)}
     <Textarea size="sm" autosize minRows={1} maxRows={5} value={text} onChange={e => setText(e.currentTarget.value)} onKeyDown={enter(add)}
       placeholder="메모 적기 (Enter)" aria-label="메모 적기" />
@@ -64,10 +92,11 @@ function PinList({ s }: { s: Session }) {
   </Stack>
 }
 
-function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
-  return <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }}>
-    <Group p="8px 12px 2px" gap={6}><Text fw={600} size="sm">{title}</Text>{sub && <Text size="xs" c="dimmed">{sub}</Text>}</Group>
-    <ScrollArea style={{ flex: 1, minHeight: 0 }}><Box p="6px 12px 12px">{children}</Box></ScrollArea>
+// 오른쪽 칸 하나: 이름 옆에 영역 단축키(녹화 버튼). 안의 스크롤 칸은 키보드로도 스크롤된다(↑↓)
+function Section({ area, title, sub, children }: { area: Area; title: string; sub?: string; children: React.ReactNode }) {
+  return <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area={area} onKeyDown={areaKeys()}>
+    <Group p="8px 12px 2px" gap={6} wrap="nowrap"><Text fw={600} size="sm">{title}</Text>{sub && <Text size="xs" c="dimmed">{sub}</Text>}<Box ml="auto"><KeyRec area={area} /></Box></Group>
+    <ScrollArea style={{ flex: 1, minHeight: 0 }} viewportProps={{ tabIndex: 0, className: 'hq-scrollfocus' }}><Box p="6px 12px 12px">{children}</Box></ScrollArea>
   </Paper>
 }
 
@@ -77,13 +106,13 @@ export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-side' })
   const { layoutKey } = useUI()
   return <Split key={layoutKey} orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
-    <Panel id="pin" defaultSize="25" minSize={70}><Section title="핀" sub="Claude 핀보드"><PinList s={s} /></Section></Panel>
+    <Panel id="pin" defaultSize="25" minSize={70}><Section area="pin" title="핀" sub="Claude 핀보드"><PinList s={s} /></Section></Panel>
     <Separator className="hq-split" />
-    <Panel id="memo" defaultSize="30" minSize={70}><Section title="메모"><MemoList S={S} sid={s.sid} /></Section></Panel>
+    <Panel id="memo" defaultSize="30" minSize={70}><Section area="memo" title="메모"><MemoList S={S} sid={s.sid} /></Section></Panel>
     <Separator className="hq-split" />
     <Panel id="btw" minSize={200}>
-      <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }}>
-        <Text p="8px 12px 0" fw={600} size="sm">btw{asking ? ' …' : ''}</Text>
+      <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area="btw" onKeyDown={areaKeys()}>
+        <Group p="8px 12px 0" gap={6} wrap="nowrap"><Text fw={600} size="sm">btw{asking ? ' …' : ''}</Text><Box ml="auto"><KeyRec area="btw" /></Box></Group>
         <BtwTab S={S} s={s} />
       </Paper>
     </Panel>
