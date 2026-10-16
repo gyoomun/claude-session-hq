@@ -305,6 +305,14 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   const stick = useRef(true) // 맨 아래를 보고 있으면 새 메시지가 올 때 따라 내려간다
   useLayoutEffect(() => { if (stick.current && view.current) view.current.scrollTop = view.current.scrollHeight }, [items, s.state, pending])
   useEffect(() => { stick.current = true }, [s.sid])
+  // 입력칸이 커지거나(긴 글·이미지) 되감기 목록이 올라오면 대화 칸이 줄어든다. 맨 아래를 보고 있었으면 계속 맨 아래에 붙인다
+  useEffect(() => {
+    const v = view.current
+    if (!v) return
+    const ro = new ResizeObserver(() => { if (stick.current) v.scrollTop = v.scrollHeight })
+    ro.observe(v)
+    return () => ro.disconnect()
+  }, [])
   const draft = useDraft(s.sid)
   // 보낸 직후에는 상태가 '작업중'으로 바뀌기까지 1~2초 걸린다. 그 사이에도 중단할 수 있게, 보낸 뒤 상태가 아직 안 바뀌었으면 일하는 중으로 본다
   const sent = useRef<Sent | null>(null) // 이 화면에서 마지막으로 보낸 것(중단하면 그대로 되살린다)

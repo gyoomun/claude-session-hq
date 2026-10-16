@@ -56,7 +56,7 @@ function Title({ s }: { s: Session }) {
       else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setEdit(null) } // 대화 화면의 Esc(중단·되감기)로 가지 않게
     }} />
   return <UnstyledButton className="hq-title" title="눌러서 이름 바꾸기" onClick={() => setEdit(want || s.title)}>
-    <Text component="div" fw={600} size="lg" className="hq-wrap">{want || s.title}</Text>
+    <Text component="div" fw={600} size="lg" truncate title={want || s.title}>{want || s.title}</Text>
   </UnstyledButton>
 }
 
@@ -67,7 +67,8 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
       <Stack gap={0} style={{ minWidth: 0, flex: '1 1 260px' }}>
         {/* 제목은 Claude가 정해서 아직 모른다. 같은 글줄 안에 반짝이를 넣어 높이를 똑같이 맞춘다 */}
         {s.sid ? <Title s={s} /> : <Text component="div" fw={600} size="lg"><Skeleton h="0.9em" w="38%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>}
-        <Text size="xs" c="dimmed">{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
+        {/* 한 줄로 고정: 실행 중인 명령(act)이 길어도 머리가 두꺼워지지 않게 끝을 줄이고, 마우스를 올리면 전체가 보인다 */}
+        <Text size="xs" c="dimmed" truncate title={s.act || undefined}>{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
           {/* 세션 이름: 상태줄에 보이고 다른 Claude가 이 세션을 부르는 이름. 제목과 다를 때만(이름을 안 바꾼 세션) 보이고 누르면 복사한다 */}
           {s.sid && s.name && s.name !== s.title && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyText(s.name)) toast(`세션 이름 ${s.name}을 복사했습니다.`) }}> · @{s.name}</UnstyledButton>}
           {s.act && <Text span ff="monospace" c="teal.5"> · {s.act}</Text>}</Text>

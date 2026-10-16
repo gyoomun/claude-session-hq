@@ -185,5 +185,5 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-title:hover { box-shadow: 0 1px 0 var(--mantine-color-dimmed); cursor: text; }
 .hq-title-edit { display: block; width: 100%; font: inherit; font-size: var(--mantine-font-size-lg); font-weight: 600; line-height: var(--mantine-line-height-lg); color: var(--mantine-color-text);
   background: transparent; border: 0; outline: 0; padding: 0; margin: 0; box-shadow: 0 1px 0 var(--mantine-color-indigo-4); }
-.hq-name { font-family: var(--mantine-font-family-monospace); font-size: inherit; color: var(--mantine-color-dimmed); cursor: copy; }
+.hq-name { font-family: var(--mantine-font-family-monospace); font-size: inherit; color: var(--mantine-color-dimmed); cursor: pointer; }
 .hq-name:hover { color: var(--mantine-color-text); }
