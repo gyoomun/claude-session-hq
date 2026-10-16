@@ -14,6 +14,7 @@ import { MemoView } from './Memo'
 import { SessionDrawer, TaskDrawer } from './Drawers'
 import { AddTaskModal, BriefModal, NewSessionModal } from './Modals'
 import { SettingsWindow } from './Settings'
+import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import { IconBuildingSkyscraper, IconCheck, IconFolderPlus, IconLayoutColumns, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconListDetails, IconNetwork, IconNote, IconPlus, IconReport, IconSettings } from '@tabler/icons-react'
 
 const Logo = () => <svg width="34" height="34" viewBox="0 0 8 8" shapeRendering="crispEdges" aria-hidden="true">
@@ -120,6 +121,37 @@ function Sidebar({ S }: { S: Snapshot }) {
   </Stack>
 }
 
+// 오른쪽: 메인(알림·보기의 내용) | 서브(일정·메일 같은 카드들). 서브는 사이드바 바로 옆부터 왼쪽으로 붙여 놓고, 카드마다 너비를 끌어 바꾼다
+// (비율은 localStorage react-resizable-panels:hq-sub. 앞으로 서브에 들이는 카드도 같은 규칙). 마지막 빈 칸이 남는 폭을 받는다
+function MainSplit({ S, offline }: { S: Snapshot; offline: boolean }) {
+  const ui = useUI()
+  const main = useDefaultLayout({ id: 'hq-main' }), sub = useDefaultLayout({ id: 'hq-sub' })
+  return <Split key={ui.layoutKey} orientation="vertical" defaultLayout={main.defaultLayout} onLayoutChanged={main.onLayoutChanged} style={{ height: '100dvh', overflow: 'visible' }}>
+    <Panel id="main" minSize={300}>
+      <Box h="100%" p="md" pb={4} w="100%" maw={2032} mx="auto" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--mantine-spacing-md)', minWidth: 0, minHeight: 0 }}>
+        {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
+        <Notices S={S} />
+        <Box key={ui.mode} className="hq-fade" style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
+          {ui.mode === 'work' ? <WorkView S={S} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
+        </Box>
+      </Box>
+    </Panel>
+    {/* 메인과 서브를 가르는 줄. 창 폭 전체로 긋고, 끌면 서브 높이가 바뀐다 */}
+    <Separator className="hq-split-line" />
+    <Panel id="sub" defaultSize={218} minSize={110} maxSize="60" style={{ overflow: 'visible' }}>
+      <div className="hq-sub">
+        <Split key={ui.layoutKey} orientation="horizontal" defaultLayout={sub.defaultLayout} onLayoutChanged={sub.onLayoutChanged} style={{ overflow: 'visible' }}>
+          <Panel id="cal" defaultSize={360} minSize={220} style={{ overflow: 'visible' }}><CalendarCard S={S} /></Panel>
+          <Separator className="hq-split-v" />
+          <Panel id="mail" defaultSize={480} minSize={240}><MailCard S={S} /></Panel>
+          <Separator className="hq-split-v" />
+          <Panel id="rest" minSize={0}><div /></Panel>
+        </Split>
+      </div>
+    </Panel>
+  </Split>
+}
+
 export function App() {
   const S = useSnapshot()
   const offline = useOffline()
@@ -158,22 +190,13 @@ export function App() {
   }, [])
 
   if (!S) return <Center h="100vh"><Loader /></Center>
-  // 사이드바는 창 맨 왼쪽에 붙고, 본문은 나머지 폭의 가운데에 놓는다(좌우 여백이 같다). 본문 폭은 모든 보기에서 같다(작업 보기의 세 칸 기준 2032px. 보기마다 다르면 넘길 때 화면이 움찔한다).
-  // 본문은 위에서부터 알림 · 메인 내용 · (줄) 일정·메일. 페이지 자체는 스크롤하지 않고 메인 내용이 남은 높이를 채운다
+  // 사이드바는 창 맨 왼쪽에 붙고, 오른쪽은 위아래 두 칸(메인 | 서브)이며 사이 경계를 끌어 서브 높이를 바꾼다(비율은 localStorage react-resizable-panels:hq-main).
+  // 메인 내용은 나머지 폭의 가운데에 놓는다(좌우 여백이 같다). 본문 폭은 모든 보기에서 같다(작업 보기의 세 칸 기준 2032px. 보기마다 다르면 넘길 때 화면이 움찔한다).
+  // 페이지 자체는 스크롤하지 않는다
   const side = ui.slim ? 68 : 224
-  return <Box h="100dvh" className="hq-shell" style={{ gridTemplateColumns: `${side}px minmax(0, 1fr)` }}>
+  return <Box h="100dvh" className="hq-shell" style={{ gridTemplateColumns: `${side}px minmax(0, 1fr)`, '--side': side + 'px' } as React.CSSProperties}>
     <Sidebar S={S} />
-    <div className="hq-right">
-    <Box p="md" w="100%" maw={2032} mx="auto" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--mantine-spacing-md)', minWidth: 0, minHeight: 0 }}>
-      {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
-      <Notices S={S} />
-      <Box key={ui.mode} className="hq-fade" style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
-        {ui.mode === 'work' ? <WorkView S={S} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
-      </Box>
-    </Box>
-    {/* 아래 줄: 일정·메일 카드. 메인 내용과 창 폭 전체를 가로지르는 줄로 나눈다. 카드가 없어도 높이는 둔다 */}
-    <div className="hq-sub"><div className="hq-sub-in"><CalendarCard S={S} /><MailCard S={S} /></div></div>
-    </div>
+    <MainSplit S={S} offline={offline} />
     <SessionDrawer S={S} />
     <TaskDrawer S={S} />
     <NewSessionModal S={S} />

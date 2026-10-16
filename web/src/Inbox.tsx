@@ -1,4 +1,4 @@
-// 메일(받은편지함): 본문 아래 줄(`.hq-sub`)에서 일정 카드 오른쪽. 높이는 일정 카드와 같고, 이은 계정들을 합쳐 최근 순으로 보인다(넘치면 스크롤).
+// 메일(받은편지함): 서브 칸(`MainSplit`)에서 일정 카드 오른쪽. 이은 계정들을 합쳐 최근 순으로 보인다(넘치면 스크롤).
 // 안 읽은 메일은 굵게. 줄을 누르면 Gmail 웹에서 그 메일(스레드)을 연다. 이은 메일이 없으면 안 보인다(환경설정 '메일')
 import { Group, Paper, Text, UnstyledButton } from '@mantine/core'
 import type { Snapshot } from './types'

@@ -15,7 +15,7 @@ interface Draft { view: 'chat' | 'term'; detail: boolean; motion: 'system' | 'on
 // 분류와 그 안의 항목 글(검색에 쓴다)
 const PAGES = [
   { id: 'view', name: '화면', icon: IconPalette, words: '웹 세션 화면 대화 터미널 작업 과정 자세히 도구 움직임 애니메이션 동작 줄이기 알림 토스트 위치 자리' },
-  { id: 'layout', name: '배치', icon: IconLayoutColumns, words: '칸 높이 너비 핀 메모 btw 세션 목록 즐겨찾기 대화 경계 되돌리기 기본값' },
+  { id: 'layout', name: '배치', icon: IconLayoutColumns, words: '칸 높이 너비 핀 메모 btw 세션 목록 즐겨찾기 대화 경계 되돌리기 기본값 아래 칸 일정 메일 카드' },
   { id: 'keys', name: '단축키', icon: IconKeyboard, words: '단축키 키보드 영역 세션 목록 즐겨찾기 대화 핀 메모 btw 녹화 F1 F2 F3 F4 Ctrl Tab Cmd T Esc 되감기' },
   { id: 'calendar', name: '일정', icon: IconCalendar, words: '일정 캘린더 구글 연차 반차 휴가 회사 iCal 다시 읽기' },
   { id: 'mail', name: '메일', icon: IconMail, words: '메일 이메일 Gmail 지메일 받은편지함 앱 비밀번호 다시 읽기' },
@@ -96,6 +96,9 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
     <Row label="세션 목록·즐겨찾기·대화 너비" help="작업 보기의 세 칸 사이 경계를 처음 너비로 되돌립니다">
       <Button size="xs" variant="default" onClick={() => { resetLayout('hq-work'); toast('목록·즐겨찾기·대화 너비를 처음으로 되돌렸습니다.') }}>기본값으로</Button>
     </Row>
+    <Row label="아래 칸(일정·메일) 높이·카드 너비" help="메인과 아래 칸 사이 경계, 아래 칸 카드들의 너비를 처음으로 되돌립니다">
+      <Button size="xs" variant="default" onClick={() => { resetLayout('hq-main'); resetLayout('hq-sub'); toast('아래 칸 높이와 카드 너비를 처음으로 되돌렸습니다.') }}>기본값으로</Button>
+    </Row>
   </Section>
   if (id === 'keys') {
     const fixed: [string, string][] = [['F1 · F2 · F3 · F4', '작업 · 업무별 · 세션 전체 · 메모 보기'], ['Ctrl+Tab · Ctrl+Shift+Tab', '같은 목록(즐겨찾기 또는 세션 목록) 안에서 다음·이전 세션'],
@@ -115,7 +118,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
     const c = S.calendar
     return <>
       <Section title="구글 캘린더">
-        <Row label="연결" help={!c?.sources ? '아직 이은 캘린더가 없습니다. 아래 순서대로 이으면 화면 아래 줄에 오늘 일정이 보입니다'
+        <Row label="연결" help={!c?.sources ? '아직 이은 캘린더가 없습니다. 아래 순서대로 이으면 화면 아래 칸에 오늘 일정이 보입니다'
           : `캘린더 ${c.sources}개 · 일정 ${c.events.length}개(오늘부터 7일) · ${c.at ? new Date(c.at).toLocaleTimeString('ko-KR', { hour12: false }) + '에 읽음' : '아직 못 읽음'} · 10분마다 다시 읽습니다`}>
           <Button size="xs" variant="default" onClick={async () => { const r = await api<string>('calendar/reload'); if (r) toast(r.result ? '일부를 읽지 못했습니다: ' + r.result : '일정을 다시 읽었습니다.', r.result ? 'red' : undefined) }}>다시 읽기</Button>
         </Row>
@@ -135,7 +138,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
     const b = S.inbox
     return <>
       <Section title="받은편지함">
-        <Row label="연결" help={!b?.accounts.length ? '아직 이은 메일이 없습니다. 아래 순서대로 이으면 화면 아래 줄에 최근 메일이 보입니다'
+        <Row label="연결" help={!b?.accounts.length ? '아직 이은 메일이 없습니다. 아래 순서대로 이으면 화면 아래 칸에 최근 메일이 보입니다'
           : `${b.accounts.join(', ')} · ${b.at ? new Date(b.at).toLocaleTimeString('ko-KR', { hour12: false }) + '에 읽음' : '아직 못 읽음'} · 2분마다 다시 읽습니다(읽음 표시는 바꾸지 않습니다)`}>
           <Button size="xs" variant="default" onClick={async () => { const r = await api<string>('inbox/reload'); if (r) toast(r.result ? '일부를 읽지 못했습니다: ' + r.result : '메일을 다시 읽었습니다.', r.result ? 'red' : undefined) }}>다시 읽기</Button>
         </Row>
