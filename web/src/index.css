@@ -165,3 +165,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-copy:hover { background: rgba(255, 255, 255, .16); }
 .hq-set-crumb { position: sticky; top: -14px; z-index: 1; margin: -14px -20px 12px; padding: 12px 20px 10px; background: var(--mantine-color-body); border-bottom: 1px solid var(--mantine-color-default-border); }
 .hq-set-spacer { height: 60%; }   /* 마지막 분류도 목차로 눌렀을 때 맨 위에 오게 */
+/* 되감기(입력칸 자리, Rewind.tsx) */
+.hq-rewind-list { max-height: 40vh; overflow-y: auto; }
+.hq-rewind-row { padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.hq-rewind-row.on { background: var(--mantine-color-indigo-light); }

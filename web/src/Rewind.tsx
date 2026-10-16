@@ -1,6 +1,7 @@
-// 되감기 창: Claude Code의 되감기(/rewind, 터미널에서 Esc 두 번)를 웹에서 고른다. 서버가 tmux 화면을 읽고 키를 보낸다(웹 세션만)
+// 되감기: Claude Code의 되감기(/rewind, 터미널에서 Esc 두 번)를 대화 화면 입력칸 자리에서 고른다(터미널처럼, 키보드만으로).
+// 서버가 tmux 화면을 읽고 키를 보낸다(웹 세션만). ↑↓ 고르기 · Enter 정하기 · Esc 닫기, 확인 단계에서는 숫자 키로도 고른다
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Box, Button, Group, Loader, Modal, ScrollArea, Stack, Text, UnstyledButton } from '@mantine/core'
+import { Box, Group, Kbd, Paper, Skeleton, Stack, Text } from '@mantine/core'
 import { api } from './store'
 import type { Session } from './types'
 
@@ -20,32 +21,38 @@ const note = (n: string) => NOTE[n] || n.replace(/^The code will be restored (.+
 const DETAIL: Record<string, string> = { 'No code changes': '코드 변경 없음' }
 
 // restored: 되돌린 뒤 Claude 입력칸에 돌아온 그때의 말. picked: 고른 말(목록의 첫 줄)
-export function RewindModal({ s, opened, onClose, onDone }: {
-  s: Session; opened: boolean; onClose: () => void; onDone: (r: { restored: string; picked: string; label: string }) => void
+export function RewindPanel({ s, onClose, onDone }: {
+  s: Session; onClose: () => void; onDone: (r: { restored: string; picked: string; label: string }) => void
 }) {
   const [items, setItems] = useState<Item[] | null>(null)
+  const [sel, setSel] = useState(0)
   const [picked, setPicked] = useState<Item | null>(null)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const [opt, setOpt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const root = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLDivElement>(null)
+  const live = useRef(true) // 목록을 읽는 사이에 닫았으면, 다 열린 뒤에 Claude 쪽 되감기 창도 닫는다
   const done = useRef(false)
-  const live = useRef(false) // 목록을 읽는 사이에 창을 닫았으면, 다 열린 뒤에 Claude 쪽 되감기 창도 닫는다
-  const view = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (!opened) return
-    done.current = false; live.current = true
-    setItems(null); setPicked(null); setConfirm(null); setError('')
+    root.current?.focus()
     fetch('/api/rewind/open', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-hq': '1' }, body: JSON.stringify({ pid: s.pid }) })
-      .then(r => r.json()).then(d => { if (!live.current) api('rewind/cancel', { pid: s.pid }); else if (d.error) setError(d.error); else setItems(d.result) })
-      .catch(() => setError('서버에 연결할 수 없습니다'))
-  }, [opened, s.pid])
-  useEffect(() => { if (items && view.current) view.current.scrollTop = view.current.scrollHeight }, [items])
+      .then(r => r.json()).then(d => {
+        if (!live.current) { api('rewind/cancel', { pid: s.pid }); return }
+        if (d.error) setError(d.error); else { setItems(d.result); setSel(d.result.length - 1) } // 터미널처럼 가장 최근 말에서 시작
+      }).catch(() => setError('서버에 연결할 수 없습니다'))
+    return () => { live.current = false }
+  }, [s.pid])
+  useEffect(() => { list.current?.querySelector('.on')?.scrollIntoView({ block: 'nearest' }) }, [sel, items])
+  useEffect(() => { root.current?.focus() }, [confirm])
   const close = () => { live.current = false; if (!done.current) api('rewind/cancel', { pid: s.pid }); onClose() }
   const pick = async (it: Item) => {
-    setBusy(true); setError('')
+    setBusy(true)
     const r = await api<Confirm>('rewind/pick', { pid: s.pid, k: it.k, text: it.text })
     setBusy(false)
-    if (r) { setPicked(it); setConfirm(r.result) } else onClose()
+    if (!r) { onClose(); return }
+    setPicked(it); setConfirm(r.result); setOpt(0)
   }
   const choose = async (o: Confirm['options'][number]) => {
     if (o.label === 'Never mind') { close(); return }
@@ -56,26 +63,44 @@ export function RewindModal({ s, opened, onClose, onDone }: {
     if (r) onDone({ restored: r.result.restored || '', picked: picked!.text, label: o.label })
     onClose()
   }
-  return <Modal opened={opened} onClose={close} title="되감기" size="lg">
-    {error ? <Alert color="red" variant="light">{error}</Alert>
-      : !items ? <Group gap={8}><Loader size="xs" /><Text size="sm" c="dimmed">되감을 수 있는 말을 읽는 중입니다…</Text></Group>
-      : !confirm ? <Stack gap="xs">
-          <Text size="sm" c="dimmed">고른 말을 보내기 전으로 돌아갑니다. 위가 오래된 말입니다{items.length >= 50 ? ' (최근 50개)' : ''}.</Text>
-          {!items.length && <Text size="sm">되감을 말이 없습니다.</Text>}
-          <ScrollArea.Autosize mah="60vh" viewportRef={view}>
-            <Stack gap={4}>{items.map(it => <UnstyledButton key={it.k} disabled={busy} onClick={() => pick(it)} p="8px 10px" className="hq-rewind-item">
-              <Text size="sm" className="hq-wrap">{it.text}</Text>
-              <Text size="xs" c="dimmed">{DETAIL[it.detail] || it.detail}</Text>
-            </UnstyledButton>)}</Stack>
-          </ScrollArea.Autosize>
-          {busy && <Group gap={8}><Loader size="xs" /><Text size="sm" c="dimmed">고르는 중…</Text></Group>}
-        </Stack>
-      : <Stack gap="sm">
-          <Text size="sm">이 말을 보내기 전으로 돌아갑니다.</Text>
+  const key = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing) return
+    const n = confirm ? confirm.options.length : items?.length || 0
+    const setI = confirm ? setOpt : setSel
+    const k = e.key
+    if (k === 'Escape') close()
+    else if (busy) return
+    else if (k === 'ArrowUp' || k === 'ArrowDown') setI(i => Math.max(0, Math.min(n - 1, i + (k === 'ArrowUp' ? -1 : 1))))
+    else if (k === 'Home' || k === 'End') setI(k === 'Home' ? 0 : n - 1)
+    else if (k === 'Enter') { if (confirm) choose(confirm.options[opt]); else if (items?.[sel]) pick(items[sel]) }
+    else if (confirm && /^[1-9]$/.test(k)) { const o = confirm.options.find(x => x.n === +k); if (o) choose(o) }
+    else return
+    e.preventDefault(); e.stopPropagation()
+  }
+  const hint = (keys: string[], what: string) => <Group gap={4} wrap="nowrap">{keys.map(x => <Kbd key={x} size="xs">{x}</Kbd>)}<Text size="xs" c="dimmed">{what}</Text></Group>
+  return <Paper withBorder p="sm" className="hq-rewind hq-in" ref={root} tabIndex={-1} onKeyDown={key} style={{ outline: 'none' }}>
+    <Group justify="space-between" mb={8} wrap="nowrap">
+      <Text size="sm" fw={600}>되감기 <Text span size="xs" c="dimmed" fw={400}>{confirm ? '이 말을 보내기 전으로 돌아갑니다' : '고른 말을 보내기 전으로 돌아갑니다'}</Text></Text>
+      <Group gap="md" wrap="nowrap">{hint(['↑', '↓'], '고르기')}{confirm && hint(['1~' + confirm.options.length], '바로')}{hint(['Enter'], busy ? '처리 중…' : '정하기')}{hint(['Esc'], '닫기')}</Group>
+    </Group>
+    {error ? <Text size="sm" c="red.4">{error}</Text>
+      : !items ? <Stack gap={6}>{[70, 55, 80, 45].map((w, i) => <Group key={i} gap={8} wrap="nowrap" px={8} py={4}><Skeleton h={12} w={`${w}%`} /><Skeleton h={10} w={70} ml="auto" /></Group>)}</Stack>
+      : !confirm ? <Box ref={list} className="hq-rewind-list">
+          {!items.length && <Text size="sm" c="dimmed" px={8}>되감을 말이 없습니다.</Text>}
+          {items.map((it, i) => <Group key={it.k} gap={8} wrap="nowrap" className={'hq-rewind-row' + (i === sel ? ' on' : '')} onMouseEnter={() => setSel(i)} onClick={() => !busy && pick(it)}>
+            <Text size="sm" w={12} c="indigo.4" style={{ flex: 'none' }}>{i === sel ? '❯' : ''}</Text>
+            <Text size="sm" truncate style={{ flex: 1, minWidth: 0 }}>{it.text}</Text>
+            <Text size="xs" c={it.detail === 'No code changes' ? 'dimmed' : 'teal.4'} style={{ flex: 'none' }}>{DETAIL[it.detail] || it.detail}</Text>
+          </Group>)}
+          {items.length >= 50 && <Text size="xs" c="dimmed" px={8} pt={4}>최근 50개까지 보입니다</Text>}
+        </Box>
+      : <Stack gap={8}>
           <Box className="hq-say me" style={{ alignSelf: 'stretch', maxWidth: '100%' }}><Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{confirm.message}</Text></Box>
           {confirm.notes.map(n => <Text key={n} size="xs" c="dimmed">{note(n)}</Text>)}
-          <Group gap="xs">{confirm.options.map(o => <Button key={o.n} size="xs" loading={busy && o.label !== 'Never mind'} disabled={busy}
-            variant={o.label === 'Never mind' ? 'default' : o.n === 1 ? 'filled' : 'light'} onClick={() => choose(o)}>{LABEL[o.label] || o.label}</Button>)}</Group>
+          <Box>{confirm.options.map((o, i) => <Group key={o.n} gap={8} wrap="nowrap" className={'hq-rewind-row' + (i === opt ? ' on' : '')} onMouseEnter={() => setOpt(i)} onClick={() => !busy && choose(o)}>
+            <Text size="sm" w={12} c="indigo.4">{i === opt ? '❯' : ''}</Text>
+            <Text size="sm">{o.n}. {LABEL[o.label] || o.label}</Text>
+          </Group>)}</Box>
         </Stack>}
-  </Modal>
+  </Paper>
 }

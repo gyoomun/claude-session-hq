@@ -8,7 +8,7 @@ import { api, serverNow, toast } from './store'
 import { pickNew } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
-import { RewindModal } from './Rewind'
+import { RewindPanel } from './Rewind'
 
 interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'result'; text: string; name?: string; toolId?: string; error?: boolean }
 
@@ -354,7 +354,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   }
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.isComposing || document.querySelector('.mantine-Modal-content, .mantine-Drawer-content, .hq-window')) return
+      if (e.key !== 'Escape' || e.isComposing || document.querySelector('.mantine-Modal-content, .mantine-Drawer-content, .hq-window, .hq-rewind')) return
       esc.current()
     }
     addEventListener('keydown', on)
@@ -382,14 +382,15 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
           {!missing && !items.length && !pending && <ChatSkeleton />}
           <Messages items={shown} detail={detail} />
           {pending && <Box className="hq-say me hq-pending"><Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pending.text}</Text></Box>}
-          {(s.state === 'working' || s.state === 'compact') && <Group gap={8}><Loader size="xs" color={COLOR[s.state]} /><Text size="sm" c={`${COLOR[s.state]}.4`} ff="monospace">{s.act || '생각 중'}</Text></Group>}
+          {/* 되감기 창이 떠 있는 동안 Claude Code는 바쁨 상태지만 일하는 게 아니다 */}
+          {(s.state === 'working' || s.state === 'compact') && !rewind && <Group gap={8}><Loader size="xs" color={COLOR[s.state]} /><Text size="sm" c={`${COLOR[s.state]}.4`} ff="monospace">{s.act || '생각 중'}</Text></Group>}
         </Stack>
       </ScrollArea>
     </Paper>
-    {s.host ? <Composer s={s} d={draft} working={working} onSent={(x, req) => {
+    {/* 되감기는 터미널처럼 입력칸 자리에서 고른다(입력칸에 쓰던 글은 그대로 남는다) */}
+    {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : <Composer s={s} d={draft} working={working} onSent={(x, req) => {
       sent.current = x; sending.current = req; setSentAt(x.at); setPending(x); stick.current = true
       req.then(ok => { if (ok) poke.current(); else { sent.current = null; setPending(null) } })
-    }} interrupt={interrupt} onRewind={() => setRewind(true)} /> : <NoInput s={s} />}
-    {s.host === 'web' && <RewindModal s={s} opened={rewind} onClose={() => setRewind(false)} onDone={rewound} />}
+    }} interrupt={interrupt} onRewind={() => setRewind(true)} />}
   </Stack>
 }
