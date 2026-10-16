@@ -9,7 +9,7 @@ import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
 import { ChatView, copyText } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
-import { IconPinFilled } from '@tabler/icons-react'
+import { IconCopy, IconPinFilled } from '@tabler/icons-react'
 import { KeyRec, areaKeys } from './Keys'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 
@@ -21,17 +21,26 @@ function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; 
   // 고른 세션은 목록에서 보이게 스크롤한다(새로고침·Ctrl+Tab·다른 데서 열기). 고른 순간에만 해서, 손으로 스크롤한 목록을 되돌리지 않는다
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (on) ref.current?.scrollIntoView({ block: 'nearest' }) }, [on])
-  return <UnstyledButton ref={ref} data-on={on} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%" className="hq-item"
+  return <UnstyledButton ref={ref} data-on={on} data-name={s.name} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%" className="hq-item"
     style={{ borderRadius: 8, background: on ? 'var(--mantine-color-indigo-light)' : undefined, boxShadow: on ? 'inset 0 0 0 1px var(--mantine-color-indigo-5)' : undefined }}>
     <Group gap={8} wrap="nowrap" align="flex-start">
       <Box w={8} h={8} mt={6} className={'hq-dot' + (s.state === 'working' || s.state === 'compact' ? ' busy' : '')} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} />
-      <Stack gap={0} style={{ minWidth: 0 }}>
+      <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
         <Text size="sm" fw={600} className="hq-wrap" lh={1.35} lineClamp={clamp ? 2 : undefined} title={clamp ? s.title : undefined}>{s.title}{memo && <IconPinFilled size={12} style={{ marginLeft: 4, verticalAlign: -1, color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}</Text>
         <Text size="xs" c="dimmed"><Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
           {s.host !== 'web' && <Badge size="xs" variant="outline" color="gray" ml={6}>{s.host === 'orca' ? 'Orca' : '외부'}</Badge>}</Text>
       </Stack>
+      <CopyName name={s.name} />
     </Group>
   </UnstyledButton>
+}
+// 줄 오른쪽의 세션 이름 복사(다른 Claude에게 이름을 알려 줄 일이 많아서). 줄을 고르지 않는다. 키보드로는 줄에서 ⌘C(Ctrl+C)
+// 줄이 button이라 안에 button을 넣지 못해 span으로 만든다
+function CopyName({ name }: { name: string }) {
+  return <span role="button" tabIndex={-1} className="hq-rowcopy" title={`세션 이름 복사: ${name}`} aria-label="세션 이름 복사"
+    onMouseDown={e => e.stopPropagation()} onClick={async e => { e.stopPropagation(); e.preventDefault(); if (await copyText(name)) toast(`세션 이름 ${name}을 복사했습니다.`) }}>
+    <IconCopy size={14} stroke={1.6} />
+  </span>
 }
 
 // 세션 제목: 누르면 그 자리에서 고친다(Enter·바깥 누르기 저장, Esc 취소). 저장하면 그 세션에 /rename을 넣어
@@ -195,7 +204,7 @@ function Favs({ S, sel }: { S: Snapshot; sel: string }) {
   }
   const rows = f.mode === 'free' ? Math.max(0, ...live.map(x => x.slot + 1), (hover ?? -1) + 1) : 0
   return <Paper withBorder p={6} h="100%" style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
-    data-area="favs" onKeyDown={areaKeys(true)}
+    data-area="favs" tabIndex={-1} onKeyDown={areaKeys(true)}
     onDragOver={e => { if (!dragging(e)) return; e.preventDefault(); setHover(target(e, dragSid)) }}
     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHover(null) }} onDrop={drop}>
     <Group justify="space-between" px={4} gap={4} wrap="wrap">
@@ -260,7 +269,7 @@ export function WorkView({ S }: { S: Snapshot }) {
   return <Split key={ui.layoutKey} orientation="horizontal" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
     <Panel id="list" defaultSize={290} minSize={180} maxSize={560}>
     <Paper withBorder p={6} h="100%" className={unfav ? 'hq-drop-over' : undefined} style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
-      data-area="list" onKeyDown={areaKeys(true)}
+      data-area="list" tabIndex={-1} onKeyDown={areaKeys(true)}
       onDragOver={e => { if (!dragging(e)) return; e.preventDefault(); setUnfav(true) }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setUnfav(false) }}
       onDrop={e => {

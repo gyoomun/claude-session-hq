@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ActionIcon, Group, Kbd, Text, Tooltip } from '@mantine/core'
 import { IconKeyboard } from '@tabler/icons-react'
 import { toast } from './store'
+import { copyText } from './Chat'
 import { AREAS, type Area, type Combo, setKeys, setMode, useUI } from './ui'
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform)
@@ -82,7 +83,8 @@ export function useAreaKeys() {
   }, [keys, settings])
 }
 
-// 영역 안에서: Esc는 대화 입력칸으로 돌아간다(Claude를 멈추지 않는다). 목록·즐겨찾기는 ↑↓·Home·End로 옮기고 Enter로 열고 입력칸으로 간다
+// 영역 안에서: Esc는 대화 입력칸으로 돌아간다(Claude를 멈추지 않는다). 목록·즐겨찾기는 ↑↓·Home·End로 옮기고 Enter로 열고 입력칸으로 가며, ⌘C는 세션 이름 복사.
+// 영역의 빈 곳을 누르면 영역 자체에 커서가 가고(tabIndex -1) 거기서 ↓를 누르면 첫 줄부터 다닌다
 export function areaKeys(list = false) {
   return (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.nativeEvent.isComposing) return
@@ -96,6 +98,7 @@ export function areaKeys(list = false) {
     else if (e.key === 'Home') go(0)
     else if (e.key === 'End') go(items.length - 1)
     else if (e.key === 'Enter' && i >= 0) { items[i].click(); setTimeout(() => focusArea('chat'), 80) }
+    else if ((e.metaKey || e.ctrlKey) && e.code === 'KeyC' && i >= 0 && items[i].dataset.name) { const n = items[i].dataset.name!; copyText(n).then(ok => ok && toast(`세션 이름 ${n}을 복사했습니다.`)) }
     else return
     e.preventDefault()
   }

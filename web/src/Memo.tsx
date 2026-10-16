@@ -94,7 +94,7 @@ function PinList({ s }: { s: Session }) {
 
 // 오른쪽 칸 하나: 이름 옆에 영역 단축키(녹화 버튼). 안의 스크롤 칸은 키보드로도 스크롤된다(↑↓)
 function Section({ area, title, sub, children }: { area: Area; title: string; sub?: string; children: React.ReactNode }) {
-  return <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area={area} onKeyDown={areaKeys()}>
+  return <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area={area} tabIndex={-1} onKeyDown={areaKeys()}>
     <Group p="8px 12px 2px" gap={6} wrap="nowrap"><Text fw={600} size="sm">{title}</Text>{sub && <Text size="xs" c="dimmed">{sub}</Text>}<Box ml="auto"><KeyRec area={area} /></Box></Group>
     <ScrollArea style={{ flex: 1, minHeight: 0 }} viewportProps={{ tabIndex: 0, className: 'hq-scrollfocus' }}><Box p="6px 12px 12px">{children}</Box></ScrollArea>
   </Paper>
@@ -111,7 +111,7 @@ export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
     <Panel id="memo" defaultSize="30" minSize={70}><Section area="memo" title="메모"><MemoList S={S} sid={s.sid} /></Section></Panel>
     <Separator className="hq-split" />
     <Panel id="btw" minSize={200}>
-      <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area="btw" onKeyDown={areaKeys()}>
+      <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area="btw" tabIndex={-1} onKeyDown={areaKeys()}>
         <Group p="8px 12px 0" gap={6} wrap="nowrap"><Text fw={600} size="sm">btw{asking ? ' …' : ''}</Text><Box ml="auto"><KeyRec area="btw" /></Box></Group>
         <BtwTab S={S} s={s} />
       </Paper>
