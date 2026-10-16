@@ -94,6 +94,7 @@ function scanLines(text, info) {
       if (d.requestedModel || d.message?.model) info.model = d.requestedModel || d.message.model;
       if (d.effort) info.effort = d.effort;
     }
+    if (d.type === 'user' && d.permissionMode) info.mode = d.permissionMode; // 권한 모드(보낸 말마다 남는다. 화면을 못 읽는 세션에서 쓴다)
     else if (d.type === 'user') {
       // 핀보드 플러그인은 바꿀 때마다 보드 전체를 도구 결과로 남긴다("Pinboard now: …"). 그 마지막 것이 지금 보드다
       for (const x of Array.isArray(d.message?.content) ? d.message.content : []) {
@@ -324,7 +325,9 @@ function scan() {
       pid: s.pid, sid: s.sessionId, name: s.name, title: t.custom || (tabTitle && tabTitle !== 'Claude Code' ? tabTitle : '') || t.title || s.name,
       cwd: s.cwd.replace(HOME, '~'), dir: s.cwd, state, since, startedAt: s.startedAt,
       act: state === 'working' ? (toolNow ? toolLine(h) : '생각 중') : state === 'compact' ? '대화 압축 중' : '',
-      msg, prompt: clip(t.lastPrompt, 400), model: t.model || '', effort: t.effort || '', task: db.assign[s.sessionId] || '',
+      msg, prompt: clip(t.lastPrompt, 400), model: t.model || '', effort: t.effort || '',
+      // 권한 모드와 뒤에서 도는 작업: 웹 세션은 Claude Code 화면 맨 아래 줄을 읽는다(모드를 바꾸면 바로 보인다), 아니면 대화 기록의 마지막 모드
+      mode: (where.tmux && footers.get(where.tmux)?.mode) || t.mode || '', bg: (where.tmux && footers.get(where.tmux)?.bg) || { shells: 0, agents: [] }, task: db.assign[s.sessionId] || '',
       pin: db.pins[s.sessionId] ? pinItems(db.pins[s.sessionId].text) : [],
       host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '',
     };
@@ -1042,6 +1045,34 @@ function webPane(pid) {
   if (!name || !s) throw new Error('웹에서 띄운 세션만 되감을 수 있습니다');
   return { name, s };
 }
+/* Claude Code 화면 맨 아래(입력칸 아래 줄들): 권한 모드('⏵⏵ bypass permissions on', '⏸ plan mode on' 등, 기본 모드면 안 나온다),
+   뒤에서 도는 셸('· 2 shells'), 뒤에서 도는 하위 에이전트('◯ general-purpose  설명  6s · ↓ 44k tokens' 줄들). 웹 세션마다 3초마다 읽는다 */
+const footers = new Map(); // tmux 이름 -> { mode, bg: { shells, agents: [설명] } }
+const MODES = { 'bypass permissions': 'bypassPermissions', 'accept edits': 'acceptEdits', 'plan mode': 'plan', 'auto mode': 'auto', 'manual mode': 'default' };
+function parseFooter(text) {
+  const lines = text.split('\n').map(l => l.trimEnd());
+  const border = lines.findLastIndex(l => /^─{20,}(?: .+ ─+)?$/.test(l.trim()));
+  if (border < 0) return null;
+  const below = lines.slice(border + 1);
+  const m = below.join('\n').match(/(?:⏵⏵|⏸)\s*([a-z ]+?) on\b/);
+  const shells = +(below.join(' ').match(/· (\d+) shells?\b/) || [])[1] || 0;
+  const agents = below.map(l => l.match(/^\s*◯\s+(.+?)(?:\s{2,}\d+[smh].*)?$/)).filter(Boolean).map(x => x[1].replace(/\s{2,}/g, ' · '));
+  // 에이전트 줄 목록이 접히면 '/tasks to see subagents'만 남는다(몇 개인지는 모른다)
+  if (!agents.length && /\/tasks to see subagents/.test(below.join(' '))) agents.push('하위 에이전트(목록은 터미널의 /tasks)');
+  // 기본 모드면 모드 글이 없다. 그런데 되감기·질문 창 등이 아래를 덮어도 없으니, 화면에서 못 찾으면 대화 기록의 모드를 쓴다('')
+  return { mode: m ? MODES[m[1]] || m[1] : '', bg: { shells, agents } };
+}
+let readingFooters = false;
+async function readFooters() {
+  if (readingFooters) return;
+  readingFooters = true;
+  try {
+    for (const w of db.web) {
+      const f = parseFooter(await tmux(['capture-pane', '-p', '-t', w.name]).catch(() => ''));
+      if (f) footers.set(w.name, f); else footers.delete(w.name);
+    }
+  } finally { readingFooters = false; }
+}
 // Claude Code 입력칸(화면 맨 아래 두 가로줄 사이)에 들어 있는 글. 흐린 글씨(빈 칸 안내·다음 말 추천)는 빈 것으로 본다
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
 async function inputBox(name) {
@@ -1187,6 +1218,7 @@ http.createServer((req, res) => {
 
 restoreWeb().finally(() => {
   scan(); setInterval(scan, SCAN_MS);
+  setInterval(readFooters, 3000);
   loadCalendar(); setInterval(loadCalendar, 10 * 60e3);
   loadInbox(); setInterval(loadInbox, 2 * 60e3);
   // 새 세션은 Claude가 세션 파일을 쓰는 순간 바로 훑어 목록에 띄운다(2초 간격을 기다리면 새 세션이 늦게 보인다)

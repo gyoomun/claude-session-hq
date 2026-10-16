@@ -21,6 +21,12 @@ const NewTab = (p: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...p} t
 // claude-opus-5-5 → Opus 5.5 (터미널의 표기와 같게). 모르는 모양이면 그대로
 const modelName = (id: string) => id.replace(/^claude-([a-z]+)-(\d+)(?:-(\d+))?(\[1m\])?.*$/, (_, f: string, a, b, m) => `${f[0].toUpperCase()}${f.slice(1)} ${a}${b ? '.' + b : ''}${m ? ' (1M)' : ''}`)
 
+// 권한 모드: 평소 쓰는 우회는 흐리게, 계획 모드(Claude가 파일을 안 고친다)·매번 확인은 눈에 띄게
+const MODE: Record<string, [string, string]> = { bypassPermissions: ['권한 우회', 'dimmed'], acceptEdits: ['수정 자동 허용', 'yellow.5'], plan: ['계획 모드', 'orange.5'], default: ['매번 확인', 'yellow.5'], auto: ['자동 모드', 'dimmed'] }
+// 뒤에서 도는 작업(셸·하위 에이전트). 답을 마쳤어도 아직 돌고 있으면 여기에 남는다(웹 세션만 안다)
+export const bgCount = (s: Session) => (s.bg?.shells || 0) + (s.bg?.agents.length || 0)
+export const bgText = (s: Session) => ['뒤에서 도는 작업', s.bg.shells ? `셸 ${s.bg.shells}개` : '', ...s.bg.agents.map(a => '에이전트: ' + a)].filter(Boolean).join('\n')
+
 export async function copyText(t: string) {
   try { await navigator.clipboard.writeText(t); return true } catch { /* 아래로 */ }
   const el = Object.assign(document.createElement('textarea'), { value: t }); el.style.position = 'fixed'; el.style.opacity = '0'
@@ -240,6 +246,8 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
           <Text size="xs" c="dimmed" truncate><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
         </Group>
         <Group gap={6} wrap="nowrap">
+          {bgCount(s) > 0 && <Text size="xs" c="teal.4" title={bgText(s)} style={{ whiteSpace: 'nowrap' }}>뒤 작업 {[s.bg.shells && `셸 ${s.bg.shells}`, s.bg.agents.length && `에이전트 ${s.bg.agents.length}`].filter(Boolean).join(' · ')}</Text>}
+          {s.mode && MODE[s.mode] && <Text size="xs" c={MODE[s.mode][1]} title={`권한 모드: ${s.mode}`} style={{ whiteSpace: 'nowrap' }}>{MODE[s.mode][0]}</Text>}
           {s.model && <Text size="xs" c="dimmed" mr={4} title={`모델 ${s.model} · effort ${s.effort || '?'} (마지막 답 기준)`} style={{ whiteSpace: 'nowrap' }}>{modelName(s.model)}{s.effort && ` · ${s.effort}`}</Text>}
           {working && <Button size="xs" variant="default" onClick={interrupt}>중단 (Esc)</Button>}
           {!working && s.host === 'web' && <Button size="xs" variant="subtle" color="gray" onClick={onRewind} title="Claude Code의 되감기(Esc 두 번)">되감기 (Esc Esc)</Button>}

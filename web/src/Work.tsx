@@ -7,7 +7,7 @@ import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
-import { ChatView, copyName, useFlash } from './Chat'
+import { ChatView, bgCount, bgText, copyName, useFlash } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
 import { IconCheck, IconCopy, IconPinFilled } from '@tabler/icons-react'
 import { KeyRec, areaKeys } from './Keys'
@@ -28,6 +28,7 @@ function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; 
       <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
         <Text size="sm" fw={600} className="hq-wrap" lh={1.35} lineClamp={clamp ? 2 : undefined} title={clamp ? s.title : undefined}>{s.title}{memo && <IconPinFilled size={12} style={{ marginLeft: 4, verticalAlign: -1, color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}</Text>
         <Text size="xs" c="dimmed"><Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
+          {bgCount(s) > 0 && <Text span c="teal.4" title={bgText(s)}> · 뒤 작업 {bgCount(s)}</Text>}
           {s.host !== 'web' && <Badge size="xs" variant="outline" color="gray" ml={6}>{s.host === 'orca' ? 'Orca' : '외부'}</Badge>}</Text>
       </Stack>
       <CopyName name={s.name} />
@@ -301,7 +302,7 @@ export function WorkView({ S }: { S: Snapshot }) {
   const [opened] = useState(() => new Map<string, number>())
   if (ui.pendingSel && !opened.has(ui.pendingSel)) opened.set(ui.pendingSel, Date.now())
   const ghost: Session | null = ui.pendingSel ? { pid: 0, sid: '', name: '', title: '', cwd: ui.pendingCwd, dir: '', state: ui.pendingWorking ? 'working' : 'myturn',
-    since: opened.get(ui.pendingSel)!, startedAt: 0, act: '', msg: '', prompt: '', task: ui.pendingTask, host: 'web', tmux: ui.pendingSel, pin: [], model: '', effort: '' } : null
+    since: opened.get(ui.pendingSel)!, startedAt: 0, act: '', msg: '', prompt: '', task: ui.pendingTask, host: 'web', tmux: ui.pendingSel, pin: [], model: '', effort: '', mode: '', bg: { shells: 0, agents: [] } } : null
   // Ctrl+Tab / Ctrl+Shift+Tab: 지금 세션이 즐겨찾기에 있으면 즐겨찾기 안에서, 아니면 목록 안에서 다음·이전으로(끝에서 처음으로 돈다).
   // 크롬은 일반 탭에서 이 키를 탭 전환에 먼저 쓴다. '앱으로 설치'한 창에서는 브라우저가 키를 가져가지 않아 여기로 온다
   const order = useRef({ favs, normal: [] as string[], sel: '' })

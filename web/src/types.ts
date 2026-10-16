@@ -20,6 +20,8 @@ export interface Session {
   pin: PinItem[] // Claude 핀보드(대화 기록의 마지막 상태)
   model: string // 마지막 답을 만든 모델 ID(claude-opus-5-5 등). 아직 답이 없으면 ''
   effort: string // 그 답의 effort(low·medium·high·xhigh·max)
+  mode: string // 권한 모드(bypassPermissions·acceptEdits·plan·default·auto). 모르면 ''
+  bg: { shells: number; agents: string[] } // 뒤에서 도는 셸 수와 하위 에이전트(설명). 웹 세션만 안다
 }
 
 export interface PinItem { id: string; mark: ' ' | '>' | 'x' | '?'; text: string }
