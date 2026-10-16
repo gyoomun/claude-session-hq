@@ -724,6 +724,21 @@ const routes = {
     })();
     return list.length;
   },
+  // 세션 이름 바꾸기: 그 세션에 Claude Code의 /rename을 쳐 넣는다. 세션 이름(상태줄, 다른 Claude가 부르는 이름)과
+  // 대화 제목이 함께 바뀌고, 화면 제목은 대화 기록의 custom-title을 따라 바뀐다
+  'session/rename': async b => {
+    const name = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!name) throw new Error('이름을 적어 주세요');
+    const where = handles.get(+b.pid) || {};
+    if (where.tmux) {
+      if (await rewindScreen(where.tmux)) throw new Error('Claude 쪽에 되감기 창이 열려 있습니다');
+      if (await inputBox(where.tmux)) throw new Error('Claude 입력칸에 글이 남아 있어 이름을 바꿀 수 없습니다. 터미널 화면에서 비운 뒤 다시 하세요');
+      await tmux(['send-keys', '-t', where.tmux, '-l', '--', '/rename ' + name]);
+      await sleep(300);
+      await tmux(['send-keys', '-t', where.tmux, 'Enter']);
+    } else if (where.orca) await orca(b.pid, ['terminal', 'send', '--text', '/rename ' + name, '--enter']);
+    else throw new Error('다른 터미널에서 직접 띄운 세션은 여기서 이름을 바꿀 수 없습니다');
+  },
   'session/close': async b => {
     const w = db.web.find(x => x.name === b.name);
     if (!w) throw new Error('웹에서 연 세션만 여기서 닫을 수 있습니다');

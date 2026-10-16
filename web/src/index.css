@@ -180,3 +180,10 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-toastpick button.on { border: 0; background: var(--mantine-color-indigo-5); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mantine-color-indigo-5) 35%, transparent); }
 /* 새 세션을 여는 동안의 화면(Work.tsx WorkSkeleton): 진짜 화면과 똑같이 보이고 손만 못 댄다(inert) */
 .hq-ghost { height: 100%; }
+/* 세션 머리의 제목: 눌러서 그 자리에서 고친다. 입력칸은 제목과 같은 글자·높이라 바뀌어도 움찔하지 않는다 */
+.hq-title { display: block; border-radius: 4px; }
+.hq-title:hover { box-shadow: 0 1px 0 var(--mantine-color-dimmed); cursor: text; }
+.hq-title-edit { display: block; width: 100%; font: inherit; font-size: var(--mantine-font-size-lg); font-weight: 600; line-height: var(--mantine-line-height-lg); color: var(--mantine-color-text);
+  background: transparent; border: 0; outline: 0; padding: 0; margin: 0; box-shadow: 0 1px 0 var(--mantine-color-indigo-4); }
+.hq-name { font-family: var(--mantine-font-family-monospace); font-size: inherit; color: var(--mantine-color-dimmed); cursor: copy; }
+.hq-name:hover { color: var(--mantine-color-text); }

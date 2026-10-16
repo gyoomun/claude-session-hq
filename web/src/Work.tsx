@@ -7,7 +7,7 @@ import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
-import { ChatView } from './Chat'
+import { ChatView, copyText } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
 import { IconPinFilled } from '@tabler/icons-react'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
@@ -33,14 +33,43 @@ function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; 
   </UnstyledButton>
 }
 
+// 세션 제목: 누르면 그 자리에서 고친다(Enter·바깥 누르기 저장, Esc 취소). 저장하면 그 세션에 /rename을 넣어
+// Claude Code 세션 이름(상태줄·다른 Claude가 부르는 이름)과 대화 제목이 함께 바뀐다. 반영될 때까지 새 이름을 먼저 보인다
+function Title({ s }: { s: Session }) {
+  const [edit, setEdit] = useState<string | null>(null)
+  const [want, setWant] = useState('')
+  useEffect(() => { if (want && s.title === want) setWant('') }, [s.title, want])
+  useEffect(() => { setEdit(null); setWant('') }, [s.sid])
+  const save = async () => {
+    const v = (edit ?? '').replace(/\s+/g, ' ').trim()
+    setEdit(null)
+    if (!v || v === s.title) return
+    setWant(v)
+    if (!await api('session/rename', { pid: s.pid, name: v })) setWant('')
+    else setTimeout(() => setWant(x => x === v ? '' : x), 8000)
+  }
+  if (edit !== null) return <input className="hq-title-edit" value={edit} autoFocus maxLength={60} aria-label="세션 이름"
+    onFocus={e => e.currentTarget.select()} onChange={e => setEdit(e.currentTarget.value)} onBlur={save}
+    onKeyDown={e => {
+      if (e.nativeEvent.isComposing) return
+      if (e.key === 'Enter') { e.preventDefault(); save() }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setEdit(null) } // 대화 화면의 Esc(중단·되감기)로 가지 않게
+    }} />
+  return <UnstyledButton className="hq-title" title="눌러서 이름 바꾸기" onClick={() => setEdit(want || s.title)}>
+    <Text component="div" fw={600} size="lg" className="hq-wrap">{want || s.title}</Text>
+  </UnstyledButton>
+}
+
 function Head({ S, s }: { S: Snapshot; s: Session }) {
   const [confirm, setConfirm] = useState(false)
   return <Paper withBorder p="10px 12px">
     <Group gap="sm" wrap="wrap">
       <Stack gap={0} style={{ minWidth: 0, flex: '1 1 260px' }}>
         {/* 제목은 Claude가 정해서 아직 모른다. 같은 글줄 안에 반짝이를 넣어 높이를 똑같이 맞춘다 */}
-        <Text component="div" fw={600} size="lg" className="hq-wrap">{s.sid ? s.title : <Skeleton h="0.9em" w="38%" display="inline-block" style={{ verticalAlign: 'middle' }} />}</Text>
+        {s.sid ? <Title s={s} /> : <Text component="div" fw={600} size="lg"><Skeleton h="0.9em" w="38%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>}
         <Text size="xs" c="dimmed">{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
+          {/* 세션 이름: 상태줄에 보이고 다른 Claude가 이 세션을 부르는 이름. 제목과 다를 때만(이름을 안 바꾼 세션) 보이고 누르면 복사한다 */}
+          {s.sid && s.name && s.name !== s.title && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyText(s.name)) toast(`세션 이름 ${s.name}을 복사했습니다.`) }}> · @{s.name}</UnstyledButton>}
           {s.act && <Text span ff="monospace" c="teal.5"> · {s.act}</Text>}</Text>
       </Stack>
       <Group gap={6}>
