@@ -26,8 +26,11 @@ async function poll() {
     if (!offline) { offline = true; emit() }
   }
 }
-poll()
-setInterval(poll, 2000)
+// 평소엔 2초마다, 새 세션을 연 직후처럼 곧 바뀔 게 있을 때(burst)는 잠깐 0.3초마다 읽는다
+let fastUntil = 0, timer = 0
+const tick = async () => { await poll(); timer = window.setTimeout(tick, Date.now() < fastUntil ? 300 : 2000) }
+tick()
+export function burst(ms = 8000) { fastUntil = Date.now() + ms; window.clearTimeout(timer); tick() }
 
 export const useSnapshot = () => useSyncExternalStore(subscribe, () => snap)
 export const useOffline = () => useSyncExternalStore(subscribe, () => offline)

@@ -1,13 +1,13 @@
 // 작업 보기: 왼쪽 세션 목록(업무별로 묶음) | 즐겨찾기 | 고른 세션(머리 + 대화) | 핀·메모·btw
 import { useEffect, useRef, useState } from 'react'
-import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, Stack, Text, UnstyledButton } from '@mantine/core'
+import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast } from './store'
 import { pick, setUI, useUI } from './ui'
 import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
-import { ChatView } from './Chat'
+import { ChatSkeleton, ChatView } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
 import { IconPinFilled } from '@tabler/icons-react'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
@@ -81,6 +81,25 @@ function ClosedList({ S }: { S: Snapshot }) {
       </Group>
     </>}
   </Stack>
+}
+
+// 새 세션을 여는 동안(Claude가 뜨는 데 2~3초): 세션 화면과 같은 배치를 미리 그리고 안만 반짝인다
+const ItemSkeleton = () => <Group gap={8} wrap="nowrap" align="flex-start" p="7px 8px">
+  <Skeleton w={8} h={8} mt={6} radius={2} /><Stack gap={6} style={{ flex: 1 }}><Skeleton h={13} w="80%" /><Skeleton h={10} w="45%" /></Stack>
+</Group>
+function WorkSkeleton() {
+  const box = (h: number | string, rows = 2) => <Paper withBorder p="sm" h={h}><Stack gap={8}><Skeleton h={12} w="35%" />{Array.from({ length: rows }, (_, i) => <Skeleton key={i} h={10} w={`${80 - i * 15}%`} />)}</Stack></Paper>
+  return <Box className="hq-fade" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 420px)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
+    <Paper withBorder p="10px 12px" style={{ gridColumn: '1 / -1' }}>
+      <Group justify="space-between" wrap="nowrap"><Stack gap={8} style={{ flex: 1 }}><Skeleton h={18} w="32%" /><Skeleton h={10} w="22%" /></Stack>
+        <Group gap={6}>{[90, 54, 40, 76, 70].map((x, i) => <Skeleton key={i} h={26} w={x} radius="sm" />)}</Group></Group>
+    </Paper>
+    <Stack gap={8} style={{ minHeight: 0 }}>
+      <Paper withBorder p="md" style={{ flex: 1 }}><Box maw={980} mx="auto"><ChatSkeleton /></Box></Paper>
+      <Paper withBorder p="sm"><Stack gap={8}><Skeleton h={52} radius="sm" /><Group justify="space-between"><Skeleton h={10} w={220} /><Skeleton h={26} w={64} radius="sm" /></Group></Stack></Paper>
+    </Stack>
+    <Stack gap={10} style={{ minHeight: 0 }}>{box('25%')}{box('30%', 1)}<Box style={{ flex: 1 }}>{box('100%', 3)}</Box></Stack>
+  </Box>
 }
 
 // 즐겨찾기 칸. 비어 있어도 칸은 늘 있다(끌어다 놓을 자리).
@@ -204,8 +223,9 @@ export function WorkView({ S }: { S: Snapshot }) {
             <UnstyledButton px={8} onClick={g.id ? () => setUI({ openTask: g.id }) : undefined} style={{ cursor: g.id ? 'pointer' : 'default' }}>
               <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{g.name}</Text><Text size="xs" c="dimmed">{g.ss.length}</Text></Group>
             </UnstyledButton>
+            {ui.pendingSel && ui.pendingTask === g.id && <ItemSkeleton />}
             {g.ss.map(x => <Item key={x.pid} s={x} on={x.sid === ui.sel} memo={hasMemo(S, x.sid)} />)}
-            {!g.ss.length && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
+            {!g.ss.length && !(ui.pendingSel && ui.pendingTask === g.id) && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
           </Stack>)}
           <ClosedList S={S} />
         </Stack>
@@ -217,10 +237,10 @@ export function WorkView({ S }: { S: Snapshot }) {
     <Separator className="hq-split-v" />
     <Panel id="main" minSize={480}>
     {/* 나머지: 2행 격자. 위: 세션 머리(두 칸에 걸침) / 아래: 대화 | 핀·메모·btw. 오른쪽 칸이 대화창과 같은 높이에서 시작한다 */}
-    {!s ? <Paper withBorder p="xl" h="100%" style={{ borderStyle: 'dashed' }}>
+    {!s && ui.pendingSel ? <WorkSkeleton /> : !s ? <Paper withBorder p="xl" h="100%" style={{ borderStyle: 'dashed' }}>
       <Stack align="flex-start">
-        <Text>{ui.pendingSel ? '세션을 여는 중입니다…' : '왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.'}</Text>
-        {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
+        <Text>왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.</Text>
+        <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>
       </Stack>
     </Paper> : <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 420px)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
       <Box style={{ gridColumn: '1 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>

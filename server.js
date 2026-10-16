@@ -150,6 +150,8 @@ function stateOf(s, h, now) {
 /* 세션이 어디서 돌고 있나: claude 프로세스의 환경 변수로 안다. 웹 세션은 HQ_TMUX, Orca는 ORCA_TERMINAL_HANDLE. 프로세스마다 한 번만 읽는다. */
 const handles = new Map(); // pid -> { tmux, orca }
 const argsByPid = new Map(); // pid -> 다시 띄울 때 쓸 원래 옵션(--dangerously-skip-permissions 등)
+let soonTimer = null;
+const scanSoon = () => { clearTimeout(soonTimer); soonTimer = setTimeout(scan, 60); };
 function loadHandles(pids) {
   const need = pids.filter(p => !handles.has(p));
   if (!need.length) return;
@@ -168,6 +170,7 @@ function loadHandles(pids) {
       // tmux 안에서 돈다면 웹 세션이다. Orca 변수가 남아 있어도 무시한다
       handles.set(+m[1], t ? { tmux: t[1] } : o ? { orca: o[1] } : {});
     }
+    scanSoon(); // 어디서 도는지(웹·Orca) 알았으니 다음 훑기(2초)를 기다리지 않는다
   });
 }
 
@@ -982,4 +985,8 @@ http.createServer((req, res) => {
 // 모든 주소에서 받되, 사내망 접속이 꺼져 있으면 이 맥 밖의 요청은 위에서 막는다
 }).listen(PORT, () => console.log(`claude-session-hq: http://127.0.0.1:${PORT}`));
 
-restoreWeb().finally(() => { scan(); setInterval(scan, SCAN_MS); });
+restoreWeb().finally(() => {
+  scan(); setInterval(scan, SCAN_MS);
+  // 새 세션은 Claude가 세션 파일을 쓰는 순간 바로 훑어 목록에 띄운다(2초 간격을 기다리면 새 세션이 늦게 보인다)
+  try { fs.watch(SESS_DIR, scanSoon); } catch (e) { console.error('세션 폴더 감시 실패:', e.message); }
+});

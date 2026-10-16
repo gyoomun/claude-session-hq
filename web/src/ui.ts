@@ -1,5 +1,6 @@
 // 화면 상태(보기, 고른 세션, 열린 서랍·창). 보기는 주소 끝(#work 등)에 남겨 브라우저·마우스 뒤로가기로 돌아간다
 import { useSyncExternalStore } from 'react'
+import { burst } from './store'
 
 export type Mode = 'work' | 'task' | 'all' | 'memo'
 const MODES: Mode[] = ['work', 'task', 'all', 'memo']
@@ -10,7 +11,8 @@ const hashMode = () => (MODES as string[]).includes(location.hash.slice(1)) ? lo
 interface UI {
   mode: Mode
   sel: string // 작업 보기에서 고른 세션(sid)
-  pendingSel: string // 방금 연 웹 세션(tmux 이름). 목록에 나타나면 고른다
+  pendingSel: string // 방금 연 웹 세션(tmux 이름). 목록에 나타나면 고른다. 그때까지 작업 보기는 뼈대(스켈레톤)를 보인다
+  pendingTask: string // 그 세션이 들어갈 업무(목록의 뼈대 자리). ''는 미배치
   openTask: string | null
   openSess: string | null
   newFor: string | null // 새 세션 창: null이면 닫힘, ''이면 업무 없이, 업무 id면 그 업무로
@@ -24,7 +26,7 @@ interface UI {
   layoutKey: number // 칸 경계를 기본값으로 되돌릴 때 올린다(경계 묶음은 처음 그릴 때만 저장값을 읽어서, 다시 그리게 한다)
 }
 let ui: UI = {
-  mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '',
+  mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '', pendingTask: '',
   openTask: null, openSess: null, newFor: null, addTask: false, brief: false,
   settings: false, settingsPage: 'view', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', layoutKey: 0, motion: get('hq-motion') === 'on' ? 'on' : 'system',
 }
@@ -49,8 +51,9 @@ export function pick(sid: string) {
   setUI({ sel: sid, openTask: null, openSess: null })
   setMode('work')
 }
-export function pickNew(tmux: string) {
-  setUI({ pendingSel: tmux, sel: '', openTask: null, openSess: null })
+export function pickNew(tmux: string, task = '') {
+  setUI({ pendingSel: tmux, pendingTask: task, sel: '', openTask: null, openSess: null })
+  burst()
   setMode('work')
 }
 export function setView(v: UI['view']) { set('hq-view', v); setUI({ view: v }) }

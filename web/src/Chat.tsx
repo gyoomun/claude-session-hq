@@ -3,7 +3,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Box, Button, CloseButton, Group, Kbd, Loader, Modal, Paper, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
+import { Box, Button, CloseButton, Group, Kbd, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
 import { pickNew } from './ui'
 import type { Session } from './types'
@@ -246,6 +246,15 @@ function grouped(items: Item[]) {
   return out
 }
 
+// 대화를 불러오는 동안의 뼈대: 말풍선이 놓일 자리를 미리 그리고 안만 반짝인다
+export const ChatSkeleton = () => <Stack gap={14}>
+  <Skeleton h={34} w="42%" radius="md" style={{ alignSelf: 'flex-end' }} />
+  <Stack gap={8}><Skeleton h={12} w="88%" /><Skeleton h={12} w="76%" /><Skeleton h={12} w="54%" /></Stack>
+  <Skeleton h={14} w="30%" />
+  <Skeleton h={34} w="34%" radius="md" style={{ alignSelf: 'flex-end' }} />
+  <Stack gap={8}><Skeleton h={12} w="82%" /><Skeleton h={12} w="64%" /></Stack>
+</Stack>
+
 // 메시지 목록. 입력칸에 글을 칠 때나 2초마다 상태가 바뀔 때는 다시 그리지 않는다(items·detail이 바뀔 때만).
 // 터미널처럼 최근 것만 그리고(처음 200개), 더 보려면 위에서 '이전 대화 더 보기'를 누른다
 const PAGE = 200
@@ -351,8 +360,9 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
         if (v) stick.current = v.scrollHeight - (y + v.clientHeight) < 80
       }}>
         <Stack gap={10} p="md" maw={980} mx="auto">
-          {missing && <Text c="dimmed">이 세션의 대화 기록을 찾지 못했습니다.</Text>}
-          {!missing && !items.length && <Group gap={8}><Loader size="xs" /><Text c="dimmed" size="sm">대화를 불러오는 중입니다…</Text></Group>}
+          {/* 기록 파일은 첫 말을 보낸 뒤에야 생긴다. 그 전엔 빈 새 대화다 */}
+          {missing && !pending && <Text c="dimmed" size="sm" ta="center" mt="xl">새 대화입니다. 아래에 첫 말을 적으면 시작합니다.</Text>}
+          {!missing && !items.length && !pending && <ChatSkeleton />}
           <Messages items={shown} detail={detail} />
           {pending && <Box className="hq-say me hq-pending"><Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pending.text}</Text></Box>}
           {(s.state === 'working' || s.state === 'compact') && <Group gap={8}><Loader size="xs" color={COLOR[s.state]} /><Text size="sm" c={`${COLOR[s.state]}.4`} ff="monospace">{s.act || '생각 중'}</Text></Group>}
