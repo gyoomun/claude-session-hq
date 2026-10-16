@@ -350,7 +350,7 @@ function scan() {
     pushFeed({ at: now, sid, title: was?.title || sid, task: db.assign[sid] || '', from: st, to: 'closed' });
     // 최근 닫힌 세션: Orca가 꺼지는 등으로 한꺼번에 사라져도 웹에서 같은 명령으로 다시 열 수 있게 남긴다
     if (was && !restarting.has(sid)) {
-      db.closed = [{ sid, title: was.title, dir: was.dir, cwd: was.cwd, args: argsByPid.get(was.pid) || [], host: was.host, state: was.state, closedAt: now },
+      db.closed = [{ sid, title: was.title, dir: was.dir, cwd: was.cwd, args: argsByPid.get(was.pid) || [], host: was.host, state: was.state, closedAt: now, quiet: userClosed.delete(sid) },
         ...db.closed.filter(c => c.sid !== sid)].slice(0, 60);
       dirty = true;
     }
@@ -684,6 +684,7 @@ function readAccount() {
 }
 
 let migrating = false;
+const userClosed = new Set(); // 사용자가 '세션 종료'로 닫은 대화: 기록은 남기되 경고(quiet)는 띄우지 않는다
 const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '최근 닫힌 세션'에 넣지 않는다
 const keepSince = new Map(); // 다시 띄운 세션의 sid -> 끄기 전 { state, since }
 let notice = null; // 화면에 한 번 띄울 알림 { text, color, at } (모두 재시작이 끝났을 때 등)
@@ -825,6 +826,7 @@ const routes = {
     if (names.length === 1) focusReq = { name: names[0], at: Date.now() };
     return names;
   },
+  'session/quiet-closed': b => { for (const c of db.closed) if ((b.sids || []).includes(c.sid)) c.quiet = true; },
   'session/forget-closed': b => { db.closed = b.sid ? db.closed.filter(x => x.sid !== b.sid) : []; },
   'session/resume': async b => {
     // 닫힌 대화를 웹에서 다시 연다. 보통 웹 안의 Claude가 대화 기록을 뒤져 찾은 뒤 이 API를 부른다(skills/hq-open)
@@ -955,6 +957,7 @@ const routes = {
   'session/close': async b => {
     const w = db.web.find(x => x.name === b.name);
     if (!w) throw new Error('웹에서 연 세션만 여기서 닫을 수 있습니다');
+    if (w.sid) userClosed.add(w.sid);
     await tmux(['kill-session', '-t', w.name]).catch(() => {});
     db.web = db.web.filter(x => x !== w);
   },

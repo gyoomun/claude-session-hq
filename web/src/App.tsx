@@ -55,7 +55,7 @@ function LanAddress({ S, slim }: { S: Snapshot; slim: boolean }) {
 function Notices({ S }: { S: Snapshot }) {
   const orca = S.sessions.filter(s => s.host === 'orca')
   const movable = orca.filter(s => s.state !== 'working' && s.state !== 'compact' && s.state !== 'approval').length
-  const recent = S.closed.filter(c => Date.now() - c.closedAt < 30 * 60e3)
+  const recent = S.closed.filter(c => !c.quiet && Date.now() - c.closedAt < 30 * 60e3)
   const [busy, setBusy] = useState(false)
   // 화면을 연 뒤에 새 빌드가 나왔으면 새로고침하라고 알린다(데이터는 2초마다 오지만 화면 코드는 새로고침해야 바뀐다)
   const build = useRef(S.build)
@@ -81,7 +81,7 @@ function Notices({ S }: { S: Snapshot }) {
             setBusy(true); const r = await api<string[]>('session/reopen', { sids: recent.map(c => c.sid) }); setBusy(false)
             if (r) toast(`${r.result.length}개를 웹에서 다시 열었습니다.`)
           }}>모두 웹에서 다시 열기</Button>
-          <Button size="xs" variant="subtle" color="gray" onClick={() => recent.forEach(c => api('session/forget-closed', { sid: c.sid }))}>무시</Button>
+          <Button size="xs" variant="subtle" color="gray" onClick={() => api('session/quiet-closed', { sids: recent.map(c => c.sid) })}>무시</Button>
         </Group>
       </Group>
     </Alert>}

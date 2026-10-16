@@ -70,7 +70,7 @@ export interface Snapshot {
   build: number // 서버가 내주는 화면의 빌드 시각
 }
 
-export interface Closed { sid: string; title: string; dir: string; cwd: string; args: string[]; host: string; closedAt: number }
+export interface Closed { sid: string; title: string; dir: string; cwd: string; args: string[]; host: string; closedAt: number; quiet?: boolean }
 
 export interface BtwItem { id: string; q: string; a: string; state: 'asking' | 'done' | 'error'; at: number; doneAt?: number }
 
