@@ -9,7 +9,8 @@ import { WorkView } from './Work'
 import { BoardView } from './Board'
 import { MemoView } from './Memo'
 import { SessionDrawer, TaskDrawer } from './Drawers'
-import { AccessModal, AddTaskModal, BriefModal, NewSessionModal, SettingsModal } from './Modals'
+import { AddTaskModal, BriefModal, NewSessionModal } from './Modals'
+import { SettingsWindow } from './Settings'
 import { IconSettings } from '@tabler/icons-react'
 
 const Logo = () => <svg width="34" height="34" viewBox="0 0 8 8" shapeRendering="crispEdges" aria-hidden="true">
@@ -31,7 +32,7 @@ function LanAddress({ S }: { S: Snapshot }) {
       notifications.show({ title: '맥의 주소가 바뀌었습니다', message: `사내망에서는 이제 ${primary} 로 들어옵니다`, color: 'orange', autoClose: 15000 })
     prev.current = primary
   }, [primary, a.lan])
-  if (!a.lan) return <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ access: true })}>사내망 접속 꺼짐</Button>
+  if (!a.lan) return <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ settings: true, settingsPage: 'access' })}>사내망 접속 꺼짐</Button>
   return <Group gap={6} wrap="nowrap">
     <Text size="xs" c="dimmed">사내망 주소</Text>
     <Code fz="sm">{primary || '네트워크 없음'}</Code>
@@ -174,7 +175,6 @@ export function App() {
     <NewSessionModal S={S} />
     <AddTaskModal />
     <BriefModal S={S} />
-    <AccessModal S={S} />
-    <SettingsModal S={S} />
+    <SettingsWindow S={S} />
   </Box>
 }

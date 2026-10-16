@@ -138,3 +138,22 @@ body { background: var(--mantine-color-body); overflow: hidden; }
   :root:not([data-motion="on"]) .hq-in, :root:not([data-motion="on"]) .hq-fade, :root:not([data-motion="on"]) .hq-pop, :root:not([data-motion="on"]) .hq-dot.busy { animation: none; }
   :root:not([data-motion="on"]) .hq-item, :root:not([data-motion="on"]) .hq-dot, :root:not([data-motion="on"]) .hq-slide, :root:not([data-motion="on"]) .hq-room, :root:not([data-motion="on"]) .hq-rewind-item { transition: none; }
 }
+
+/* 환경설정 창(Settings.tsx): 옮기고 크기를 바꾸는 창. 뒤는 흐리게 막는다 */
+.hq-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, .45); animation: hq-fade .15s ease-out; }
+.hq-window { position: fixed; width: min(940px, calc(100vw - 32px)); height: min(640px, calc(100vh - 32px)); min-width: 620px; min-height: 420px;
+  max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); resize: both; overflow: hidden; display: flex; flex-direction: column;
+  background: var(--mantine-color-body); border: 1px solid var(--mantine-color-default-border); border-radius: 10px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .55); animation: hq-pop .16s ease-out; }
+.hq-window-title { flex: none; padding: 8px 10px 8px 16px; cursor: move; user-select: none; border-bottom: 1px solid var(--mantine-color-default-border); background: var(--mantine-color-default); }
+.hq-window-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); }
+.hq-window-foot { flex: none; padding: 10px 14px; border-top: 1px solid var(--mantine-color-default-border); }
+.hq-set-nav { padding: 12px 10px; border-right: 1px solid var(--mantine-color-default-border); overflow-y: auto; }
+.hq-set-cat { padding: 6px 8px; border-radius: 6px; transition: background-color .12s ease; }
+.hq-set-cat:hover { background: var(--mantine-color-default-hover); }
+.hq-set-cat.on { background: var(--mantine-color-indigo-light); box-shadow: inset 2px 0 0 var(--mantine-color-indigo-5); }
+.hq-set-page { padding: 14px 20px; overflow-y: auto; }
+.hq-set-rule { flex: 1; height: 1px; background: var(--mantine-color-default-border); }
+.hq-set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 8px 10px; border-radius: 6px; border-left: 2px solid transparent; transition: opacity .12s ease; }
+.hq-set-row:hover { background: var(--mantine-color-default-hover); }
+.hq-set-row.changed { border-left-color: var(--mantine-color-indigo-4); }

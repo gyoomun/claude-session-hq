@@ -328,7 +328,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   }
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.isComposing || document.querySelector('.mantine-Modal-content, .mantine-Drawer-content')) return
+      if (e.key !== 'Escape' || e.isComposing || document.querySelector('.mantine-Modal-content, .mantine-Drawer-content, .hq-window')) return
       esc.current()
     }
     addEventListener('keydown', on)

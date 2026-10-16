@@ -1,8 +1,8 @@
-// 가운데 창들: 새 세션, 업무 추가, 상황 브리핑, 접속 관리, 환경설정
+// 가운데 창들: 새 세션, 업무 추가, 상황 브리핑. 접속 관리는 환경설정 창(Settings.tsx)의 '접속'
 import { useEffect, useState } from 'react'
-import { Autocomplete, Badge, Button, Code, Group, List, Modal, NativeSelect, Paper, SegmentedControl, Stack, Switch, Text, TextInput, Textarea } from '@mantine/core'
+import { Autocomplete, Badge, Button, Code, Group, List, Modal, NativeSelect, Paper, Stack, Text, TextInput, Textarea } from '@mantine/core'
 import { api, toast } from './store'
-import { lastCwd, pickNew, rememberCwd, resetLayout, setDetail, setMode, setMotion, setUI, setView, useUI } from './ui'
+import { lastCwd, pickNew, rememberCwd, setMode, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
 import { Since, bySt, fmt, lastOf, overdue, stale, tname, waiting } from './util'
 
@@ -87,15 +87,14 @@ export function BriefModal({ S }: { S: Snapshot }) {
   </Modal>
 }
 
-export function AccessModal({ S }: { S: Snapshot }) {
-  const ui = useUI()
+// 사내망 접속·인증 메일·로그인한 기기. 환경설정 창의 '접속'에 들어간다
+export function AccessPanel({ S }: { S: Snapshot }) {
   const a = S.access
   const [renaming, setRenaming] = useState<string | null>(null)
   const [label, setLabel] = useState('')
   const [confirmAll, setConfirmAll] = useState(false)
   const local = a.me === 'local', others = a.logins.filter(l => l.id !== a.me)
-  return <Modal opened={ui.access} onClose={() => setUI({ access: false })} title="접속 관리" size="lg">
-    <Stack gap="sm">
+  return <Stack gap="sm">
       <Paper withBorder p="sm"><Stack gap={6}>
         <Group><Text fw={600}>사내망 접속</Text><Badge color={a.lan ? 'teal' : 'gray'} variant="light">{a.lan ? '켜짐' : '꺼짐'}</Badge>
           {local && <Button ml="auto" size="xs" variant="default" disabled={!a.lan && !a.mail} onClick={() => api('access/lan', { on: !a.lan })}>{a.lan ? '끄기' : '켜기'}</Button>}</Group>
@@ -134,37 +133,4 @@ export function AccessModal({ S }: { S: Snapshot }) {
         </Paper>) : <Text size="sm" c="dimmed">로그인한 다른 기기가 없습니다.</Text>}
       </Stack></Paper>
     </Stack>
-  </Modal>
-}
-
-// 웹 세션을 모두 끄고 같은 대화로 다시 띄운다(전역 CLAUDE.md·.zshrc를 바꾼 뒤). 일하는 중이어도 끊으므로 두 번 눌러야 한다
-function RestartAll({ S }: { S: Snapshot }) {
-  const [confirm, setConfirm] = useState(false)
-  const n = S.sessions.filter(s => s.host === 'web').length
-  return <Button variant="default" size="xs" color={confirm ? 'red' : undefined} disabled={!n} onBlur={() => setConfirm(false)} onClick={async () => {
-    if (!confirm) { setConfirm(true); return }
-    setConfirm(false)
-    const r = await api<number>('session/restart')
-    if (r) toast(`웹 세션 ${r.result}개를 다시 띄웁니다. 대화는 그대로 이어집니다.`)
-  }}>{confirm ? `한 번 더 누르면 ${n}개 재시작` : '모두 재시작'}</Button>
-}
-
-// 자주 바꾸지 않는 화면 설정과 관리 동작을 한곳에 모은다
-export function SettingsModal({ S }: { S: Snapshot }) {
-  const ui = useUI()
-  const row = (label: string, desc: string, control: React.ReactNode) => <Group justify="space-between" wrap="nowrap" gap="md">
-    <Stack gap={0}><Text size="sm" fw={600}>{label}</Text><Text size="xs" c="dimmed">{desc}</Text></Stack>{control}</Group>
-  return <Modal opened={ui.settings} onClose={() => setUI({ settings: false })} title="환경설정">
-    <Stack gap="lg">
-      {row('웹 세션 화면', '터미널은 Claude Code 화면 그대로입니다', <SegmentedControl size="xs" value={ui.view} onChange={v => setView(v as 'chat' | 'term')}
-        data={[{ label: '대화', value: 'chat' }, { label: '터미널', value: 'term' }]} />)}
-      {row('작업 과정 자세히', '대화 화면에서 도구 사용을 하나하나 봅니다', <Switch checked={ui.detail} onChange={e => setDetail(e.currentTarget.checked)} aria-label="작업 과정 자세히" />)}
-      {row('접속', '사내망 접속과 로그인한 기기를 관리합니다', <Button size="xs" variant="default" onClick={() => setUI({ settings: false, access: true })}>열기</Button>)}
-      {row('움직임', '컴퓨터의 \'동작 줄이기\'가 켜져 있으면 움직임이 꺼집니다. 이 화면만 켜려면 항상 켜기', <SegmentedControl size="xs" value={ui.motion} onChange={v => setMotion(v as 'system' | 'on')}
-        data={[{ label: '컴퓨터 설정 따르기', value: 'system' }, { label: '항상 켜기', value: 'on' }]} />)}
-      {row('칸 높이 되돌리기', '핀·메모·btw 사이 경계를 처음 높이로', <Button size="xs" variant="default" onClick={() => { resetLayout('hq-side'); toast('핀·메모·btw 높이를 처음으로 되돌렸습니다.') }}>되돌리기</Button>)}
-      {row('칸 너비 되돌리기', '세션 목록·즐겨찾기·대화 사이 경계를 처음 너비로', <Button size="xs" variant="default" onClick={() => { resetLayout('hq-work'); toast('목록·즐겨찾기·대화 너비를 처음으로 되돌렸습니다.') }}>되돌리기</Button>)}
-      {row('모두 재시작', '웹 세션을 모두 끄고 같은 대화로 다시 띄웁니다(일하는 중이어도)', <RestartAll S={S} />)}
-    </Stack>
-  </Modal>
 }
