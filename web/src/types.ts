@@ -56,6 +56,7 @@ export interface Snapshot {
   access: Access
   layout: Record<string, { x: number; y: number }> // 가상 사무실의 책상 위치(방 안 0~1 비율)
   usage: { at: number; limits: { kind: string; percentUsed: number; resetsAt: string | null }[] } | null // Claude 사용량 한도(플러그인 hq-usage가 남김)
+  usageShare: Record<string, { share: number; windowEnd: number; at: number }> // 즐겨찾기 동전으로 조회한 세션별 5시간 한도 추정(%p)
   calendar: { at: number; error: string; sources: number; events: CalEvent[] } // 회사 일정(구글 캘린더, 오늘부터 7일)
   inbox: { at: number; error: string; accounts: string[]; mails: Mail[] } // 받은편지함(계정들을 합쳐 최근 순)
   notice: { text: string; color: string; at: number } | null // 서버가 한 번 띄우는 알림(모두 재시작이 끝났을 때 등)

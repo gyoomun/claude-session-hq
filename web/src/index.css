@@ -201,6 +201,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 /* 세션 줄 오른쪽 이름 복사 아이콘: 늘 보이되 흐리게, 올리면 또렷하게 */
 .hq-rowcopy { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: -2px -2px 0 0; border-radius: 6px; color: var(--mantine-color-dimmed); opacity: .55; cursor: pointer; transition: opacity .12s ease, background-color .12s ease; }
 .hq-rowcopy:hover { opacity: 1; background: var(--mantine-color-default-hover); color: var(--mantine-color-text); }
+.hq-rowcopy.coin-on { opacity: 1; color: var(--mantine-color-yellow-5); }
 .hq-rowcopy.done { opacity: 1; color: var(--mantine-color-teal-4); }
 [data-area]:focus { outline: none; }
 /* 일하던 중 Esc로 멈춘 자리(터미널의 'Interrupted'): 내 말풍선이 아니라 흐린 한 줄 */

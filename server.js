@@ -34,7 +34,7 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, pins: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, usageShare: {}, pins: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 // 서버가 꺼지면서 끊긴 곁가지 질문은 실패로 표시한다
 for (const list of Object.values(db.btw || {})) for (const it of list) if (it.state === 'asking') { it.state = 'error'; it.a = '서버가 다시 시작돼 답을 받지 못했습니다.'; }
@@ -362,7 +362,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, usage: readUsage(), btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, usage: readUsage(), usageShare: db.usageShare, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -637,6 +637,37 @@ function readUsage() {
   return usage;
 }
 
+/* 세션별 5시간 한도 추정: 한도 창 안에서 세션이 쓴 가중 토큰 ÷ 이 맥 전체 가중 토큰 × 지금 한도 %. 무게는 API 가격 비율. 한도가 실제로 어떻게 세는지는 공개돼 있지 않아 추정이다.
+   하위 에이전트 기록(<대화ID>/subagents/)은 원래 세션 몫으로 합친다. 전체 합산은 파일을 다 읽어 몇 초 걸려서 1분 캐시한다 */
+const WEIGHT = { input_tokens: 1, cache_creation_input_tokens: 1.25, cache_read_input_tokens: 0.1, output_tokens: 5 };
+let windowCache = null; // { start, at, bySid: Map }
+async function transcriptFiles(dir, key, since, out) {
+  for (const e of await fs.promises.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const f = path.join(dir, e.name);
+    if (e.isDirectory()) await transcriptFiles(f, key || e.name, since, out);
+    else if (e.name.endsWith('.jsonl') && (await fs.promises.stat(f)).mtimeMs >= since) out.push({ file: f, sid: key || e.name.slice(0, -6) });
+  }
+}
+async function windowTokens(start) {
+  if (windowCache && windowCache.start === start && Date.now() - windowCache.at < 60000) return windowCache.bySid;
+  const files = [];
+  for (const d of await fs.promises.readdir(PROJ_DIR).catch(() => [])) await transcriptFiles(path.join(PROJ_DIR, d), '', start, files);
+  const byMsg = new Map(); // 같은 답이 여러 줄로 남는다. 마지막 줄이 최종 값
+  for (const { file, sid } of files) {
+    for (const line of (await fs.promises.readFile(file, 'utf8')).split('\n')) {
+      if (!line.includes('"usage"') || !line.includes('"assistant"')) continue;
+      let d; try { d = JSON.parse(line); } catch { continue; }
+      const u = d.message?.usage;
+      if (d.type !== 'assistant' || !u || !(Date.parse(d.timestamp) >= start)) continue;
+      byMsg.set(d.message.id || d.uuid, { sid, w: Object.entries(WEIGHT).reduce((a, [k, v]) => a + (u[k] || 0) * v, 0) });
+    }
+  }
+  const bySid = new Map();
+  for (const { sid, w } of byMsg.values()) bySid.set(sid, (bySid.get(sid) || 0) + w);
+  windowCache = { start, at: Date.now(), bySid };
+  return bySid;
+}
+
 let migrating = false;
 const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '최근 닫힌 세션'에 넣지 않는다
 const keepSince = new Map(); // 다시 띄운 세션의 sid -> 끄기 전 { state, since }
@@ -873,6 +904,18 @@ const routes = {
       scan();
     })();
     return list.length;
+  },
+  // 즐겨찾기 줄의 동전: 그 세션이 이번 5시간 창의 한도를 얼마나 썼는지 추정해서 hq.json에 남긴다
+  'session/limit-share': async b => {
+    const five = readUsage()?.limits.find(l => l.kind === 'five_hour');
+    const end = five?.resetsAt && Date.parse(five.resetsAt);
+    if (!end || end < Date.now()) throw new Error('지금 5시간 한도 값을 모릅니다(아무 세션에서 한 번 더 답을 받은 뒤 다시 누르세요)');
+    const start = end - 5 * 3600e3, bySid = await windowTokens(start);
+    const total = [...bySid.values()].reduce((a, v) => a + v, 0);
+    const share = total ? Math.round((bySid.get(b.sid) || 0) / total * five.percentUsed * 10) / 10 : 0;
+    db.usageShare[b.sid] = { share, windowEnd: end, at: Date.now() };
+    save(); scanSoon();
+    return db.usageShare[b.sid];
   },
   // 세션 이름 바꾸기: 그 세션에 Claude Code의 /rename을 쳐 넣는다. 세션 이름(상태줄, 다른 Claude가 부르는 이름)과
   // 대화 제목이 함께 바뀌고, 화면 제목은 대화 기록의 custom-title을 따라 바뀐다
