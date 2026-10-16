@@ -12,7 +12,6 @@ const when = (t: number) => {
 export function MailCard({ S }: { S: Snapshot }) {
   const b = S.inbox
   if (!b?.accounts.length) return <div className="hq-mail" />
-  const many = b.accounts.length > 1
   return <Paper withBorder className="hq-mail">
     <Group justify="space-between" gap={6} wrap="nowrap" px={12} pt={10} pb={4}>
       <Text size="sm" fw={600}>메일</Text>
@@ -22,12 +21,11 @@ export function MailCard({ S }: { S: Snapshot }) {
       </Group>
     </Group>
     <div className="hq-mail-list">
-      {b.mails.map(m => <UnstyledButton key={m.id} className="hq-cal-row" title={`${m.from}\n${m.subject}\nGmail에서 열기`} onClick={() => window.open(m.url, '_blank', 'noopener')}>
-        <Group justify="space-between" gap={6} wrap="nowrap">
-          <Text size="xs" truncate fw={m.unread ? 700 : 400} c={m.unread ? undefined : 'dimmed'}>{m.from}{many && <Text span inherit c="dimmed" fw={400}> · {m.account.split('@')[0]}</Text>}</Text>
-          <Text size="xs" c="dimmed" style={{ flex: 'none' }}>{when(m.at)}</Text>
+      {b.mails.map(m => <UnstyledButton key={m.id} className="hq-cal-row" title={`${m.from}${b.accounts.length > 1 ? ` · ${m.account}` : ''}\n${m.subject}\nGmail에서 열기`} onClick={() => window.open(m.url, '_blank', 'noopener')}>
+        <Group gap={8} wrap="nowrap">
+          <Text size="xs" c="dimmed" ff="monospace" style={{ flex: 'none' }}>{when(m.at)}</Text>
+          <Text size="sm" truncate fw={m.unread ? 600 : 400} c={m.unread ? undefined : 'dimmed'}><Text span inherit fw={m.unread ? 700 : 400}>{m.from}</Text> {m.subject}</Text>
         </Group>
-        <Text size="sm" truncate fw={m.unread ? 600 : 400} c={m.unread ? undefined : 'dimmed'}>{m.subject}</Text>
       </UnstyledButton>)}
       {!b.mails.length && <Text size="xs" c="dimmed">{b.at ? '메일 없음' : '읽는 중…'}</Text>}
     </div>
