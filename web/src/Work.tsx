@@ -38,11 +38,10 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
   return <Paper withBorder p="10px 12px">
     <Group gap="sm" wrap="wrap">
       <Stack gap={0} style={{ minWidth: 0, flex: '1 1 260px' }}>
-        {s.sid ? <>
-          <Text fw={600} size="lg" className="hq-wrap">{s.title}</Text>
-          <Text size="xs" c="dimmed">{s.cwd} · <Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
-            {s.act && <Text span ff="monospace" c="teal.5"> · {s.act}</Text>}</Text>
-        </> : <><Skeleton h={20} w="38%" my={4} /><Skeleton h={11} w="24%" my={4} /></>}
+        {/* 제목은 Claude가 정해서 아직 모른다. 같은 글줄 안에 반짝이를 넣어 높이를 똑같이 맞춘다 */}
+        <Text component="div" fw={600} size="lg" className="hq-wrap">{s.sid ? s.title : <Skeleton h="0.9em" w="38%" display="inline-block" style={{ verticalAlign: 'middle' }} />}</Text>
+        <Text size="xs" c="dimmed">{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
+          {s.act && <Text span ff="monospace" c="teal.5"> · {s.act}</Text>}</Text>
       </Stack>
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
@@ -86,14 +85,17 @@ function ClosedList({ S }: { S: Snapshot }) {
 }
 
 // 새 세션을 여는 동안(Claude가 뜨는 데 2~3초) 목록에서 그 세션이 들어갈 자리
-const ItemSkeleton = () => <Group gap={8} wrap="nowrap" align="flex-start" p="7px 8px">
-  <Skeleton w={8} h={8} mt={6} radius={2} /><Stack gap={6} style={{ flex: 1 }}><Skeleton h={13} w="80%" /><Skeleton h={10} w="45%" /></Stack>
-</Group>
-// 새 세션을 여는 동안: 진짜 세션 화면을 빈 세션(ghost)으로 그리고 손대지 못하게 막는다(fieldset disabled).
-// 버튼·칸 제목·입력칸은 그대로 보이고, 아직 모르는 제목·핀·대화만 반짝인다. 배치가 같아 세션이 뜰 때 튀지 않는다
-function WorkSkeleton({ S, tmux, task }: { S: Snapshot; tmux: string; task: string }) {
-  const ghost: Session = { pid: 0, sid: '', name: '', title: '', cwd: '', dir: '', state: 'idle', since: Date.now(), startedAt: 0, act: '', msg: '', prompt: '', task, host: 'web', tmux, pin: [] }
-  return <fieldset disabled className="hq-ghost" aria-busy="true"><SessionArea S={S} s={ghost} /></fieldset>
+function ItemSkeleton({ state, since }: { state: Session['state']; since: number }) {
+  return <Group gap={8} wrap="nowrap" align="flex-start" p="7px 8px">
+    <Box w={8} h={8} mt={6} className="hq-dot" style={{ borderRadius: 2, flex: 'none', background: cssColor(state) }} />
+    <Stack gap={0} style={{ flex: 1, minWidth: 0 }}><Text component="div" size="sm" fw={600} lh={1.35}><Skeleton h="0.9em" w="80%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>
+      <Text size="xs" c="dimmed"><Text span c={`${COLOR[state]}.5`} fw={600}>{LABEL[state]}</Text> <Since t={since} suf="째" /></Text></Stack>
+  </Group>
+}
+// 새 세션을 여는 동안: 진짜 세션 화면을 빈 세션(ghost)으로 그리고 손만 못 대게 막는다(inert. disabled로 막으면 버튼 모양·크기가 바뀌어 뜰 때 움찔한다).
+// 폴더·상태·버튼·칸 제목·입력칸은 그대로 보이고, 아직 모르는 제목·핀·대화만 반짝인다. 배치가 같아 세션이 뜰 때 튀지 않는다
+function WorkSkeleton({ S, ghost }: { S: Snapshot; ghost: Session }) {
+  return <Box inert className="hq-ghost" aria-busy="true"><SessionArea S={S} s={ghost} /></Box>
 }
 // 고른 세션: 위 머리(두 칸에 걸침) / 아래 대화 | 핀·메모·btw. 오른쪽 칸은 대화창과 같은 높이에서 시작한다
 function SessionArea({ S, s }: { S: Snapshot; s: Session }) {
@@ -105,6 +107,13 @@ function SessionArea({ S, s }: { S: Snapshot; s: Session }) {
     </Box>
     <Box style={{ gridColumn: 2, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
   </Box>
+}
+
+// 일반 목록에 남는 즐겨찾기 세션의 자리: 흐린 한 줄. 누르면 그 세션을 연다(고른 표시는 즐겨찾기 칸에)
+function FavGhost({ s, on }: { s: Session; on: boolean }) {
+  return <UnstyledButton onClick={() => pick(s.sid)} p="4px 8px" w="100%" className="hq-item hq-favghost" style={{ borderRadius: 8, opacity: on ? .8 : .45 }} title="즐겨찾기에 있습니다">
+    <Group gap={8} wrap="nowrap"><Text size="xs" c="yellow.5" style={{ flex: 'none' }}>★</Text><Text size="xs" truncate style={{ minWidth: 0 }}>{s.title}</Text><Text size="xs" c="dimmed" style={{ flex: 'none' }}>즐겨찾기</Text></Group>
+  </UnstyledButton>
 }
 
 // 즐겨찾기 칸. 비어 있어도 칸은 늘 있다(끌어다 놓을 자리).
@@ -188,9 +197,15 @@ export function WorkView({ S }: { S: Snapshot }) {
   const ui = useUI()
   const favs = favSids(S), inFav = new Set(favs)
   // 즐겨찾기에 넣은 세션은 목록에서 빠지고, 빼면 원래 업무 묶음의 원래 순서 자리로 돌아간다
-  const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, ss: sessOf(S, t).filter(x => !inFav.has(x.sid)) })),
-    { id: '', name: '미배치', ss: S.sessions.filter(s => !s.task && !inFav.has(s.sid)).sort(bySt) }]
+  // 즐겨찾기로 간 세션은 원래 업무 자리에 흐린 줄(FavGhost)로 남는다(어느 업무 것인지, 어디로 갔는지 보이게). 순회·끌기에는 넣지 않는다
+  const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, all: sessOf(S, t) })), { id: '', name: '미배치', all: S.sessions.filter(s => !s.task).sort(bySt) }]
+    .map(g => ({ ...g, ss: g.all.filter(x => !inFav.has(x.sid)), favs: g.all.filter(x => inFav.has(x.sid)) }))
   const s = S.sessions.find(x => x.sid === ui.sel)
+  // 새 세션을 여는 동안 쓸 빈 세션. 뜰 때의 상태(첫 지시가 있으면 작업중, 없으면 내 차례)와 폴더를 미리 안다
+  const [opened] = useState(() => new Map<string, number>())
+  if (ui.pendingSel && !opened.has(ui.pendingSel)) opened.set(ui.pendingSel, Date.now())
+  const ghost: Session | null = ui.pendingSel ? { pid: 0, sid: '', name: '', title: '', cwd: ui.pendingCwd, dir: '', state: ui.pendingWorking ? 'working' : 'myturn',
+    since: opened.get(ui.pendingSel)!, startedAt: 0, act: '', msg: '', prompt: '', task: ui.pendingTask, host: 'web', tmux: ui.pendingSel, pin: [] } : null
   // Ctrl+Tab / Ctrl+Shift+Tab: 지금 세션이 즐겨찾기에 있으면 즐겨찾기 안에서, 아니면 목록 안에서 다음·이전으로(끝에서 처음으로 돈다).
   // 크롬은 일반 탭에서 이 키를 탭 전환에 먼저 쓴다. '앱으로 설치'한 창에서는 브라우저가 키를 가져가지 않아 여기로 온다
   const order = useRef({ favs, normal: [] as string[], sel: '' })
@@ -228,9 +243,10 @@ export function WorkView({ S }: { S: Snapshot }) {
             <UnstyledButton px={8} onClick={g.id ? () => setUI({ openTask: g.id }) : undefined} style={{ cursor: g.id ? 'pointer' : 'default' }}>
               <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{g.name}</Text><Text size="xs" c="dimmed">{g.ss.length}</Text></Group>
             </UnstyledButton>
-            {ui.pendingSel && ui.pendingTask === g.id && <ItemSkeleton />}
+            {ghost && ghost.task === g.id && <ItemSkeleton state={ghost.state} since={ghost.since} />}
             {g.ss.map(x => <Item key={x.pid} s={x} on={x.sid === ui.sel} memo={hasMemo(S, x.sid)} />)}
-            {!g.ss.length && !(ui.pendingSel && ui.pendingTask === g.id) && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
+            {g.favs.map(x => <FavGhost key={x.pid} s={x} on={x.sid === ui.sel} />)}
+            {!g.ss.length && !g.favs.length && !(ghost && ghost.task === g.id) && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
           </Stack>)}
           <ClosedList S={S} />
         </Stack>
@@ -242,7 +258,7 @@ export function WorkView({ S }: { S: Snapshot }) {
     <Separator className="hq-split-v" />
     <Panel id="main" minSize={480}>
     {/* 나머지: 2행 격자. 위: 세션 머리(두 칸에 걸침) / 아래: 대화 | 핀·메모·btw. 오른쪽 칸이 대화창과 같은 높이에서 시작한다 */}
-    {!s && ui.pendingSel ? <WorkSkeleton S={S} tmux={ui.pendingSel} task={ui.pendingTask} /> : !s ? <Paper withBorder p="xl" h="100%" style={{ borderStyle: 'dashed' }}>
+    {!s && ghost ? <WorkSkeleton S={S} ghost={ghost} /> : !s ? <Paper withBorder p="xl" h="100%" style={{ borderStyle: 'dashed' }}>
       <Stack align="flex-start">
         <Text>왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.</Text>
         <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>

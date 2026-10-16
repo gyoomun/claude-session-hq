@@ -23,7 +23,7 @@ export function NewSessionModal({ S }: { S: Snapshot }) {
       setBusy(true)
       const r = await api<string>('session/new', { cwd: cwd.trim(), task, prompt })
       setBusy(false)
-      if (r) { rememberCwd(cwd.trim()); setPrompt(''); close(); pickNew(r.result, task) }
+      if (r) { rememberCwd(cwd.trim()); setPrompt(''); close(); pickNew(r.result, { task, cwd: cwd.trim().replace(/\/+$/, '').replace(/^\/Users\/[^/]+/, '~'), working: !!prompt.trim() }) }
     }}>
       <Stack gap="sm">
         <Autocomplete label="폴더" placeholder="예: ~/01dev/13engsoft" data={dirs} value={cwd} onChange={setCwd} data-autofocus={!cwd || undefined} />

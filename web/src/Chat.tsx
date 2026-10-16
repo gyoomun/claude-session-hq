@@ -244,7 +244,7 @@ function NoInput({ s }: { s: Session }) {
           <Button color="orange" onClick={async () => {
             setAsk(false)
             const r = await api<string>('session/resume', { sid: s.sid, force: true })
-            if (r) { pickNew(r.result); toast('웹에서도 열었습니다.') }
+            if (r) { pickNew(r.result, { cwd: s.cwd, task: s.task }); toast('웹에서도 열었습니다.') }
           }}>그래도 열기</Button></Group>
       </Stack>
     </Modal>

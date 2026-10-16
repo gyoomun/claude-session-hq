@@ -1,10 +1,10 @@
 // 환경설정 창(IntelliJ 설정 창을 본떴다): 제목줄을 잡고 옮기고, 오른쪽 아래 모서리로 크기를 바꾼다.
-// 왼쪽은 검색과 목차(전체·분류), 오른쪽은 늘 모든 분류를 이어서 보인다. 목차를 누르면 그 자리로 스크롤하고, 스크롤하면 목차가 따라온다. 값을 고르는 항목은 [적용]·[확인]을 눌러야 반영되고(바꾼 줄은 왼쪽에 파란 표시),
+// 왼쪽은 검색과 목차(분류), 오른쪽은 늘 모든 분류를 이어서 보인다. 목차를 누르면 그 자리로 스크롤하고, 스크롤하면 목차가 따라온다. 값을 고르는 항목은 [적용]·[확인]을 눌러야 반영되고(바꾼 줄은 왼쪽에 파란 표시),
 // 되돌리기·모두 재시작 같은 동작 버튼과 접속 관리는 누르면 바로 실행된다
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Box, Button, CloseButton, Group, SegmentedControl, Stack, Switch, Text, TextInput, UnstyledButton } from '@mantine/core'
-import { IconAccessPoint, IconLayoutColumns, IconLayoutList, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconAccessPoint, IconLayoutColumns, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { api, toast } from './store'
 import { TOAST_POS, type ToastPos, resetLayout, setDetail, setMotion, setToast, setUI, setView, useUI } from './ui'
 import type { Snapshot } from './types'
@@ -20,7 +20,7 @@ const PAGES = [
 ] as const
 
 const Query = createContext('')
-const GAP = 24 // 목차로 옮겼을 때 분류 제목 위 여백(px)
+const GAP = 24 // 목차로 옮겼을 때 분류 제목 위 여백(px). 첫 분류는 맨 위(0)와 같아진다
 const hit = (q: string, text: string) => !q || text.toLowerCase().includes(q.toLowerCase())
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -113,7 +113,7 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
     const w = Math.min(940, innerWidth - 32), h = Math.min(640, innerHeight - 32)
     setPos({ x: Math.round((innerWidth - w) / 2), y: Math.round((innerHeight - h) / 2) })
   }, [ui.settings])
-  const close = () => setUI({ settings: false, settingsPage: 'all' }) // 다음엔 '전체'(맨 위)에서 연다
+  const close = () => setUI({ settings: false, settingsPage: '' }) // 다음엔 맨 위에서 연다
   const changed = d.view !== ui.view || d.detail !== ui.detail || d.motion !== ui.motion || d.toast !== ui.toast
   const apply = () => {
     if (d.view !== ui.view) setView(d.view)
@@ -135,32 +135,30 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
     addEventListener('pointermove', move)
     addEventListener('pointerup', () => removeEventListener('pointermove', move), { once: true })
   }
-  // 목차: 누르면 그 분류로 스크롤, 스크롤하면 지금 보이는 분류에 불이 들어온다('전체'는 맨 위일 때)
+  // 목차: 누르면 그 분류로 스크롤, 스크롤하면 지금 보이는 분류에 불이 들어온다(맨 위면 첫 분류)
   const scroller = useRef<HTMLDivElement>(null)
-  const [active, setActive] = useState('all')
-  const pinned = useRef(0) // 목차를 누른 직후(부드러운 스크롤 중)에는 누른 것에 불을 둔다. 첫 분류는 '전체'와 같은 자리라서
+  const [active, setActive] = useState('')
+  const pinned = useRef(0) // 목차를 누른 직후(부드러운 스크롤 중)에는 누른 것에 불을 둔다
   const go = (id: string, smooth = true) => {
     const box = scroller.current, el = box?.querySelector<HTMLElement>(`[data-page="${id}"]`)
     if (!box) return
     setActive(id); pinned.current = Date.now() + 700
     const crumb = box.querySelector<HTMLElement>('.hq-set-crumb')?.offsetHeight || 0 // 위에 붙은 경로 줄 밑으로
-    // 제목 위에 여백을 둔다(GAP). 첫 분류는 그래서 맨 위(0)와 같아져 '전체'와 '화면'을 오가도 움찔하지 않는다
-    box.scrollTo({ top: id === 'all' || !el ? 0 : Math.max(0, el.offsetTop - box.offsetTop - crumb - GAP), behavior: smooth ? 'smooth' : 'auto' })
+    box.scrollTo({ top: !el ? 0 : Math.max(0, el.offsetTop - box.offsetTop - crumb - GAP), behavior: smooth ? 'smooth' : 'auto' })
   }
   const spy = () => {
     const box = scroller.current
     if (!box || Date.now() < pinned.current) return
-    if (box.scrollTop < 8) { setActive('all'); return }
     const top = box.getBoundingClientRect().top + (box.querySelector<HTMLElement>('.hq-set-crumb')?.offsetHeight || 0) + GAP + 8
     const el = [...box.querySelectorAll<HTMLElement>('[data-page]')].filter(x => x.getBoundingClientRect().top <= top).pop()
-    setActive(el?.dataset.page || 'all')
+    setActive(el?.dataset.page || box.querySelector<HTMLElement>('[data-page]')?.dataset.page || '')
   }
   // 열 때 고른 분류(예: 머리의 '사내망 접속 꺼짐' → 접속)가 있으면 그 자리에서 시작한다
-  useLayoutEffect(() => { if (ui.settings) go(ui.settingsPage, false) }, [ui.settings])
+  useLayoutEffect(() => { if (ui.settings) { go(ui.settingsPage, false); if (!PAGES.some(p => p.id === ui.settingsPage)) { pinned.current = 0; spy() } } }, [ui.settings])
   if (!ui.settings) return null
   const pages = PAGES.filter(p => hit(q, p.name + ' ' + p.words))
-  const nav = [{ id: 'all', name: '전체', icon: IconLayoutList }, ...pages]
-  const name = (nav.find(p => p.id === active) || nav[0]).name
+  const nav = pages
+  const name = (nav.find(p => p.id === active) || nav[0])?.name || ''
   return createPortal(<Box className="hq-overlay">
     <Box ref={win} className="hq-window" role="dialog" aria-label="환경설정" style={{ left: pos.x, top: pos.y }}>
       <Group className="hq-window-title" justify="space-between" wrap="nowrap" onPointerDown={drag}>
