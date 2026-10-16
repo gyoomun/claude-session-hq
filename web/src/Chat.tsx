@@ -47,10 +47,14 @@ function ToolGroup({ tools, results }: { tools: Item[]; results: Map<string | un
 function useTranscript(sid: string) {
   const [items, setItems] = useState<Item[]>([])
   const [missing, setMissing] = useState(false)
+  const poke = useRef(() => {})
   useEffect(() => {
-    let stop = false, next = -1
+    let stop = false, next = -1, timer = 0, fastUntil = 0, inflight = false, again = false
     setItems([]); setMissing(false)
     const load = async () => {
+      // 한 번에 하나만 읽는다(겹치면 같은 자리를 두 번 이어 붙인다). 읽는 중에 또 부르면 끝난 뒤 한 번 더
+      if (inflight) { again = true; return }
+      inflight = true
       try {
         const r = await fetch(`/api/transcript?sid=${sid}${next >= 0 ? `&from=${next}` : ''}`, { cache: 'no-store' })
         if (r.status === 401) { location.href = '/login'; return }
@@ -62,13 +66,18 @@ function useTranscript(sid: string) {
         // 너무 길어지면 오래된 것부터 버린다(기록 파일에는 다 남아 있다)
         if (d.reset) setItems(d.items.slice(-800))
         else if (d.items.length) setItems(p => [...p, ...d.items].slice(-1500))
-      } catch { /* 다음에 다시 */ }
+      } catch { /* 다음에 다시 */ } finally {
+        inflight = false
+        if (again && !stop) { again = false; load() }
+      }
     }
-    load()
-    const iv = setInterval(load, 1500)
-    return () => { stop = true; clearInterval(iv) }
+    // 평소엔 1.5초마다, 말을 보낸 직후 4초 동안은 0.3초마다 읽는다(보낸 말과 첫 답이 빨리 보이게)
+    const tick = async () => { await load(); if (!stop) timer = window.setTimeout(tick, Date.now() < fastUntil ? 300 : 1500) }
+    tick()
+    poke.current = () => { fastUntil = Date.now() + 4000; window.clearTimeout(timer); tick() }
+    return () => { stop = true; window.clearTimeout(timer) }
   }, [sid])
-  return { items, missing }
+  return { items, missing, poke }
 }
 
 interface Img { n: number; path: string; url: string }
@@ -139,25 +148,23 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
   s: Session; d: Draft; working: boolean; onSent: (x: Sent, done: Promise<unknown>) => void; interrupt: () => void; onRewind: () => void
 }) {
   const { text, setText, imgs, setImgs, pastes, setPastes, uploading, attach, addPaste } = d
-  const [busy, setBusy] = useState(false)
   const box = useRef<HTMLTextAreaElement>(null)
   const shown = imgs.filter(i => text.includes(tok(i.n))) // 표시를 지운 이미지·글은 보내지 않는다
   const shownPastes = pastes.filter(p => text.includes(ptok(p)))
   const send = async () => {
-    if (!text.trim() || busy || uploading) return
+    if (!text.trim() || uploading) return
     // 쓴 순서대로 나눈다. 짝이 없는 표시(앞서 보낸 것을 글로 가리킨 것 등)는 글 그대로 보낸다
     const parts = text.split(TOK).flatMap((x, i): { text?: string; image?: string; paste?: string }[] => {
       const img = i % 2 ? imgs.find(m => tok(m.n) === x) : undefined
       const pa = i % 2 ? pastes.find(m => ptok(m) === x) : undefined
       return img ? [{ image: img.path }] : pa ? [{ paste: pa.text }] : x ? [{ text: x }] : []
     })
+    // 입력칸은 바로 비우고 보낸 말은 대화에 바로 보인다(ChatView의 '보내는 중' 말풍선). 실패하면 입력칸에 되살린다
     const x = { text, imgs, pastes, at: serverNow() }
-    setBusy(true)
+    setText(''); setImgs([]); setPastes([])
     const req = api('term/send', { pid: s.pid, parts })
     onSent(x, req) // 보내는 중에도(글을 넣는 데 시간이 걸린다) 바로 '일하는 중'으로 본다
-    const ok = await req
-    setBusy(false)
-    if (ok) { setText(''); setImgs([]); setPastes([]) }
+    if (!await req) { setText(p => p ? x.text + '\n' + p : x.text); setImgs(p => [...x.imgs, ...p]); setPastes(p => [...x.pastes, ...p]) }
   }
   const key = (k: string) => api('term/key', { pid: s.pid, key: k })
   const place = (len: number, at: number) => requestAnimationFrame(() => box.current?.setSelectionRange(at + len, at + len))
@@ -198,7 +205,7 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
         <Group gap={6}>
           {working && <Button size="xs" variant="default" onClick={interrupt}>중단 (Esc)</Button>}
           {!working && s.host === 'web' && <Button size="xs" variant="subtle" color="gray" onClick={onRewind} title="Claude Code의 되감기(Esc 두 번)">되감기 (Esc Esc)</Button>}
-          <Button size="xs" loading={busy || uploading > 0} onClick={send}>보내기</Button>
+          <Button size="xs" loading={uploading > 0} onClick={send}>보내기</Button>
         </Group>
       </Group>
     </Stack>
@@ -257,10 +264,13 @@ const Messages = memo(function Messages({ items, detail }: { items: Item[]; deta
 })
 
 export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
-  const { items, missing } = useTranscript(s.sid)
+  const { items, missing, poke } = useTranscript(s.sid)
+  // 방금 보낸 말: 대화 기록에 실제로 들어올 때까지(보낸 시각 이후의 내 말이 보이면) 아래에 '보내는 중' 말풍선으로 먼저 보인다
+  const [pending, setPending] = useState<Sent | null>(null)
+  useEffect(() => { if (pending && items.some(i => i.t === 'user' && i.at >= pending.at - 1500)) setPending(null) }, [items, pending])
   const view = useRef<HTMLDivElement>(null)
   const stick = useRef(true) // 맨 아래를 보고 있으면 새 메시지가 올 때 따라 내려간다
-  useLayoutEffect(() => { if (stick.current && view.current) view.current.scrollTop = view.current.scrollHeight }, [items, s.state])
+  useLayoutEffect(() => { if (stick.current && view.current) view.current.scrollTop = view.current.scrollHeight }, [items, s.state, pending])
   useEffect(() => { stick.current = true }, [s.sid])
   const draft = useDraft(s.sid)
   // 보낸 직후에는 상태가 '작업중'으로 바뀌기까지 1~2초 걸린다. 그 사이에도 중단할 수 있게, 보낸 뒤 상태가 아직 안 바뀌었으면 일하는 중으로 본다
@@ -286,7 +296,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
     const back = r?.result?.restored
     if (!back) return
     if (sent.current) setCut({ from: sent.current.at - 3000, to: serverNow() + 1000 })
-    restore(back); sent.current = null
+    restore(back); sent.current = null; setPending(null)
     toast('중단했습니다. 보낸 말이 입력칸으로 돌아왔습니다.')
   }
   // 되감기: 고른 말부터 아래를 가린다
@@ -337,11 +347,15 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
           {missing && <Text c="dimmed">이 세션의 대화 기록을 찾지 못했습니다.</Text>}
           {!missing && !items.length && <Group gap={8}><Loader size="xs" /><Text c="dimmed" size="sm">대화를 불러오는 중입니다…</Text></Group>}
           <Messages items={shown} detail={detail} />
+          {pending && <Box className="hq-say me hq-pending"><Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{pending.text}</Text></Box>}
           {(s.state === 'working' || s.state === 'compact') && <Group gap={8}><Loader size="xs" color={COLOR[s.state]} /><Text size="sm" c={`${COLOR[s.state]}.4`} ff="monospace">{s.act || '생각 중'}</Text></Group>}
         </Stack>
       </ScrollArea>
     </Paper>
-    {s.host ? <Composer s={s} d={draft} working={working} onSent={(x, req) => { sent.current = x; sending.current = req; setSentAt(x.at); req.then(ok => { if (!ok) sent.current = null }) }} interrupt={interrupt} onRewind={() => setRewind(true)} /> : <NoInput s={s} />}
+    {s.host ? <Composer s={s} d={draft} working={working} onSent={(x, req) => {
+      sent.current = x; sending.current = req; setSentAt(x.at); setPending(x); stick.current = true
+      req.then(ok => { if (ok) poke.current(); else { sent.current = null; setPending(null) } })
+    }} interrupt={interrupt} onRewind={() => setRewind(true)} /> : <NoInput s={s} />}
     {s.host === 'web' && <RewindModal s={s} opened={rewind} onClose={() => setRewind(false)} onDone={rewound} />}
   </Stack>
 }

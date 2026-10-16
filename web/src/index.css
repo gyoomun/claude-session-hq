@@ -114,3 +114,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-split-v { width: 12px; display: grid; place-items: center; outline: none; }
 .hq-split-v::after { content: ''; width: 3px; height: 44px; border-radius: 2px; background: var(--mantine-color-default-border); }
 .hq-split-v[data-separator="hover"]::after, .hq-split-v[data-separator="active"]::after, .hq-split-v[data-separator="focus"]::after { height: 100%; background: var(--mantine-color-indigo-5); }
+/* 보내는 중인 내 말: 기록에 들어오기 전까지 살짝 흐리게, 나타날 때 아래에서 올라온다 */
+.hq-pending { opacity: .6; animation: hq-in .16s ease-out; }
+@keyframes hq-in { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .hq-pending { animation: none; } }
