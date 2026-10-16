@@ -1,9 +1,9 @@
-// 회사 일정(구글 캘린더): 본문 위쪽 줄(`.hq-top`)의 왼쪽 카드. 평소엔 오늘 것만 보인다.
-// - 오른쪽 › : 옆으로 펼쳐져 오늘부터 한 달을 하루 한 칸으로 보인다(보기만. 다른 달은 못 본다)
+// 회사 일정(구글 캘린더): 본문 아래 줄(`.hq-sub`)의 왼쪽 카드. 평소엔 오늘 것만 보인다.
+// - 오른쪽 › : 옆으로 펼쳐져 이번 달(오늘이 속한 달)을 하루 한 칸으로 보인다. 처음엔 오늘 칸이 맨 앞(보기만. 다른 달은 못 본다)
 // - 오른쪽 아래 돋보기: 한 달 달력. 연월 양옆 ‹ › 로 앞뒤 달, 연월을 누르면 달 고르기
-// 펼치면 다른 화면을 덮는다. Esc나 바깥을 누르면 닫혀 오늘만 보인다(달 고르기가 떠 있으면 Esc는 그것만 닫는다).
+// 펼치면 위·옆으로 커져 다른 화면을 덮는다. Esc나 바깥을 누르면 닫혀 오늘만 보인다(달 고르기가 떠 있으면 Esc는 그것만 닫는다).
 // 일정 줄·날짜 칸을 누르면 구글 캘린더 웹의 그 달 화면을 연다. 캘린더를 안 이었으면 안 보인다(환경설정 '일정')
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Group, Paper, Text, UnstyledButton } from '@mantine/core'
 import { useClickOutside } from '@mantine/hooks'
 import { IconChevronLeft, IconChevronRight, IconSearch } from '@tabler/icons-react'
@@ -58,7 +58,7 @@ export function CalendarCard({ S }: { S: Snapshot }) {
   if (!c?.sources) return <div className="hq-cal-slot" />
   const now = new Date(), today = midnight(now.getFullYear(), now.getMonth(), now.getDate())
   const toggle = (m: 'strip' | 'month') => { setPick(false); setMode(x => x === m ? '' : m) }
-  return <div className="hq-cal-slot"><Paper ref={ref} withBorder className={'hq-cal' + (mode ? ' open ' + mode : '')}>
+  return <div className="hq-cal-slot"><Paper ref={ref} withBorder={!!mode} className={'hq-cal' + (mode ? ' open ' + mode : '')}>
     {mode === 'month' ? <Month today={today} pick={pick} setPick={setPick} />
       : mode === 'strip' ? <Strip today={today} />
       : <div className="hq-cal-today">
@@ -78,12 +78,16 @@ export function CalendarCard({ S }: { S: Snapshot }) {
   </Paper></div>
 }
 
-// 옆으로 펼친 한 달: 오늘부터 31일을 하루 한 칸으로(가로 스크롤). 더 보려면 돋보기
+// 옆으로 펼친 이번 달: 1일부터 말일까지 하루 한 칸(가로 스크롤). 처음엔 오늘 칸이 맨 앞에 오게 둔다. 더 보려면 돋보기
 function Strip({ today }: { today: number }) {
-  const events = useRange(today, today + 31 * DAY)
-  return <div className="hq-cal-strip">
-    {Array.from({ length: 31 }, (_, n) => today + n * DAY).map((t, n) => <div key={t} className="hq-cal-day">
-      <Text size="sm" fw={n ? 400 : 600} c={n ? 'dimmed' : undefined} mb={4}>{dayLabel(t)}{n ? '' : ' · 오늘'}</Text>
+  const d = new Date(today), y = d.getFullYear(), m = d.getMonth()
+  const days = Array.from({ length: new Date(y, m + 1, 0).getDate() }, (_, i) => midnight(y, m, i + 1))
+  const events = useRange(days[0], days[days.length - 1] + DAY)
+  const box = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => { const el = box.current?.querySelector<HTMLElement>('.today'); if (el && box.current) box.current.scrollLeft = el.offsetLeft }, [])
+  return <div className="hq-cal-strip" ref={box}>
+    {days.map(t => <div key={t} className={'hq-cal-day' + (t === today ? ' today' : '')}>
+      <Text size="sm" fw={t === today ? 600 : 400} c={t === today ? undefined : 'dimmed'} mb={4}>{dayLabel(t)}{t === today ? ' · 오늘' : ''}</Text>
       {on(events, t).map(e => <Row key={e.id} e={e} t={t} />)}
       {events && !on(events, t).length && <Text size="xs" c="dimmed">일정 없음</Text>}
     </div>)}

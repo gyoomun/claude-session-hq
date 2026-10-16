@@ -1,4 +1,4 @@
-// 메일(받은편지함): 본문 위쪽 줄(`.hq-top`)에서 일정 카드 오른쪽. 높이는 일정 카드와 같고, 이은 계정들을 합쳐 최근 순으로 보인다(넘치면 스크롤).
+// 메일(받은편지함): 본문 아래 줄(`.hq-sub`)에서 일정 카드 오른쪽. 높이는 일정 카드와 같고, 이은 계정들을 합쳐 최근 순으로 보인다(넘치면 스크롤).
 // 안 읽은 메일은 굵게. 줄을 누르면 Gmail 웹에서 그 메일(스레드)을 연다. 이은 메일이 없으면 안 보인다(환경설정 '메일')
 import { Group, Paper, Text, UnstyledButton } from '@mantine/core'
 import type { Snapshot } from './types'
@@ -13,12 +13,12 @@ export function MailCard({ S }: { S: Snapshot }) {
   const b = S.inbox
   if (!b?.accounts.length) return <div className="hq-mail" />
   const many = b.accounts.length > 1
-  return <Paper withBorder className="hq-mail">
-    <Group justify="space-between" gap={6} wrap="nowrap" px={12} pt={10} pb={4}>
+  return <Paper className="hq-mail">
+    <Group justify="space-between" gap={6} wrap="nowrap" px={12} pb={4}>
       <Text size="sm" fw={600}>메일</Text>
       <Group gap={8} wrap="nowrap">
         {b.error && <Text size="xs" c="red.4" title={b.error}>일부 못 읽음</Text>}
-        {b.at > 0 && <Text size="xs" c="dimmed" title="마지막으로 읽은 시각(2분마다 다시 읽는다)">{new Date(b.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 새로고침</Text>}
+        {b.at > 0 && <Text size="xs" c="dimmed" title="마지막으로 읽은 시각(2분마다 다시 읽는다)">{new Date(b.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 불러옴</Text>}
       </Group>
     </Group>
     <div className="hq-mail-list">

@@ -115,7 +115,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
     const c = S.calendar
     return <>
       <Section title="구글 캘린더">
-        <Row label="연결" help={!c?.sources ? '아직 이은 캘린더가 없습니다. 아래 순서대로 이으면 화면 위쪽 카드에 오늘 일정이 보입니다'
+        <Row label="연결" help={!c?.sources ? '아직 이은 캘린더가 없습니다. 아래 순서대로 이으면 화면 아래 줄에 오늘 일정이 보입니다'
           : `캘린더 ${c.sources}개 · 일정 ${c.events.length}개(오늘부터 7일) · ${c.at ? new Date(c.at).toLocaleTimeString('ko-KR', { hour12: false }) + '에 읽음' : '아직 못 읽음'} · 10분마다 다시 읽습니다`}>
           <Button size="xs" variant="default" onClick={async () => { const r = await api<string>('calendar/reload'); if (r) toast(r.result ? '일부를 읽지 못했습니다: ' + r.result : '일정을 다시 읽었습니다.', r.result ? 'red' : undefined) }}>다시 읽기</Button>
         </Row>
@@ -135,7 +135,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
     const b = S.inbox
     return <>
       <Section title="받은편지함">
-        <Row label="연결" help={!b?.accounts.length ? '아직 이은 메일이 없습니다. 아래 순서대로 이으면 화면 위쪽 카드에 최근 메일이 보입니다'
+        <Row label="연결" help={!b?.accounts.length ? '아직 이은 메일이 없습니다. 아래 순서대로 이으면 화면 아래 줄에 최근 메일이 보입니다'
           : `${b.accounts.join(', ')} · ${b.at ? new Date(b.at).toLocaleTimeString('ko-KR', { hour12: false }) + '에 읽음' : '아직 못 읽음'} · 2분마다 다시 읽습니다(읽음 표시는 바꾸지 않습니다)`}>
           <Button size="xs" variant="default" onClick={async () => { const r = await api<string>('inbox/reload'); if (r) toast(r.result ? '일부를 읽지 못했습니다: ' + r.result : '메일을 다시 읽었습니다.', r.result ? 'red' : undefined) }}>다시 읽기</Button>
         </Row>
