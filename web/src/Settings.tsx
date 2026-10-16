@@ -1,10 +1,10 @@
 // 환경설정 창(IntelliJ 설정 창을 본떴다): 제목줄을 잡고 옮기고, 오른쪽 아래 모서리로 크기를 바꾼다.
-// 왼쪽은 검색과 분류, 오른쪽은 분류의 항목. 값을 고르는 항목은 [적용]·[확인]을 눌러야 반영되고(바꾼 줄은 왼쪽에 파란 표시),
+// 왼쪽은 검색과 목차(전체·분류), 오른쪽은 늘 모든 분류를 이어서 보인다. 목차를 누르면 그 자리로 스크롤하고, 스크롤하면 목차가 따라온다. 값을 고르는 항목은 [적용]·[확인]을 눌러야 반영되고(바꾼 줄은 왼쪽에 파란 표시),
 // 되돌리기·모두 재시작 같은 동작 버튼과 접속 관리는 누르면 바로 실행된다
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Box, Button, CloseButton, Group, SegmentedControl, Stack, Switch, Text, TextInput, UnstyledButton } from '@mantine/core'
-import { IconAccessPoint, IconLayoutColumns, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconAccessPoint, IconLayoutColumns, IconLayoutList, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { api, toast } from './store'
 import { resetLayout, setDetail, setMotion, setUI, setView, useUI } from './ui'
 import type { Snapshot } from './types'
@@ -92,7 +92,7 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
     const w = Math.min(940, innerWidth - 32), h = Math.min(640, innerHeight - 32)
     setPos({ x: Math.round((innerWidth - w) / 2), y: Math.round((innerHeight - h) / 2) })
   }, [ui.settings])
-  const close = () => setUI({ settings: false })
+  const close = () => setUI({ settings: false, settingsPage: 'all' }) // 다음엔 '전체'(맨 위)에서 연다
   const changed = d.view !== ui.view || d.detail !== ui.detail || d.motion !== ui.motion
   const apply = () => {
     if (d.view !== ui.view) setView(d.view)
@@ -113,9 +113,29 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
     addEventListener('pointermove', move)
     addEventListener('pointerup', () => removeEventListener('pointermove', move), { once: true })
   }
+  // 목차: 누르면 그 분류로 스크롤, 스크롤하면 지금 보이는 분류에 불이 들어온다('전체'는 맨 위일 때)
+  const scroller = useRef<HTMLDivElement>(null)
+  const [active, setActive] = useState('all')
+  const go = (id: string, smooth = true) => {
+    const box = scroller.current, el = box?.querySelector<HTMLElement>(`[data-page="${id}"]`)
+    if (!box) return
+    const crumb = box.querySelector<HTMLElement>('.hq-set-crumb')?.offsetHeight || 0 // 위에 붙은 경로 줄 밑으로
+    box.scrollTo({ top: id === 'all' || !el ? 0 : el.offsetTop - box.offsetTop - crumb, behavior: smooth ? 'smooth' : 'auto' })
+  }
+  const spy = () => {
+    const box = scroller.current
+    if (!box) return
+    if (box.scrollTop < 8) { setActive('all'); return }
+    const top = box.getBoundingClientRect().top + (box.querySelector<HTMLElement>('.hq-set-crumb')?.offsetHeight || 0) + 8
+    const el = [...box.querySelectorAll<HTMLElement>('[data-page]')].filter(x => x.getBoundingClientRect().top <= top).pop()
+    setActive(el?.dataset.page || 'all')
+  }
+  // 열 때 고른 분류(예: 머리의 '사내망 접속 꺼짐' → 접속)가 있으면 그 자리에서 시작한다
+  useLayoutEffect(() => { if (ui.settings) { go(ui.settingsPage, false); spy() } }, [ui.settings])
   if (!ui.settings) return null
   const pages = PAGES.filter(p => hit(q, p.name + ' ' + p.words))
-  const page = PAGES.find(p => p.id === ui.settingsPage) || PAGES[0]
+  const nav = [{ id: 'all', name: '전체', icon: IconLayoutList }, ...pages]
+  const name = (nav.find(p => p.id === active) || nav[0]).name
   return createPortal(<Box className="hq-overlay">
     <Box ref={win} className="hq-window" role="dialog" aria-label="환경설정" style={{ left: pos.x, top: pos.y }}>
       <Group className="hq-window-title" justify="space-between" wrap="nowrap" onPointerDown={drag}>
@@ -124,15 +144,21 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
       </Group>
       <Box className="hq-window-body">
         <Stack gap={6} className="hq-set-nav">
-          <TextInput size="xs" leftSection={<IconSearch size={14} />} placeholder="설정 찾기" value={q} onChange={e => setQ(e.currentTarget.value)} autoFocus />
-          {pages.map(p => <UnstyledButton key={p.id} className={'hq-set-cat' + (p.id === page.id ? ' on' : '')} onClick={() => setUI({ settingsPage: p.id })}>
+          <TextInput size="xs" leftSection={<IconSearch size={14} />} placeholder="설정 찾기" value={q} onChange={e => { setQ(e.currentTarget.value); requestAnimationFrame(spy) }} autoFocus />
+          {nav.map(p => <UnstyledButton key={p.id} className={'hq-set-cat' + (p.id === active ? ' on' : '')} onClick={() => go(p.id)}>
             <Group gap={8} wrap="nowrap"><p.icon size={16} stroke={1.6} /><Text size="sm">{p.name}</Text></Group>
           </UnstyledButton>)}
           {!pages.length && <Text size="xs" c="dimmed" px={8}>찾는 설정이 없습니다</Text>}
         </Stack>
-        <Box className="hq-set-page">
-          <Text size="sm" c="dimmed" mb="md">환경설정 › <Text span c="var(--mantine-color-text)" fw={600}>{page.name}</Text></Text>
-          <Query.Provider value={q}><Page id={page.id} S={S} d={d} set={p => setD(x => ({ ...x, ...p }))} ui={cur} /></Query.Provider>
+        <Box className="hq-set-page" ref={scroller} onScroll={spy}>
+          <Text size="sm" c="dimmed" className="hq-set-crumb">환경설정 › <Text span c="var(--mantine-color-text)" fw={600}>{name}</Text></Text>
+          <Query.Provider value={q}>
+            {pages.map(p => <Box key={p.id} data-page={p.id} mb="xl">
+              <Text fw={700} mb="sm">{p.name}</Text>
+              <Page id={p.id} S={S} d={d} set={x => setD(v => ({ ...v, ...x }))} ui={cur} />
+            </Box>)}
+          </Query.Provider>
+          <Box className="hq-set-spacer" />
         </Box>
       </Box>
       <Group className="hq-window-foot" justify="flex-end" gap="xs">

@@ -163,3 +163,5 @@ body { background: var(--mantine-color-body); overflow: hidden; }
   color: #e7ebf5; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .15); }
 .hq-code:hover .hq-copy, .hq-copy:focus-visible { opacity: 1; }
 .hq-copy:hover { background: rgba(255, 255, 255, .16); }
+.hq-set-crumb { position: sticky; top: -14px; z-index: 1; margin: -14px -20px 12px; padding: 12px 20px 10px; background: var(--mantine-color-body); border-bottom: 1px solid var(--mantine-color-default-border); }
+.hq-set-spacer { height: 60%; }   /* 마지막 분류도 목차로 눌렀을 때 맨 위에 오게 */

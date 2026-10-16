@@ -19,7 +19,7 @@ interface UI {
   addTask: boolean
   brief: boolean
   settings: boolean
-  settingsPage: string // 환경설정 창에서 보고 있는 분류
+  settingsPage: string // 환경설정 창을 열 때 보일 분류('all'이면 맨 위)
   view: 'chat' | 'term' // 웹 세션을 대화 화면으로 볼지, 터미널(Claude Code 화면 그대로)로 볼지
   detail: boolean // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
   motion: 'system' | 'on' // 움직임: 컴퓨터의 '동작 줄이기'를 따를지, 항상 켤지
@@ -28,7 +28,7 @@ interface UI {
 let ui: UI = {
   mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '', pendingTask: '',
   openTask: null, openSess: null, newFor: null, addTask: false, brief: false,
-  settings: false, settingsPage: 'view', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', layoutKey: 0, motion: get('hq-motion') === 'on' ? 'on' : 'system',
+  settings: false, settingsPage: 'all', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', layoutKey: 0, motion: get('hq-motion') === 'on' ? 'on' : 'system',
 }
 history.replaceState(null, '', '#' + ui.mode)
 const subs = new Set<() => void>()
