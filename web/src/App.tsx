@@ -193,7 +193,7 @@ export function App() {
   // 사이드바는 창 맨 왼쪽에 붙고, 오른쪽은 위아래 두 칸(메인 | 서브)이며 사이 경계를 끌어 서브 높이를 바꾼다(비율은 localStorage react-resizable-panels:hq-main).
   // 메인 내용은 나머지 폭의 가운데에 놓는다(좌우 여백이 같다). 본문 폭은 모든 보기에서 같다(작업 보기의 세 칸 기준 2032px. 보기마다 다르면 넘길 때 화면이 움찔한다).
   // 페이지 자체는 스크롤하지 않는다
-  const side = ui.slim ? 68 : 224
+  const side = ui.slim ? 68 : 184
   return <Box h="100dvh" className="hq-shell" style={{ gridTemplateColumns: `${side}px minmax(0, 1fr)`, '--side': side + 'px' } as React.CSSProperties}>
     <Sidebar S={S} />
     <MainSplit S={S} offline={offline} />
