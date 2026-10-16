@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Box, Button, Center, Code, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { Alert, Badge, Box, Button, Center, Code, Group, Kbd, Loader, Paper, Popover, ScrollArea, SegmentedControl, SimpleGrid, Stack, Text, Title, UnstyledButton } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
 import { type Mode, pickNew, rememberSel, setMode, setUI, useUI } from './ui'
-import type { Snapshot } from './types'
+import type { CalEvent, Snapshot } from './types'
 import { stale } from './util'
 import { WorkView } from './Work'
 import { copyText } from './Chat'
@@ -80,6 +80,44 @@ function Notices({ S }: { S: Snapshot }) {
   </>
 }
 
+// 오늘 회사 일정(구글 캘린더): 머리에 한 줄. 누르면 이번 7일을 날짜별로 본다. 캘린더를 안 이었으면 안 보인다(환경설정 '일정')
+const hm = (t: number) => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+const evText = (e: CalEvent) => e.allDay ? e.title : `${hm(e.start)} ${e.title}`
+function Today({ S }: { S: Snapshot }) {
+  const c = S.calendar
+  if (!c || !c.sources) return null
+  const day = (n: number) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + n); return +d }
+  const today = c.events.filter(e => e.start < day(1) && e.end > day(0))
+  const days = Array.from({ length: 7 }, (_, n) => ({ n, from: day(n), list: c.events.filter(e => e.start < day(n + 1) && e.end > day(n)) }))
+  return <Popover width={440} position="bottom" shadow="md" withArrow>
+    <Popover.Target>
+      <UnstyledButton className="hq-today" title="이번 7일 일정 보기">
+        <Group gap={6} wrap="nowrap">
+          <Text size="xs" c="dimmed" style={{ flex: 'none' }}>오늘</Text>
+          {c.error && <Text size="xs" c="red.4" style={{ flex: 'none' }} title={c.error}>일정을 다 읽지 못함</Text>}
+          {today.length ? today.slice(0, 4).map(e => <Badge key={e.id} variant="light" color={e.allDay ? 'yellow' : 'indigo'} radius="sm" tt="none" fw={500} maw={220}>{evText(e)}</Badge>)
+            : <Text size="xs" c="dimmed">일정 없음</Text>}
+          {today.length > 4 && <Text size="xs" c="dimmed">+{today.length - 4}</Text>}
+        </Group>
+      </UnstyledButton>
+    </Popover.Target>
+    <Popover.Dropdown>
+      <ScrollArea.Autosize mah="60vh">
+        <Stack gap="sm">
+          {days.map(d => <Stack key={d.n} gap={4}>
+            <Text size="xs" fw={600} c={d.n ? 'dimmed' : undefined}>{new Date(d.from).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' })}{d.n === 0 ? ' · 오늘' : ''}</Text>
+            {d.list.length ? d.list.map(e => <Group key={e.id} gap={8} wrap="nowrap" pl={6}>
+              <Text size="xs" ff="monospace" c="dimmed" w={42} style={{ flex: 'none' }}>{e.allDay ? '종일' : hm(e.start)}</Text>
+              <Text size="sm" style={{ flex: 1, minWidth: 0 }} className="hq-wrap">{e.title}</Text>
+              {e.cal && <Text size="xs" c="dimmed" style={{ flex: 'none' }}>{e.cal}</Text>}
+            </Group>) : <Text size="xs" c="dimmed" pl={6}>없음</Text>}
+          </Stack>)}
+        </Stack>
+      </ScrollArea.Autosize>
+    </Popover.Dropdown>
+  </Popover>
+}
+
 function Header({ S }: { S: Snapshot }) {
   const un = S.sessions.filter(s => !s.task).length, waits = S.tasks.flatMap(t => t.waits).length
   const mine = S.sessions.filter(s => s.state === 'myturn' || s.state === 'approval').length
@@ -92,6 +130,7 @@ function Header({ S }: { S: Snapshot }) {
         <Text size="xs" c="dimmed">업무 {S.tasks.length} · 열린 세션 {S.sessions.length} (미배치 {un}) · 사람 대기 {waits}</Text>
       </div>
     </Group>
+    <Today S={S} />
     <Group gap="xs">
       <LanAddress S={S} />
       <Clock />

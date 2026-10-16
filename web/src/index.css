@@ -197,3 +197,6 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-memo-row { border-radius: 6px; padding: 2px; }
 .hq-memo-row.del { background: color-mix(in srgb, var(--mantine-color-red-7) 18%, transparent); }
 .hq-item:focus-visible { outline: 2px solid var(--mantine-color-indigo-4); outline-offset: -2px; }
+/* 머리의 오늘 일정(App.tsx Today) */
+.hq-today { padding: 4px 8px; border-radius: 8px; min-width: 0; overflow: hidden; transition: background-color .12s ease; }
+.hq-today:hover { background: var(--mantine-color-default-hover); }
