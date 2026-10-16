@@ -35,7 +35,8 @@ export function CalendarCard({ S }: { S: Snapshot }) {
   const now = new Date(), today = midnight(now.getFullYear(), now.getMonth(), now.getDate())
   const more = () => { if (!month) setMonth({ y: now.getFullYear(), m: now.getMonth() }); else setPick(p => !p) }
   const list = c.events.filter(e => e.start < today + 864e5 && e.end > today)
-  return <Paper ref={ref} withBorder className={'hq-cal' + (month ? ' open' : '')}>
+  // 칸(slot)이 자리를 지키고 카드는 그 안에서 아래 왼쪽에 붙어 커진다(펼쳐도 위의 메일 카드를 밀지 않고 덮는다)
+  return <div className="hq-cal-slot"><Paper ref={ref} withBorder className={'hq-cal' + (month ? ' open' : '')}>
     {month ? <Month y={month.y} m={month.m} today={today} />
       : <div className="hq-cal-today">
         <Text size="sm" fw={600} mb={4}>
@@ -52,7 +53,7 @@ export function CalendarCard({ S }: { S: Snapshot }) {
     <UnstyledButton className={'hq-cal-more' + (pick ? ' on' : '')} onClick={more} aria-label={month ? '달 고르기' : '이번 달 펼치기'} title={month ? '달 고르기' : '이번 달 펼치기 (닫기는 Esc)'}>
       <IconChevronRight size={16} />
     </UnstyledButton>
-  </Paper>
+  </Paper></div>
 }
 
 // 한 달 달력(일요일부터). 앞뒤 달의 날도 흐리게 채운다. 일정은 고를 때마다 서버에서 그 범위만 받는다

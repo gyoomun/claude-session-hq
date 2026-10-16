@@ -210,8 +210,11 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-aside { --w: calc((100vw - 2032px) / 2 - 2 * var(--mantine-spacing-md)); position: fixed; left: var(--mantine-spacing-md); bottom: var(--mantine-spacing-md); width: var(--w); display: flex; flex-direction: column; gap: var(--mantine-spacing-md); z-index: 150; }
 @media (max-width: 2415px) { .hq-aside { display: none; } }
 /* 일정 카드: 평소엔 오늘 것만, 펼치면 위·옆으로 커져 한 달 달력(화면을 덮는다) */
-.hq-cal { position: relative; height: 26vh; width: 100%; display: flex; overflow: hidden; transition: width .25s ease, height .25s ease, box-shadow .25s ease; }
+.hq-cal-slot { position: relative; height: 26vh; flex: none; }
+.hq-cal { position: absolute; left: 0; bottom: 0; height: 26vh; width: 100%; display: flex; overflow: hidden; transition: width .25s ease, height .25s ease, box-shadow .25s ease; }
 .hq-cal.open { width: min(calc(var(--w) + 1000px), calc(100vw - 2 * var(--mantine-spacing-md))); height: 72vh; box-shadow: var(--mantine-shadow-xl); }
+.hq-mail { height: 26vh; flex: none; display: flex; flex-direction: column; }
+.hq-mail-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 8px 12px; }
 .hq-cal-today { flex: 1; min-width: 0; overflow-y: auto; padding: 10px 8px 10px 12px; }
 .hq-cal-row { display: block; width: 100%; padding: 4px 6px; margin-left: -6px; border-radius: 6px; transition: background-color .12s ease; }
 .hq-cal-row:hover, .hq-cal-row:focus-visible { background: var(--mantine-color-default-hover); }

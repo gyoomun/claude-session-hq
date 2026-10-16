@@ -7,6 +7,7 @@ import type { Snapshot } from './types'
 import { stale } from './util'
 import { WorkView } from './Work'
 import { CalendarCard } from './Calendar'
+import { MailCard } from './Inbox'
 import { copyText, useFlash } from './Chat'
 import { isRecording, useAreaKeys } from './Keys'
 import { BoardView } from './Board'
@@ -174,7 +175,7 @@ export function App() {
     <AddTaskModal />
     <BriefModal S={S} />
     <SettingsWindow S={S} />
-    {/* 화면 왼쪽 빈 여백(넓은 모니터에서만 생긴다). 아래부터 일정 */}
-    <div className="hq-aside"><CalendarCard S={S} /></div>
+    {/* 화면 왼쪽 빈 여백(넓은 모니터에서만 생긴다). 아래부터 일정, 그 위에 메일 */}
+    <div className="hq-aside"><MailCard S={S} /><CalendarCard S={S} /></div>
   </Box>
 }

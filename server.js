@@ -354,7 +354,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, usage: readUsage(), btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, usage: readUsage(), btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -581,6 +581,43 @@ async function loadCalendar() {
   scan();
 }
 
+/* 메일(받은편지함): ~/.claude/board/inbox.env 에 '메일주소=앱 비밀번호'(Gmail)를 한 줄에 하나. 2분마다 계정마다 최근 15통의 머리(보낸 사람·제목·시각·읽음)만
+   읽기 전용으로 읽는다(읽음 표시를 바꾸지 않는다). 계정들을 합쳐 최근 순으로 30통을 준다. 비밀번호는 화면·API로 내보내지 않는다 */
+const { ImapFlow } = require('imapflow');
+const INBOX_FILE = path.join(BOARD_DIR, 'inbox.env');
+let inbox = { at: 0, error: '', mails: [], accounts: [] };
+async function loadInbox() {
+  let lines = [];
+  try { lines = fs.readFileSync(INBOX_FILE, 'utf8').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')); }
+  catch { inbox = { at: Date.now(), error: '', mails: [], accounts: [] }; return; }
+  const mails = [], errors = [], accounts = [];
+  for (const line of lines) {
+    const m = line.match(/^([^=\s]+@[^=\s]+)=(.+)$/);
+    if (!m) { errors.push('알아볼 수 없는 줄이 있습니다'); continue; }
+    const user = m[1];
+    accounts.push(user);
+    // 구글은 앱 비밀번호를 네 글자씩 띄어 보여 준다
+    const c = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user, pass: m[2].replace(/\s+/g, '') }, logger: false });
+    c.on('error', () => {}); // 연결이 끊겨도 서버가 죽지 않게. 실패는 아래 catch가 남긴다
+    try {
+      await c.connect();
+      const lock = await c.getMailboxLock('INBOX', { readOnly: true });
+      try {
+        const n = c.mailbox.exists;
+        if (n) for await (const x of c.fetch(`${Math.max(1, n - 14)}:*`, { envelope: true, flags: true, threadId: true, internalDate: true })) {
+          const f = x.envelope.from?.[0] || {};
+          mails.push({ id: user + ':' + x.uid, account: user, from: f.name || f.address || '', subject: x.envelope.subject || '(제목 없음)', at: +x.internalDate, unread: !x.flags.has('\\Seen'),
+            url: `https://mail.google.com/mail/u/${user}/#inbox` + (x.threadId ? '/' + BigInt(x.threadId).toString(16) : '') });
+        }
+      } finally { lock.release(); }
+      await c.logout();
+    } catch (e) { errors.push(user + ': ' + (e.authenticationFailed ? '로그인 실패(앱 비밀번호 확인)' : e.message)); c.close(); }
+  }
+  mails.sort((a, b) => b.at - a.at);
+  inbox = { at: Date.now(), error: errors.join(' · '), mails: mails.slice(0, 30), accounts };
+  scan();
+}
+
 /* Claude 사용량 한도(5시간·주간): 플러그인 hq-usage(~/.claude/my-mods)가 응답마다 ~/.claude/board/usage.json에 남긴다(계정 단위) */
 const USAGE_FILE = path.join(BOARD_DIR, 'usage.json');
 let usage = null, usageMtime = 0;
@@ -763,6 +800,7 @@ const routes = {
     askBtw(s.tmux, item);
   },
   'calendar/reload': async () => { await loadCalendar(); return calendar.error || ''; },
+  'inbox/reload': async () => { await loadInbox(); return inbox.error || ''; },
   // 달 보기: 그 달 칸(앞뒤 주 포함)의 일정. 받아 둔 캘린더를 펼치기만 한다
   'calendar/range': b => {
     const from = +b.from, to = +b.to;
@@ -1135,6 +1173,7 @@ http.createServer((req, res) => {
 restoreWeb().finally(() => {
   scan(); setInterval(scan, SCAN_MS);
   loadCalendar(); setInterval(loadCalendar, 10 * 60e3);
+  loadInbox(); setInterval(loadInbox, 2 * 60e3);
   // 새 세션은 Claude가 세션 파일을 쓰는 순간 바로 훑어 목록에 띄운다(2초 간격을 기다리면 새 세션이 늦게 보인다)
   try { fs.watch(SESS_DIR, scanSoon); } catch (e) { console.error('세션 폴더 감시 실패:', e.message); }
 });

@@ -4,7 +4,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Box, Button, CloseButton, Code, Group, SegmentedControl, Stack, Switch, Text, TextInput, UnstyledButton } from '@mantine/core'
-import { IconAccessPoint, IconCalendar, IconKeyboard, IconLayoutColumns, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconAccessPoint, IconCalendar, IconKeyboard, IconLayoutColumns, IconMail, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { api, toast } from './store'
 import { AREAS, DEFAULT_KEYS, TOAST_POS, type ToastPos, resetLayout, setKeys, setDetail, setMotion, setToast, setUI, setView, useUI } from './ui'
 import type { Snapshot } from './types'
@@ -18,6 +18,7 @@ const PAGES = [
   { id: 'layout', name: '배치', icon: IconLayoutColumns, words: '칸 높이 너비 핀 메모 btw 세션 목록 즐겨찾기 대화 경계 되돌리기 기본값' },
   { id: 'keys', name: '단축키', icon: IconKeyboard, words: '단축키 키보드 영역 세션 목록 즐겨찾기 대화 핀 메모 btw 녹화 F1 F2 F3 F4 Ctrl Tab Cmd T Esc 되감기' },
   { id: 'calendar', name: '일정', icon: IconCalendar, words: '일정 캘린더 구글 연차 반차 휴가 회사 iCal 다시 읽기' },
+  { id: 'mail', name: '메일', icon: IconMail, words: '메일 이메일 Gmail 지메일 받은편지함 앱 비밀번호 다시 읽기' },
   { id: 'session', name: '세션', icon: IconRefresh, words: '모두 재시작 웹 세션 CLAUDE.md zshrc' },
   { id: 'access', name: '접속', icon: IconAccessPoint, words: '사내망 접속 인증 메일 로그인 기기 끊기 로그아웃' },
 ] as const
@@ -125,6 +126,26 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
           <Text size="sm">1. 구글 캘린더(hjkim.engsoft@gmail.com)에서 설정 → 왼쪽 '내 캘린더의 설정'에서 팀 일정이 있는 캘린더를 고릅니다.</Text>
           <Text size="sm">2. '캘린더 통합'의 <b>비공개 주소(iCal 형식)</b>를 복사합니다. 이 주소는 비밀번호처럼 다룹니다(아는 사람은 일정을 볼 수 있다).</Text>
           <Text size="sm">3. 이 맥의 <Code>~/.claude/board/calendar.env</Code> 파일에 한 줄에 하나씩 <Code>이름=주소</Code>로 적습니다(캘린더가 여럿이면 여러 줄).</Text>
+          <Text size="sm">4. 위의 '다시 읽기'를 누릅니다.</Text>
+        </Stack>
+      </Section>
+    </>
+  }
+  if (id === 'mail') {
+    const b = S.inbox
+    return <>
+      <Section title="받은편지함">
+        <Row label="연결" help={!b?.accounts.length ? '아직 이은 메일이 없습니다. 아래 순서대로 이으면 화면 왼쪽 여백에 최근 메일이 보입니다'
+          : `${b.accounts.join(', ')} · ${b.at ? new Date(b.at).toLocaleTimeString('ko-KR', { hour12: false }) + '에 읽음' : '아직 못 읽음'} · 2분마다 다시 읽습니다(읽음 표시는 바꾸지 않습니다)`}>
+          <Button size="xs" variant="default" onClick={async () => { const r = await api<string>('inbox/reload'); if (r) toast(r.result ? '일부를 읽지 못했습니다: ' + r.result : '메일을 다시 읽었습니다.', r.result ? 'red' : undefined) }}>다시 읽기</Button>
+        </Row>
+        {b?.error && <Row label="읽지 못한 메일" help={b.error}><Text size="xs" c="red.4">확인 필요</Text></Row>}
+      </Section>
+      <Section title="잇는 법 (Gmail)">
+        <Stack gap={6} px={10}>
+          <Text size="sm">1. 그 구글 계정에 2단계 인증이 켜져 있어야 합니다.</Text>
+          <Text size="sm">2. 구글 계정 관리 → 보안 → <b>앱 비밀번호</b>(myaccount.google.com/apppasswords)에서 하나 만듭니다. 비밀번호처럼 다룹니다.</Text>
+          <Text size="sm">3. 이 맥의 <Code>~/.claude/board/inbox.env</Code> 파일에 한 줄에 하나씩 <Code>메일주소=앱 비밀번호</Code>로 적습니다(계정이 여럿이면 여러 줄).</Text>
           <Text size="sm">4. 위의 '다시 읽기'를 누릅니다.</Text>
         </Stack>
       </Section>
