@@ -115,7 +115,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
     const c = S.calendar
     return <>
       <Section title="구글 캘린더">
-        <Row label="연결" help={!c?.sources ? '아직 이은 캘린더가 없습니다. 아래 순서대로 이으면 머리 아래에 7일 일정이 보입니다'
+        <Row label="연결" help={!c?.sources ? '아직 이은 캘린더가 없습니다. 아래 순서대로 이으면 화면 위쪽 카드에 오늘 일정이 보입니다'
           : `캘린더 ${c.sources}개 · 일정 ${c.events.length}개(오늘부터 7일) · ${c.at ? new Date(c.at).toLocaleTimeString('ko-KR', { hour12: false }) + '에 읽음' : '아직 못 읽음'} · 10분마다 다시 읽습니다`}>
           <Button size="xs" variant="default" onClick={async () => { const r = await api<string>('calendar/reload'); if (r) toast(r.result ? '일부를 읽지 못했습니다: ' + r.result : '일정을 다시 읽었습니다.', r.result ? 'red' : undefined) }}>다시 읽기</Button>
         </Row>
@@ -135,7 +135,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
     const b = S.inbox
     return <>
       <Section title="받은편지함">
-        <Row label="연결" help={!b?.accounts.length ? '아직 이은 메일이 없습니다. 아래 순서대로 이으면 화면 왼쪽 여백에 최근 메일이 보입니다'
+        <Row label="연결" help={!b?.accounts.length ? '아직 이은 메일이 없습니다. 아래 순서대로 이으면 화면 위쪽 카드에 최근 메일이 보입니다'
           : `${b.accounts.join(', ')} · ${b.at ? new Date(b.at).toLocaleTimeString('ko-KR', { hour12: false }) + '에 읽음' : '아직 못 읽음'} · 2분마다 다시 읽습니다(읽음 표시는 바꾸지 않습니다)`}>
           <Button size="xs" variant="default" onClick={async () => { const r = await api<string>('inbox/reload'); if (r) toast(r.result ? '일부를 읽지 못했습니다: ' + r.result : '메일을 다시 읽었습니다.', r.result ? 'red' : undefined) }}>다시 읽기</Button>
         </Row>
@@ -211,7 +211,7 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
     const el = [...box.querySelectorAll<HTMLElement>('[data-page]')].filter(x => x.getBoundingClientRect().top <= top).pop()
     setActive(el?.dataset.page || box.querySelector<HTMLElement>('[data-page]')?.dataset.page || '')
   }
-  // 열 때 고른 분류(예: 머리의 '사내망 접속 꺼짐' → 접속)가 있으면 그 자리에서 시작한다
+  // 열 때 고른 분류(예: 사이드바의 '사내망 접속 꺼짐' → 접속)가 있으면 그 자리에서 시작한다
   useLayoutEffect(() => { if (ui.settings) { go(ui.settingsPage, false); if (!PAGES.some(p => p.id === ui.settingsPage)) { pinned.current = 0; spy() } } }, [ui.settings])
   if (!ui.settings) return null
   const pages = PAGES.filter(p => hit(q, p.name + ' ' + p.words))

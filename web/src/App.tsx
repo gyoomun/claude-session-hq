@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Box, Button, Center, Code, Group, Kbd, Loader, SegmentedControl, Stack, Text, Title } from '@mantine/core'
+import { ActionIcon, Alert, Box, Button, Center, Code, Divider, Group, Kbd, Loader, Stack, Text, Title, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
-import { type Mode, pickNew, rememberSel, setMode, setUI, useUI } from './ui'
+import { type Mode, pickNew, rememberSel, setMode, setSlim, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
-import { stale } from './util'
 import { WorkView } from './Work'
 import { CalendarCard } from './Calendar'
 import { MailCard } from './Inbox'
@@ -15,20 +14,21 @@ import { MemoView } from './Memo'
 import { SessionDrawer, TaskDrawer } from './Drawers'
 import { AddTaskModal, BriefModal, NewSessionModal } from './Modals'
 import { SettingsWindow } from './Settings'
-import { IconSettings } from '@tabler/icons-react'
+import { IconBuildingSkyscraper, IconCheck, IconFolderPlus, IconLayoutColumns, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconListDetails, IconNetwork, IconNote, IconPlus, IconReport, IconSettings } from '@tabler/icons-react'
 
 const Logo = () => <svg width="34" height="34" viewBox="0 0 8 8" shapeRendering="crispEdges" aria-hidden="true">
   <rect width="8" height="8" fill="var(--mantine-color-default)" /><rect x="1" y="1" width="2" height="2" fill="var(--mantine-color-teal-6)" />
   <rect x="5" y="1" width="2" height="2" fill="var(--mantine-color-yellow-6)" /><rect x="1" y="5" width="2" height="2" fill="var(--mantine-color-grape-5)" />
   <rect x="5" y="5" width="2" height="2" fill="var(--mantine-color-gray-6)" /><rect x="3" y="3" width="2" height="2" fill="var(--mantine-color-indigo-4)" /></svg>
 
-function Clock() {
+function Clock({ slim }: { slim: boolean }) {
   useNow()
-  return <Text ff="monospace" size="sm" c="dimmed">server time {new Date(serverNow()).toLocaleTimeString('en-GB', { hour12: false })}</Text>
+  const t = new Date(serverNow()).toLocaleTimeString('en-GB', { hour12: false })
+  return <Text ff="monospace" size="xs" c="dimmed" ta={slim ? 'center' : undefined} title="server time">{slim ? t.slice(0, 5) : 'server time ' + t}</Text>
 }
 
 // 사내망에서 들어올 주소. 맥의 네트워크(와이파이·유선)가 바뀌면 서버가 다음 갱신(2초) 때 새 주소를 주고, 바뀌었다고 알린다
-function LanAddress({ S }: { S: Snapshot }) {
+function LanAddress({ S, slim }: { S: Snapshot; slim: boolean }) {
   const [copied, flash] = useFlash()
   const a = S.access, primary = a.addresses[0] || ''
   const prev = useRef(primary)
@@ -37,14 +37,17 @@ function LanAddress({ S }: { S: Snapshot }) {
       notifications.show({ title: '맥의 주소가 바뀌었습니다', message: `사내망에서는 이제 ${primary} 로 들어옵니다`, color: 'orange', autoClose: 15000 })
     prev.current = primary
   }, [primary, a.lan])
-  if (!a.lan) return <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ settings: true, settingsPage: 'access' })}>사내망 접속 꺼짐</Button>
-  return <Group gap={6} wrap="nowrap">
-    <Text size="xs" c="dimmed">사내망 주소</Text>
+  const copy = async () => { if (primary && await copyText(primary)) flash() }
+  const off = () => setUI({ settings: true, settingsPage: 'access' })
+  if (slim) return <Tooltip label={!a.lan ? '사내망 접속 꺼짐' : copied ? '✓ 복사됨' : `사내망 주소 ${primary || '네트워크 없음'} · 누르면 복사`} position="right">
+    <ActionIcon size="lg" variant="subtle" color={copied ? 'teal' : 'gray'} onClick={a.lan ? copy : off} aria-label="사내망 주소">{copied ? <IconCheck size={18} /> : <IconNetwork size={18} />}</ActionIcon>
+  </Tooltip>
+  if (!a.lan) return <Button size="xs" variant="subtle" color="gray" onClick={off}>사내망 접속 꺼짐</Button>
+  return <Stack gap={2}>
+    <Text size="xs" c="dimmed">사내망 주소 {copied && <Text span inherit c="teal.4">✓ 복사됨</Text>}</Text>
     {/* 주소를 누르면 복사한다 */}
-    <Code fz="sm" className={primary ? 'hq-copyable' : undefined} title={primary ? '누르면 복사' : undefined}
-      onClick={async () => { if (primary && await copyText(primary)) flash() }}>{primary || '네트워크 없음'}</Code>
-    {copied && <Text size="xs" c="teal.4">✓ 복사됨</Text>}
-  </Group>
+    <Code fz="xs" className={primary ? 'hq-copyable' : undefined} title={primary ? '누르면 복사' : undefined} onClick={copy} style={{ overflowWrap: 'anywhere' }}>{primary.replace(/^https?:\/\//, '') || '네트워크 없음'}</Code>
+  </Stack>
 }
 
 // 세션이 어디에 기대고 있는지 드러낸다: Orca에서 도는 세션은 Orca를 끄면 같이 꺼지고, 방금 한꺼번에 닫힌 세션은 웹에서 다시 연다
@@ -84,27 +87,37 @@ function Notices({ S }: { S: Snapshot }) {
   </>
 }
 
-function Header({ S }: { S: Snapshot }) {
-  const un = S.sessions.filter(s => !s.task).length, waits = S.tasks.flatMap(t => t.waits).length
+// 왼쪽 사이드바: 로고, 보기 전환(F1~F4), 새 세션·업무 추가·브리핑, 아래에 사내망 주소·시각·환경설정·접기.
+// 위쪽 높이를 일정·메일 카드에 주려고 버튼들을 여기로 모았다(사용자 요청: 노트북 화면에서도 일정·메일을 보려고). 접으면 아이콘만 남는다
+const VIEWS: [Mode, string, string, typeof IconLayoutColumns][] = [['work', '작업', 'F1', IconLayoutColumns], ['task', '업무별', 'F2', IconBuildingSkyscraper], ['all', '세션 전체', 'F3', IconListDetails], ['memo', '메모', 'F4', IconNote]]
+function Sidebar({ S }: { S: Snapshot }) {
+  const ui = useUI(), slim = ui.slim
   const mine = S.sessions.filter(s => s.state === 'myturn' || s.state === 'approval').length
-  const st = (x: string) => S.sessions.filter(s => s.state === x).length
-  const count = (label: string, n: number, color: string) => <Text span inherit c={n ? color : undefined} fw={n ? 600 : undefined}>{label} {n}</Text>
   useEffect(() => { document.title = (mine ? `(${mine}) ` : '') + 'Claude Session HQ' }, [mine])
-  return <Group justify="space-between" wrap="wrap" gap="sm">
-    <Group gap="sm" wrap="nowrap">
+  // 펼치면 글자 버튼, 접으면 아이콘과 풍선 도움말
+  const item = (key: string, Icon: typeof IconLayoutColumns, label: string, onClick: () => void, o: { on?: boolean; kbd?: string; primary?: boolean } = {}) => slim
+    ? <Tooltip key={key} label={label + (o.kbd ? ` (${o.kbd})` : '')} position="right">
+      <ActionIcon size="lg" variant={o.primary ? 'filled' : o.on ? 'light' : 'subtle'} color={o.primary || o.on ? 'indigo' : 'gray'} onClick={onClick} aria-label={label}><Icon size={18} /></ActionIcon>
+    </Tooltip>
+    : <Button key={key} fullWidth justify="flex-start" variant={o.primary ? 'filled' : o.on ? 'light' : 'subtle'} color={o.primary || o.on ? 'indigo' : 'gray'}
+      leftSection={<Icon size={16} />} rightSection={o.kbd && <Kbd size="xs">{o.kbd}</Kbd>} onClick={onClick} aria-label={label}
+      styles={{ label: { flex: 1 }, root: o.on || o.primary ? undefined : { color: 'var(--mantine-color-text)' } }}>{label}</Button>
+  return <Stack className="hq-sidebar" gap="xs" align={slim ? 'center' : 'stretch'}>
+    <Group gap={10} wrap="nowrap" mb="sm" title="Claude Session HQ">
       <Logo />
-      <div>
-        <Title order={1} size={24} fw={400} className="hq-display">Claude Session HQ</Title>
-        <Text size="xs" c="dimmed">업무 {S.tasks.length} · 열린 세션 {S.sessions.length} (미배치 {un}) · {count('내 차례', st('myturn'), 'yellow.5')} · {count('승인 필요', st('approval'), 'red.5')} · 작업중 {st('working')} · 쉼 {st('idle')} · 사람 대기 {waits} · {count('정체 업무', S.tasks.filter(t => stale(S, t)).length, 'pink.5')}</Text>
-      </div>
+      {!slim && <Title order={1} size={18} lh={1.15} fw={400} className="hq-display">Claude Session HQ</Title>}
     </Group>
-    <Group gap="xs">
-      <LanAddress S={S} />
-      <Clock />
-      <Button variant="default" leftSection={<IconSettings size={16} />} onClick={() => setUI({ settings: true })}>환경설정</Button>
-      <Button onClick={() => setUI({ brief: true })}>지금 상황 브리핑</Button>
-    </Group>
-  </Group>
+    {VIEWS.map(([m, label, kbd, Icon]) => item(m, Icon, label, () => setMode(m), { on: ui.mode === m, kbd }))}
+    <Divider my={4} w="100%" />
+    {item('new', IconPlus, '새 세션', () => setUI({ newFor: '' }), { primary: true, kbd: '⌘T' })}
+    {item('task', IconFolderPlus, '업무 추가', () => setUI({ addTask: true }))}
+    {item('brief', IconReport, '지금 상황 브리핑', () => setUI({ brief: true }))}
+    <Box style={{ flex: 1 }} />
+    <LanAddress S={S} slim={slim} />
+    <Clock slim={slim} />
+    {item('settings', IconSettings, '환경설정', () => setUI({ settings: true }))}
+    {item('slim', slim ? IconLayoutSidebarLeftExpand : IconLayoutSidebarLeftCollapse, slim ? '사이드바 펼치기' : '사이드바 접기', () => setSlim(!slim))}
+  </Stack>
 }
 
 export function App() {
@@ -145,29 +158,21 @@ export function App() {
   }, [])
 
   if (!S) return <Center h="100vh"><Loader /></Center>
-  // 화면 전체를 한 덩어리로 가운데에 놓는다(좌우 여백이 같다). 폭은 모든 보기에서 같다(작업 보기의 세 칸 기준. 보기마다 다르면 넘길 때 화면이 움찔한다).
-  // 격자 2행: 위(머리·빈 자리·보기 전환) / 아래(내용). 페이지 자체는 스크롤하지 않고 아래 내용 영역이 화면 높이를 채운다
-  return <Box h="100dvh" py="md" px="md" maw={2032} mx="auto"
-    style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', rowGap: 'var(--mantine-spacing-md)' }}>
-    <Stack gap="md" style={{ minWidth: 0 }}>
-      <Header S={S} />
-      {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
-      <Notices S={S} />
-      {/* 예전 상태 카드·일정 줄 자리. 쓸모를 찾을 때까지 비워 두되 아래 화면이 움직이지 않게 높이는 둔다(사용자 요청) */}
-      <Box h={97} />
-      <Group justify="space-between">
-        <SegmentedControl value={ui.mode} onChange={v => setMode(v as Mode)}
-          data={[['작업', 'work', 'F1'], ['업무별', 'task', 'F2'], ['세션 전체', 'all', 'F3'], ['메모', 'memo', 'F4']].map(([label, value, key]) => ({
-            value, label: <Group gap={6} wrap="nowrap">{label}<Kbd size="xs">{key}</Kbd></Group>,
-          }))} />
-        <Group gap="xs">
-          <Button variant="default" onClick={() => setUI({ addTask: true })}>+ 업무 추가</Button>
-          <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>
-        </Group>
-      </Group>
-    </Stack>
-    <Box key={ui.mode} className="hq-fade" style={{ minHeight: 0, minWidth: 0 }}>
-      {ui.mode === 'work' ? <WorkView S={S} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
+  // 화면 전체(사이드바+본문)를 한 덩어리로 가운데에 놓는다(좌우 여백이 같다). 본문 폭은 모든 보기에서 같다(작업 보기의 세 칸 기준 2032px. 보기마다 다르면 넘길 때 화면이 움찔한다).
+  // 본문은 격자 2행: 위(알림·일정·메일 카드) / 아래(내용). 페이지 자체는 스크롤하지 않고 아래 내용 영역이 화면 높이를 채운다
+  const side = ui.slim ? 68 : 224
+  return <Box h="100dvh" maw={2032 + side} mx="auto" className="hq-shell" style={{ gridTemplateColumns: `${side}px minmax(0, 1fr)` }}>
+    <Sidebar S={S} />
+    <Box py="md" px="md" style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', rowGap: 'var(--mantine-spacing-md)', minWidth: 0, minHeight: 0 }}>
+      <Stack gap="md" style={{ minWidth: 0 }}>
+        {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
+        <Notices S={S} />
+        {/* 일정·메일 카드. 카드가 없어도 아래 화면이 움직이지 않게 높이는 둔다 */}
+        <div className="hq-top"><CalendarCard S={S} /><MailCard S={S} /></div>
+      </Stack>
+      <Box key={ui.mode} className="hq-fade" style={{ minHeight: 0, minWidth: 0 }}>
+        {ui.mode === 'work' ? <WorkView S={S} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
+      </Box>
     </Box>
     <SessionDrawer S={S} />
     <TaskDrawer S={S} />
@@ -175,7 +180,5 @@ export function App() {
     <AddTaskModal />
     <BriefModal S={S} />
     <SettingsWindow S={S} />
-    {/* 화면 왼쪽 빈 여백(넓은 모니터에서만 생긴다). 아래부터 일정, 그 위에 메일 */}
-    <div className="hq-aside"><MailCard S={S} /><CalendarCard S={S} /></div>
   </Box>
 }

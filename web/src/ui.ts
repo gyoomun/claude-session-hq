@@ -34,12 +34,13 @@ interface UI {
   motion: 'system' | 'on' // 움직임: 컴퓨터의 '동작 줄이기'를 따를지, 항상 켤지
   toast: ToastPos // 알림(토스트)이 뜨는 자리: 네 꼭짓점과 네 변의 가운데
   keys: Record<Area, Combo | null>
+  slim: boolean // 왼쪽 사이드바를 아이콘만 남기고 접었는지(이 브라우저에 남는다)
   layoutKey: number // 칸 경계를 기본값으로 되돌릴 때 올린다(경계 묶음은 처음 그릴 때만 저장값을 읽어서, 다시 그리게 한다)
 }
 let ui: UI = {
   mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '', pendingTask: '', pendingCwd: '', pendingWorking: false,
   openTask: null, openSess: null, newFor: null, addTask: false, brief: false,
-  settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system',
+  settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system', slim: get('hq-slim') === '1',
 }
 history.replaceState(null, '', '#' + ui.mode)
 const subs = new Set<() => void>()
@@ -68,6 +69,7 @@ export function pickNew(tmux: string, o: { task?: string; cwd?: string; working?
   setMode('work')
 }
 export function setView(v: UI['view']) { set('hq-view', v); setUI({ view: v }) }
+export function setSlim(v: boolean) { set('hq-slim', v ? '1' : ''); setUI({ slim: v }) }
 export function setMotion(v: UI['motion']) { set('hq-motion', v === 'on' ? 'on' : ''); document.documentElement.dataset.motion = v; setUI({ motion: v }) }
 document.documentElement.dataset.motion = ui.motion
 document.documentElement.dataset.toast = ui.toast
