@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Box, Button, UnstyledButton, CloseButton, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
-import { pickNew, setView } from './ui'
+import { openMenuView, pickNew } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
 import { RewindPanel } from './Rewind'
@@ -196,7 +196,7 @@ function Pick({ kind, pid, web, tip, color, children }: { kind: 'mode' | 'model'
     setBusy(true)
     const r = await api('session/menu', { pid, kind })
     if (!r || kind !== 'mode') setBusy(false)
-    if (r && kind !== 'mode') setView('term')
+    if (r && kind !== 'mode') openMenuView()
     if (r && kind === 'mode') setTimeout(() => setBusy(false), 1500) // 화면이 안 바뀌어도 풀어 준다
   }} title={tip} className="hq-item" p="2px 6px" m="-2px -6px" style={{ borderRadius: 6, width: `calc(${width} + 12px)`, flex: 'none' }}>
     {body}

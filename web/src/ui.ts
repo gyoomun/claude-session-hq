@@ -78,7 +78,21 @@ export function pickNew(tmux: string, o: { task?: string; cwd?: string; working?
   burst()
   setMode('work')
 }
-export function setView(v: UI['view']) { set('hq-view', v); setUI({ view: v }) }
+export function setView(v: UI['view']) { disarm(); set('hq-view', v); setUI({ view: v }) }
+// 터미널 보기로 /model·/effort 창을 띄운 뒤, 창을 닫는 키(Enter·Esc·s)가 눌리면 대화 화면으로 되돌린다. 이미 터미널 보기였으면 그대로 둔다.
+// 사용자가 먼저 보기를 직접 바꾸면 되돌리지 않는다
+let menuReturn: ((e: KeyboardEvent) => void) | null = null
+export function openMenuView() {
+  if (ui.view === 'term') return
+  setView('term')
+  menuReturn = e => {
+    if (!['Enter', 'Escape', 's', 'S'].includes(e.key)) return
+    setTimeout(() => setView('chat'), 300) // 창이 닫히는 것까지 잠깐 보이게
+    disarm()
+  }
+  addEventListener('keydown', menuReturn, true)
+}
+function disarm() { if (menuReturn) removeEventListener('keydown', menuReturn, true); menuReturn = null }
 // 지금 모양(펼침·접힘)의 폭을 바꾼다. 두 폭은 따로 남는다
 export function setSideW(v: number, save = false) {
   if (ui.slim) { v = clampSlim(v); if (save) set('hq-slimw', String(v)); setUI({ slimW: v }) }
