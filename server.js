@@ -178,6 +178,8 @@ function tmux(args) {
     (err, out, errOut) => err ? fail(new Error(clip((errOut || err.message).trim(), 300))) : ok(out)));
 }
 // 로그인 셸로 claude를 띄운다(.zshrc의 PATH를 쓰려고). claude가 끝나면 tmux 세션도 끝난다
+// 같은 대화로 다시 띄우는 인자. 아직 한마디도 안 한 세션은 기록 파일이 없어 --resume이 실패하고 바로 꺼지므로, 같은 대화 ID로 새로 띄운다(메모·즐겨찾기가 이어진다)
+const resumeArgs = (cwd, sid) => findTranscript({ cwd, sessionId: sid }) ? ['--resume', sid] : ['--session-id', sid];
 function startTmux(name, cwd, args) {
   return tmux(['new-session', '-d', '-s', name, '-c', cwd, '-x', '200', '-y', '50', '-e', 'HQ_TMUX=' + name,
     SHELL, '-lic', 'exec claude ' + args.map(q).join(' ')]);
@@ -205,7 +207,7 @@ async function restoreWeb() {
     if (openSids.has(w.sid)) { console.log('복구 건너뜀(다른 곳에서 열려 있음):', w.name, w.sid); w.sid = ''; w.createdAt = 0; continue; }
     // 꺼지기 전에 나를 기다리던 세션만 '내 차례'로 남기고, 나머지는 다시 띄운 것만으로 '내 차례'가 되지 않게 한다
     if (w.state !== 'myturn' && w.state !== 'approval') db.seen[w.sid] = Date.now() + 30e3;
-    try { await startTmux(w.name, w.cwd, [...w.args, '--resume', w.sid]); console.log('복구:', w.name, w.sid); }
+    try { await startTmux(w.name, w.cwd, [...w.args, ...resumeArgs(w.cwd, w.sid)]); console.log('복구:', w.name, w.sid); }
     catch (e) { console.error('복구 실패:', w.name, e.message); }
   }
   db.web = db.web.filter(w => w.sid || Date.now() - w.createdAt < 60e3);
@@ -510,7 +512,7 @@ async function migrateOne(pid) {
   for (let i = 0; i < 40 && alive(pid); i++) await sleep(500);
   if (alive(pid)) throw new Error('Orca 쪽 Claude가 끝나지 않았습니다. Orca에서 직접 /exit 해 주세요');
   const name = newName();
-  await startTmux(name, s.dir, [...args, '--resume', s.sid]);
+  await startTmux(name, s.dir, [...args, ...resumeArgs(s.dir, s.sid)]);
   db.web.push({ name, cwd: s.dir, args, sid: s.sid, createdAt: Date.now() });
   if (db.assign[s.sid]) pendingAssign.set(name, db.assign[s.sid]);
   db.closed = db.closed.filter(x => x.sid !== s.sid);
@@ -620,7 +622,7 @@ const routes = {
       const cwd = fs.existsSync(c.dir) ? c.dir : HOME;
       const args = c.args.length ? c.args : db.claudeArgs;
       const name = newName();
-      await startTmux(name, cwd, [...args, '--resume', sid]);
+      await startTmux(name, cwd, [...args, ...resumeArgs(cwd, sid)]);
       db.web.push({ name, cwd, args, sid, createdAt: Date.now() });
       db.closed = db.closed.filter(x => x !== c);
       names.push(name);
@@ -644,7 +646,7 @@ const routes = {
     const m = readTail(file, Math.min(fs.statSync(file).size, 262144), 262144).match(/"cwd":"((?:[^"\\]|\\.)*)"/);
     const cwd = m && fs.existsSync(JSON.parse(`"${m[1]}"`)) ? JSON.parse(`"${m[1]}"`) : HOME;
     const name = newName();
-    await startTmux(name, cwd, [...db.claudeArgs, '--resume', sid]);
+    await startTmux(name, cwd, [...db.claudeArgs, ...resumeArgs(cwd, sid)]);
     db.web.push({ name, cwd, args: db.claudeArgs, sid, createdAt: Date.now() });
     if (b.task) db.assign[sid] = b.task;
     focusReq = { name, at: Date.now() };
@@ -697,7 +699,7 @@ const routes = {
         try {
           await tmux(['kill-session', '-t', w.name]).catch(() => {});
           for (let i = 0; i < 20 && alive(s.pid); i++) await sleep(250);
-          await startTmux(w.name, w.cwd, [...w.args, '--resume', s.sid]);
+          await startTmux(w.name, w.cwd, [...w.args, ...resumeArgs(w.cwd, s.sid)]);
         } catch (e) { console.error('다시 띄우기 실패:', w.name, e.message); }
       }
       save();

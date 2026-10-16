@@ -25,7 +25,8 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .arm { animation: hq-wave 1.2s steps(2) infinite; }
 @keyframes hq-blink { 50% { opacity: .25; } }
 @keyframes hq-wave { 50% { transform: translateY(1px); } }
-@media (prefers-reduced-motion: reduce) { .code, .arm { animation: none; } }
+/* 움직임 줄이기: 컴퓨터 설정을 따른다. 환경설정에서 '항상 켜기'면(html data-motion="on") 무시한다 */
+@media (prefers-reduced-motion: reduce) { :root:not([data-motion="on"]) .code, :root:not([data-motion="on"]) .arm { animation: none; } }
 /* 좁은 화면: 두 칸을 위아래로 쌓고, 내용 영역 하나만 스크롤한다 */
 @media (max-width: 1100px) { .hq-board { grid-template-columns: minmax(0, 1fr) !important; overflow-y: auto; } .hq-board .hq-pane { height: auto; overflow: visible; } }
 
@@ -73,7 +74,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
   animation: hq-bounce 1s ease-in-out infinite; z-index: 2; }
 .hq-bubble::after { content: ''; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); border: 4px solid transparent; border-top-color: #111; }
 @keyframes hq-bounce { 50% { transform: translate(-50%, -3px); } }
-@media (prefers-reduced-motion: reduce) { .hq-bubble { animation: none; } .hq-desk { transition: none; } }
+@media (prefers-reduced-motion: reduce) { :root:not([data-motion="on"]) .hq-bubble { animation: none; } :root:not([data-motion="on"]) .hq-desk { transition: none; } }
 
 /* 대화 화면 (Chat.tsx) */
 .hq-say { max-width: 100%; }
@@ -117,7 +118,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 /* 보내는 중인 내 말: 기록에 들어오기 전까지 살짝 흐리게, 나타날 때 아래에서 올라온다 */
 .hq-pending { opacity: .6; animation: hq-in .16s ease-out; }
 @keyframes hq-in { from { opacity: 0; transform: translateY(8px); } }
-@media (prefers-reduced-motion: reduce) { .hq-pending { animation: none; } }
+@media (prefers-reduced-motion: reduce) { :root:not([data-motion="on"]) .hq-pending { animation: none; } }
 
 /* 움직임: 짧고 은은하게. 새로 생긴 것에만 넣는다(처음 불러온 것은 그대로) */
 .hq-in { animation: hq-in .2s ease-out; }                       /* 대화에 새로 온 답·도구 */
@@ -134,6 +135,6 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-room:not(.editing) { transition: left .22s ease, top .22s ease, width .22s ease, height .22s ease; }  /* 사무실 방(끄는 중에는 바로 따라온다) */
 .hq-rewind-item { transition: background-color .15s ease, border-color .15s ease; }
 @media (prefers-reduced-motion: reduce) {
-  .hq-in, .hq-fade, .hq-pop, .hq-dot.busy { animation: none; }
-  .hq-item, .hq-dot, .hq-slide, .hq-room, .hq-rewind-item { transition: none; }
+  :root:not([data-motion="on"]) .hq-in, :root:not([data-motion="on"]) .hq-fade, :root:not([data-motion="on"]) .hq-pop, :root:not([data-motion="on"]) .hq-dot.busy { animation: none; }
+  :root:not([data-motion="on"]) .hq-item, :root:not([data-motion="on"]) .hq-dot, :root:not([data-motion="on"]) .hq-slide, :root:not([data-motion="on"]) .hq-room, :root:not([data-motion="on"]) .hq-rewind-item { transition: none; }
 }

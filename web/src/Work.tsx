@@ -35,6 +35,7 @@ function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; 
 
 function Head({ S, s }: { S: Snapshot; s: Session }) {
   const [confirm, setConfirm] = useState(false)
+  const [restart, setRestart] = useState(false)
   return <Paper withBorder p="10px 12px">
     <Group gap="sm" wrap="wrap">
       <Stack gap={0} style={{ minWidth: 0, flex: '1 1 260px' }}>
@@ -46,6 +47,11 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         <AssignSelect S={S} s={s} />
         {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함</Button>}
         <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
+        {s.host === 'web' && <Button size="xs" variant="subtle" color="gray" onBlur={() => setRestart(false)} title="전역 CLAUDE.md·.zshrc 등을 바꾼 뒤. 같은 대화로 다시 띄워 이어집니다(일하는 중이어도 끊습니다)" onClick={async () => {
+          if (!restart) { setRestart(true); return }
+          setRestart(false)
+          if (await api('session/restart', { names: [s.tmux] })) toast('세션을 다시 띄웁니다. 대화는 그대로 이어집니다.')
+        }}>{restart ? '한 번 더 누르면 재시작' : '재시작'}</Button>}
         {s.host === 'web' && <Button size="xs" variant="outline" color="red" onBlur={() => setConfirm(false)} onClick={async () => {
           if (!confirm) { setConfirm(true); return }
           setConfirm(false)
