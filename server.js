@@ -88,7 +88,12 @@ function scanLines(text, info) {
     if (d.type === 'ai-title' && d.aiTitle) info.title = d.aiTitle;
     else if (d.type === 'custom-title' && d.customTitle) info.custom = d.customTitle;
     else if (d.isSidechain || d.isMeta || d.isCompactSummary) continue; // 자동 압축 요약은 Claude Code가 넣은 글이라 내 말로 치지 않는다
-    else if (d.type === 'assistant') { const t = textOf(d.message?.content).trim(); if (t) info.lastText = t; }
+    else if (d.type === 'assistant') {
+      const t = textOf(d.message?.content).trim(); if (t) info.lastText = t;
+      // 마지막 답을 만든 모델과 effort(/model·/effort로 바꾸면 다음 답부터 바뀐다)
+      if (d.requestedModel || d.message?.model) info.model = d.requestedModel || d.message.model;
+      if (d.effort) info.effort = d.effort;
+    }
     else if (d.type === 'user') {
       // 핀보드 플러그인은 바꿀 때마다 보드 전체를 도구 결과로 남긴다("Pinboard now: …"). 그 마지막 것이 지금 보드다
       for (const x of Array.isArray(d.message?.content) ? d.message.content : []) {
@@ -319,7 +324,7 @@ function scan() {
       pid: s.pid, sid: s.sessionId, name: s.name, title: t.custom || (tabTitle && tabTitle !== 'Claude Code' ? tabTitle : '') || t.title || s.name,
       cwd: s.cwd.replace(HOME, '~'), dir: s.cwd, state, since, startedAt: s.startedAt,
       act: state === 'working' ? (toolNow ? toolLine(h) : '생각 중') : state === 'compact' ? '대화 압축 중' : '',
-      msg, prompt: clip(t.lastPrompt, 400), task: db.assign[s.sessionId] || '',
+      msg, prompt: clip(t.lastPrompt, 400), model: t.model || '', effort: t.effort || '', task: db.assign[s.sessionId] || '',
       pin: db.pins[s.sessionId] ? pinItems(db.pins[s.sessionId].text) : [],
       host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '',
     };

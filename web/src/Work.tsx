@@ -292,7 +292,7 @@ export function WorkView({ S }: { S: Snapshot }) {
   const [opened] = useState(() => new Map<string, number>())
   if (ui.pendingSel && !opened.has(ui.pendingSel)) opened.set(ui.pendingSel, Date.now())
   const ghost: Session | null = ui.pendingSel ? { pid: 0, sid: '', name: '', title: '', cwd: ui.pendingCwd, dir: '', state: ui.pendingWorking ? 'working' : 'myturn',
-    since: opened.get(ui.pendingSel)!, startedAt: 0, act: '', msg: '', prompt: '', task: ui.pendingTask, host: 'web', tmux: ui.pendingSel, pin: [] } : null
+    since: opened.get(ui.pendingSel)!, startedAt: 0, act: '', msg: '', prompt: '', task: ui.pendingTask, host: 'web', tmux: ui.pendingSel, pin: [], model: '', effort: '' } : null
   // Ctrl+Tab / Ctrl+Shift+Tab: 지금 세션이 즐겨찾기에 있으면 즐겨찾기 안에서, 아니면 목록 안에서 다음·이전으로(끝에서 처음으로 돈다).
   // 크롬은 일반 탭에서 이 키를 탭 전환에 먼저 쓴다. '앱으로 설치'한 창에서는 브라우저가 키를 가져가지 않아 여기로 온다
   const order = useRef({ favs, normal: [] as string[], sel: '' })

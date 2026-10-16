@@ -18,6 +18,8 @@ export interface Session {
   host: 'web' | 'orca' | ''
   tmux: string
   pin: PinItem[] // Claude 핀보드(대화 기록의 마지막 상태)
+  model: string // 마지막 답을 만든 모델 ID(claude-opus-5-5 등). 아직 답이 없으면 ''
+  effort: string // 그 답의 effort(low·medium·high·xhigh·max)
 }
 
 export interface PinItem { id: string; mark: ' ' | '>' | 'x' | '?'; text: string }

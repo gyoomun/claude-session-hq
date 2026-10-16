@@ -18,6 +18,9 @@ interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'res
 const NewTab = (p: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...p} target="_blank" rel="noopener noreferrer" />
 // 마크다운 해석이 가장 무겁다. 같은 글은 다시 해석하지 않는다
 // 코드 블록: 오른쪽 위 '복사'로 한 번에 복사한다. 사내망(http)에서는 clipboard API가 막혀 있어 예전 방식(execCommand)으로도 시도한다
+// claude-opus-5-5 → Opus 5.5 (터미널의 표기와 같게). 모르는 모양이면 그대로
+const modelName = (id: string) => id.replace(/^claude-([a-z]+)-(\d+)(?:-(\d+))?(\[1m\])?.*$/, (_, f: string, a, b, m) => `${f[0].toUpperCase()}${f.slice(1)} ${a}${b ? '.' + b : ''}${m ? ' (1M)' : ''}`)
+
 export async function copyText(t: string) {
   try { await navigator.clipboard.writeText(t); return true } catch { /* 아래로 */ }
   const el = Object.assign(document.createElement('textarea'), { value: t }); el.style.position = 'fixed'; el.style.opacity = '0'
@@ -236,7 +239,8 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
           <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">대화</Text><KeyRec area="chat" /></Group>
           <Text size="xs" c="dimmed" truncate><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
         </Group>
-        <Group gap={6}>
+        <Group gap={6} wrap="nowrap">
+          {s.model && <Text size="xs" c="dimmed" mr={4} title={`모델 ${s.model} · effort ${s.effort || '?'} (마지막 답 기준)`} style={{ whiteSpace: 'nowrap' }}>{modelName(s.model)}{s.effort && ` · ${s.effort}`}</Text>}
           {working && <Button size="xs" variant="default" onClick={interrupt}>중단 (Esc)</Button>}
           {!working && s.host === 'web' && <Button size="xs" variant="subtle" color="gray" onClick={onRewind} title="Claude Code의 되감기(Esc 두 번)">되감기 (Esc Esc)</Button>}
           <Button size="xs" loading={uploading > 0} onClick={send}>보내기</Button>
