@@ -25,6 +25,8 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - `skills/hq-restart`: "웹 재시작"이라고 하면 Claude가 `/api/session/restart`를 불러 웹 세션을 모두 다시 띄운다(Orca의 "오르카 재시작" 대신). 환경설정 창의 "모두 재시작" 버튼도 같은 API다. 세션 머리의 '세션 재시작'(주황, 한 번에)은 그 세션 하나만(`names: [tmux 이름]`). 다시 띄운 세션은 상태가 그대로면 상태가 시작된 시각(since)도 그대로다(`keepSince`, 안 그러면 모두 '1분째'가 된다). 다 뜨면(새 pid로 목록에 돌아오면, 길어도 30초) 서버가 `notice`를 내고 화면이 알림으로 띄운다(일부만 떴을 때 따로 알리지 않는다) 일하는 중이어도 바로 끄는 것은 사용자가 정한 것이다
 - `skills/hq-memo`: 사용자가 시킬 때만 Claude가 세션 메모를 적고 읽고 고친다(`/api/memo/*`, `by: claude`. 화면에는 누가 적었는지 표시하지 않는다: 사용자 요청)
 - `skills/hq-task`: 세션 안의 Claude가 자기 대화 ID(`~/.claude/sessions/$CLAUDE_PID.json`)로 `/api/assign`·`/api/task/*`를 불러 업무를 만들고·바꾸고·지우고, 자기나 다른 세션을 업무에 넣고 뺀다. 업무를 지우면 그 안의 세션은 미배치로 간다
+- `skills/hq-team`: 웹 안의 Claude가 다른 Claude와 같이 일하는 법. 세션 새로 띄우기·나를 복제(`session/new`의 `fork`=대화 ID → `--resume --fork-session`, `name` → `--name`, 폴더는 그 대화의 폴더)·이름 바꾸기(`session/rename`에 `sid`, 일하는 중에도 바로 바뀐다)·다른 세션 보기(`/api/state`, `/api/transcript?sid=`)·말 걸기(Claude Code의 `ListAgents`·`SendMessage`. 받는 세션이 쉬고 있어도 깨어나 처리하고 답을 보낸다). 확인함: 새 세션에 '너를 복제해 이름 붙이고 너도 이름 바꾸고 인사 주고받아'를 시키니 스킬을 스스로 불러 끝까지 했다
+- 전역 `~/.claude/CLAUDE.md`의 'Claude Session HQ (작업 환경)' 절이 모든 세션에 'HQ 안에서 일한다, 세션 일은 hq-team 등 스킬로, 백그라운드·`claude attach`·터미널 안내 금지'를 알린다. 이것이 없을 때 한 세션이 복제본을 Claude Code 백그라운드 세션으로 띄워 HQ 화면에 안 나왔고, 사용자에게 Orca·`/rename`을 안내했다. Claude가 쓸 기능(API)을 만들거나 바꾸면 해당 스킬도 같이 고친다(다른 Claude는 스킬로만 이 툴을 안다)
 - `scripts/install.js`: settings.json 훅 등록 + 스킬 링크 + launchd plist
 
 ## 핵심 개념

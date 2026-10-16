@@ -718,14 +718,22 @@ const routes = {
     t.waits = t.waits.filter(w => w.id !== b.id); t.updatedAt = Date.now();
   },
   'session/new': async b => {
-    // 웹 세션을 연다. 첫 지시는 claude 인자로 넘기고, 복구할 때는 첫 지시 없이 --resume으로 이어 띄운다
-    const cwd = path.resolve(String(b.cwd || '').replace(/^~(?=\/|$)/, HOME));
+    // 웹 세션을 연다. 첫 지시는 claude 인자로 넘기고, 복구할 때는 첫 지시 없이 --resume으로 이어 띄운다.
+    // fork: 그 대화를 복제해 새 대화로 띄운다(--resume --fork-session, 폴더는 그 대화의 폴더). name: 세션 이름(--name). 둘 다 웹 안의 Claude가 쓴다(skills/hq-team)
+    const fork = b.fork ? String(b.fork) : '';
+    if (fork && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(fork)) throw new Error('복제할 대화 ID 형식이 아닙니다');
+    const forkFile = fork && findTranscript({ cwd: '', sessionId: fork });
+    if (fork && !forkFile) throw new Error('복제할 대화 기록을 찾지 못했습니다');
+    const forkCwd = forkFile && (readTail(forkFile, Math.min(fs.statSync(forkFile).size, 262144), 262144).match(/"cwd":"((?:[^"\\]|\\.)*)"/) || [])[1];
+    const cwd = path.resolve(b.cwd ? String(b.cwd).replace(/^~(?=\/|$)/, HOME) : forkCwd ? JSON.parse(`"${forkCwd}"`) : '');
     if (!(cwd === HOME || cwd.startsWith(HOME + '/')) || !fs.statSync(cwd, { throwIfNoEntry: false })?.isDirectory())
       throw new Error('홈 폴더 아래에 있는 폴더를 골라 주세요');
     if (b.task && !task(b.task)) throw new Error('없는 업무입니다');
     const prompt = str(b.prompt, 8000);
+    const label = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const extra = [...(fork ? ['--resume', fork, '--fork-session'] : []), ...(label ? ['--name', label] : []), ...(prompt ? [prompt] : [])];
     const name = newName();
-    await startTmux(name, cwd, prompt ? [...db.claudeArgs, prompt] : db.claudeArgs);
+    await startTmux(name, cwd, [...db.claudeArgs, ...extra]);
     db.web.push({ name, cwd, args: db.claudeArgs, sid: '', createdAt: Date.now() });
     if (b.task) pendingAssign.set(name, b.task);
     return name;
@@ -863,14 +871,16 @@ const routes = {
   'session/rename': async b => {
     const name = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
     if (!name) throw new Error('이름을 적어 주세요');
-    const where = handles.get(+b.pid) || {};
+    // 화면은 pid로, 웹 안의 Claude는 대화 ID(sid)로 부른다(skills/hq-team)
+    const pid = b.sid ? snapshot.sessions.find(x => x.sid === b.sid)?.pid : +b.pid;
+    const where = handles.get(+pid) || {};
     if (where.tmux) {
       if (await rewindScreen(where.tmux)) throw new Error('Claude 쪽에 되감기 창이 열려 있습니다');
       if (await inputBox(where.tmux)) throw new Error('Claude 입력칸에 글이 남아 있어 이름을 바꿀 수 없습니다. 터미널 화면에서 비운 뒤 다시 하세요');
       await tmux(['send-keys', '-t', where.tmux, '-l', '--', '/rename ' + name]);
       await sleep(300);
       await tmux(['send-keys', '-t', where.tmux, 'Enter']);
-    } else if (where.orca) await orca(b.pid, ['terminal', 'send', '--text', '/rename ' + name, '--enter']);
+    } else if (where.orca) await orca(pid, ['terminal', 'send', '--text', '/rename ' + name, '--enter']);
     else throw new Error('다른 터미널에서 직접 띄운 세션은 여기서 이름을 바꿀 수 없습니다');
   },
   'session/close': async b => {
