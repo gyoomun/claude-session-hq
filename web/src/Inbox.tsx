@@ -24,7 +24,7 @@ export function MailCard({ S }: { S: Snapshot }) {
       {b.mails.map(m => <UnstyledButton key={m.id} className="hq-cal-row" title={`${m.from}${b.accounts.length > 1 ? ` · ${m.account}` : ''}\n${m.subject}\nGmail에서 열기`} onClick={() => window.open(m.url, '_blank', 'noopener')}>
         <Group gap={8} wrap="nowrap">
           <Text size="xs" c="dimmed" ff="monospace" style={{ flex: 'none' }}>{when(m.at)}</Text>
-          <Text size="sm" truncate fw={m.unread ? 600 : 400} c={m.unread ? undefined : 'dimmed'}><Text span inherit fw={m.unread ? 700 : 400}>{m.from}</Text> {m.subject}</Text>
+          <Text size="sm" truncate fw={m.unread ? 600 : 400} c={m.unread ? undefined : 'dimmed'}><Text span inherit fw={700} c={m.unread ? 'teal.4' : 'teal.9'}>{m.from}</Text><Text span inherit c="dimmed"> │ </Text>{m.subject}</Text>
         </Group>
       </UnstyledButton>)}
       {!b.mails.length && <Text size="xs" c="dimmed">{b.at ? '메일 없음' : '읽는 중…'}</Text>}
