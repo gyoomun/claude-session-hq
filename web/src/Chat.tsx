@@ -3,7 +3,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Box, Button, CloseButton, Group, Kbd, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
+import { Badge, Box, Button, CloseButton, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
 import { pickNew } from './ui'
 import type { Session } from './types'
@@ -241,14 +241,13 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
         }} />
       <Group justify="space-between" gap={6}>
-        <Group gap={10} wrap="nowrap" style={{ minWidth: 0 }}>
-          <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">대화</Text><KeyRec area="chat" /></Group>
-          <Text size="xs" c="dimmed" truncate><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
-        </Group>
-        <Group gap={6} wrap="nowrap">
+        <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
+          {s.mode && MODE[s.mode] && <Badge variant="light" color={MODE[s.mode][1] === 'dimmed' ? 'gray' : MODE[s.mode][1].split('.')[0]} radius="sm" title={`권한 모드: ${s.mode}`} style={{ textTransform: 'none', flex: 'none' }}>{MODE[s.mode][0]}</Badge>}
+          {s.model && <Badge variant="light" color="gray" radius="sm" title={`모델 ${s.model} · effort ${s.effort || '?'} (마지막 답 기준)`} style={{ textTransform: 'none', flex: 'none' }}>{modelName(s.model)}{s.effort && ` · ${s.effort}`}</Badge>}
           {bgCount(s) > 0 && <Text size="xs" c="teal.4" title={bgText(s)} style={{ whiteSpace: 'nowrap' }}>뒤 작업 {[s.bg.shells && `셸 ${s.bg.shells}`, s.bg.agents.length && `에이전트 ${s.bg.agents.length}`].filter(Boolean).join(' · ')}</Text>}
-          {s.mode && MODE[s.mode] && <Text size="xs" c={MODE[s.mode][1]} title={`권한 모드: ${s.mode}`} style={{ whiteSpace: 'nowrap' }}>{MODE[s.mode][0]}</Text>}
-          {s.model && <Text size="xs" c="dimmed" mr={4} title={`모델 ${s.model} · effort ${s.effort || '?'} (마지막 답 기준)`} style={{ whiteSpace: 'nowrap' }}>{modelName(s.model)}{s.effort && ` · ${s.effort}`}</Text>}
+        </Group>
+        <Group gap={8} wrap="nowrap">
+          <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">대화</Text><KeyRec area="chat" /></Group>
           {working && <Button size="xs" variant="default" onClick={interrupt}>중단 (Esc)</Button>}
           {!working && s.host === 'web' && <Button size="xs" variant="subtle" color="gray" onClick={onRewind} title="Claude Code의 되감기(Esc 두 번)">되감기 (Esc Esc)</Button>}
           <Button size="xs" loading={uploading > 0} onClick={send}>보내기</Button>
