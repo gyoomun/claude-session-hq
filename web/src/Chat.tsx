@@ -21,8 +21,8 @@ const NewTab = (p: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...p} t
 // claude-opus-5-5 → Opus 5.5 (터미널의 표기와 같게). 모르는 모양이면 그대로
 const modelName = (id: string) => id.replace(/^claude-([a-z]+)-(\d+)(?:-(\d+))?(\[1m\])?.*$/, (_, f: string, a, b, m) => `${f[0].toUpperCase()}${f.slice(1)} ${a}${b ? '.' + b : ''}${m ? ' (1M)' : ''}`)
 
-// 권한 모드: 평소 쓰는 우회는 흐리게, 계획 모드(Claude가 파일을 안 고친다)·매번 확인은 눈에 띄게
-const MODE: Record<string, [string, string]> = { bypassPermissions: ['권한 우회', 'dimmed'], acceptEdits: ['수정 자동 허용', 'yellow.5'], plan: ['계획 모드', 'orange.5'], default: ['매번 확인', 'yellow.5'], auto: ['자동 모드', 'dimmed'] }
+// 권한 모드: Claude Code 화면의 영어 그대로(번역하지 않는다: 사용자 요청). 평소 쓰는 bypass는 흐리게, plan(Claude가 파일을 안 고친다)·manual·accept edits는 눈에 띄게
+const MODE: Record<string, [string, string]> = { bypassPermissions: ['bypass permissions', 'dimmed'], acceptEdits: ['accept edits', 'yellow.5'], plan: ['plan mode', 'orange.5'], default: ['manual mode', 'yellow.5'], auto: ['auto mode', 'dimmed'] }
 // 뒤에서 도는 작업(셸·하위 에이전트). 답을 마쳤어도 아직 돌고 있으면 여기에 남는다(웹 세션만 안다)
 export const bgCount = (s: Session) => (s.bg?.shells || 0) + (s.bg?.agents.length || 0)
 export const bgText = (s: Session) => ['뒤에서 도는 작업', s.bg.shells ? `셸 ${s.bg.shells}개` : '', ...s.bg.agents.map(a => '에이전트: ' + a)].filter(Boolean).join('\n')
