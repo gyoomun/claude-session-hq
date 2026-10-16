@@ -354,7 +354,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, usage: readUsage(), btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -559,6 +559,17 @@ async function loadCalendar() {
   events.sort((a, b) => a.start - b.start || b.allDay - a.allDay);
   calendar = { at: Date.now(), error: errors.join(' · '), events, sources: lines.length };
   scan();
+}
+
+/* Claude 사용량 한도(5시간·주간): 플러그인 hq-usage(~/.claude/my-mods)가 응답마다 ~/.claude/board/usage.json에 남긴다(계정 단위) */
+const USAGE_FILE = path.join(BOARD_DIR, 'usage.json');
+let usage = null, usageMtime = 0;
+function readUsage() {
+  try {
+    const st = fs.statSync(USAGE_FILE);
+    if (st.mtimeMs !== usageMtime) { usageMtime = st.mtimeMs; usage = JSON.parse(fs.readFileSync(USAGE_FILE, 'utf8')); }
+  } catch {}
+  return usage;
 }
 
 let migrating = false;

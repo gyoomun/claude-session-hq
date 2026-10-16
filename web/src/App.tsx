@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Badge, Box, Button, Center, Code, Group, Kbd, Loader, Paper, Popover, ScrollArea, SegmentedControl, SimpleGrid, Stack, Text, Title, UnstyledButton } from '@mantine/core'
+import { Alert, Badge, Box, Button, Center, Code, Group, Kbd, Loader, Paper, Popover, Progress, ScrollArea, SegmentedControl, SimpleGrid, Stack, Text, Title, UnstyledButton } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
 import { type Mode, pickNew, rememberSel, setMode, setUI, useUI } from './ui'
@@ -19,6 +19,26 @@ const Logo = () => <svg width="34" height="34" viewBox="0 0 8 8" shapeRendering=
   <rect width="8" height="8" fill="var(--mantine-color-default)" /><rect x="1" y="1" width="2" height="2" fill="var(--mantine-color-teal-6)" />
   <rect x="5" y="1" width="2" height="2" fill="var(--mantine-color-yellow-6)" /><rect x="1" y="5" width="2" height="2" fill="var(--mantine-color-grape-5)" />
   <rect x="5" y="5" width="2" height="2" fill="var(--mantine-color-gray-6)" /><rect x="3" y="3" width="2" height="2" fill="var(--mantine-color-indigo-4)" /></svg>
+
+// Claude 사용량 한도: 5시간·주간 창이 얼마나 찼는지(플러그인 hq-usage가 응답마다 남긴 값). 마우스를 올리면 초기화 시각
+const LIMIT: Record<string, string> = { five_hour: '5시간', seven_day: '주간', spend_limit: '사용 한도' }
+function Usage({ S }: { S: Snapshot }) {
+  const u = S.usage
+  if (!u?.limits?.length) return null
+  const old = Date.now() - u.at > 3 * 3600e3 // 오래 응답이 없어 낡은 값
+  return <Group gap={10} wrap="nowrap" style={{ opacity: old ? .5 : 1 }} title={old ? `${new Date(u.at).toLocaleString('ko-KR')}에 잰 값` : undefined}>
+    {u.limits.map(l => {
+      const color = l.percentUsed >= 90 ? 'red' : l.percentUsed >= 70 ? 'yellow' : 'teal'
+      const reset = l.resetsAt ? new Date(l.resetsAt) : null
+      const tip = reset ? `${reset.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}에 초기화` : ''
+      return <Group key={l.kind} gap={5} wrap="nowrap" title={tip}>
+        <Text size="xs" c="dimmed">{LIMIT[l.kind] || l.kind}</Text>
+        <Progress value={Math.min(100, l.percentUsed)} color={color} size="sm" w={56} radius="xl" />
+        <Text size="xs" ff="monospace" c={`${color}.4`}>{Math.round(l.percentUsed)}%</Text>
+      </Group>
+    })}
+  </Group>
+}
 
 function Clock() {
   useNow()
@@ -133,6 +153,7 @@ function Header({ S }: { S: Snapshot }) {
     <Today S={S} />
     <Group gap="xs">
       <LanAddress S={S} />
+      <Usage S={S} />
       <Clock />
       <Button variant="default" leftSection={<IconSettings size={16} />} onClick={() => setUI({ settings: true })}>환경설정</Button>
       <Button onClick={() => setUI({ brief: true })}>지금 상황 브리핑</Button>
