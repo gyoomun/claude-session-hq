@@ -21,10 +21,10 @@ export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
     setBusy(false)
   }
   return <>
-    <Group justify="space-between" p="6px 10px" gap={4} wrap="nowrap">
-      <Text size="xs" c="dimmed">{s.host === 'web' || !s.sid ? 'Claude Code의 /btw로 묻습니다. 하던 일을 끊지 않고, 원래 대화에는 남지 않습니다' : '웹에서 띄운 세션에서만 쓸 수 있습니다'}</Text>
+    {(list.length > 0 || (s.host !== 'web' && s.sid)) && <Group justify="space-between" p="6px 10px" gap={4} wrap="nowrap">
+      <Text size="xs" c="dimmed">{s.host !== 'web' && s.sid ? '웹에서 띄운 세션에서만 쓸 수 있습니다' : ''}</Text>
       {list.length > 0 && <Button size="compact-xs" variant="subtle" color="gray" style={{ flex: 'none' }} onClick={() => api('btw/clear', { sid: s.sid })}>비우기</Button>}
-    </Group>
+    </Group>}
     <ScrollArea viewportRef={view} style={{ flex: 1 }} viewportProps={{ tabIndex: 0, className: 'hq-scrollfocus' }}>
       <Stack gap="sm" p="sm">
         {!list.length && <Text size="sm" c="dimmed">메인 작업을 시켜 둔 동안 궁금한 것을 물어보세요. 예: "지금 어디까지 했어?", "아까 그 설정 파일 위치가 어디였지?"</Text>}
