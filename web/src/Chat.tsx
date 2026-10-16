@@ -183,10 +183,23 @@ function useDraft(sid: string) {
 type Draft = ReturnType<typeof useDraft>
 
 // 입력칸 아래 권한 모드·모델·effort: 누르면 권한 모드는 다음 모드로 돌고, 모델·effort는 터미널 화면으로 바꿔 /model·/effort 창을 띄운다(고르고 확인은 사용자가)
-function Pick({ kind, pid, web, tip, color, children }: { kind: 'mode' | 'model' | 'effort'; pid: number; web: boolean; tip: string; color: string; children: React.ReactNode }) {
-  if (!web) return <Text size="sm" fw={600} c={color} title={tip} style={{ whiteSpace: 'nowrap' }}>{children}</Text>
-  return <UnstyledButton onClick={async () => { if (await api('session/menu', { pid, kind }) && kind !== 'mode') setView('term') }} title={tip} className="hq-item" p="2px 6px" m="-2px -6px" style={{ borderRadius: 6 }}>
-    <Text size="sm" fw={600} c={color} style={{ whiteSpace: 'nowrap' }}>{children}</Text>
+function Pick({ kind, pid, web, tip, color, children }: { kind: 'mode' | 'model' | 'effort'; pid: number; web: boolean; tip: string; color: string; children: string }) {
+  const [busy, setBusy] = useState(false)
+  // 글자 폭이 바뀌어도 줄이 움찔하지 않게 자리를 고정한다
+  const width = { mode: '19ch', model: '16ch', effort: '8ch' }[kind]
+  // 권한 모드는 Shift+Tab을 보낸 뒤 화면 글자가 바뀔 때까지(몇 초 걸린다) 돌아가는 표시를 둔다. 안 바뀌어도 5초 뒤에는 끈다
+  useEffect(() => { setBusy(false) }, [children])
+  useEffect(() => { if (!busy) return; const t = setTimeout(() => setBusy(false), 5000); return () => clearTimeout(t) }, [busy])
+  const text = <Text size="sm" fw={600} c={color} style={{ whiteSpace: 'nowrap' }}>{children}</Text>
+  const body = <Group gap={6} wrap="nowrap" style={{ width, flex: 'none' }}>{text}<Box w={12} h={12} style={{ flex: 'none' }}>{busy && <Loader size={12} color="gray" />}</Box></Group>
+  if (!web) return <Box title={tip}>{body}</Box>
+  return <UnstyledButton disabled={busy} onClick={async () => {
+    setBusy(true)
+    const r = await api('session/menu', { pid, kind })
+    if (!r || kind !== 'mode') setBusy(false)
+    if (r && kind !== 'mode') setView('term')
+  }} title={tip} className="hq-item" p="2px 6px" m="-2px -6px" style={{ borderRadius: 6, width: `calc(${width} + 12px)`, flex: 'none' }}>
+    {body}
   </UnstyledButton>
 }
 function Composer({ s, d, working, onSent, interrupt }: {
