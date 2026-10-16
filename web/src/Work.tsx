@@ -10,6 +10,7 @@ import { TerminalView } from './Terminal'
 import { ChatView } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
 import { IconPinFilled } from '@tabler/icons-react'
+import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 
 // 목록·즐겨찾기의 세션 한 줄. 끌어서 즐겨찾기에 넣고 빼고, 즐겨찾기 안에서 자리를 옮긴다(HTML 끌어다 놓기, 넘기는 값은 대화 ID)
 const DRAG = 'application/x-hq-sid'
@@ -126,7 +127,7 @@ function Favs({ S, sel }: { S: Snapshot; sel: string }) {
     save(order.map((x, i) => ({ sid: x.sid, slot: m === 'free' ? i : x.slot })), m as 'auto' | 'free')
   }
   const rows = f.mode === 'free' ? Math.max(0, ...live.map(x => x.slot + 1), (hover ?? -1) + 1) : 0
-  return <Paper withBorder p={6} style={{ gridRow: '1 / -1', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
+  return <Paper withBorder p={6} h="100%" style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
     onDragOver={e => { if (!dragging(e)) return; e.preventDefault(); setHover(target(e, dragSid)) }}
     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHover(null) }} onDrop={drop}>
     <Group justify="space-between" px={4} gap={4} wrap="nowrap">
@@ -155,7 +156,7 @@ function Favs({ S, sel }: { S: Snapshot; sel: string }) {
   </Paper>
 }
 
-// 네 칸 × 2행: 세션 목록(두 행) | 즐겨찾기(두 행) | 위: 세션 머리(셋째·넷째 칸에 걸침) / 아래: 대화 | 핀·메모·btw(늘 펼쳐 둔다)
+// 세 덩어리: 세션 목록 | 즐겨찾기 | 나머지(위: 세션 머리 / 아래: 대화 | 핀·메모·btw). 덩어리 사이 너비는 끌어서 바꾼다
 export function WorkView({ S }: { S: Snapshot }) {
   const ui = useUI()
   const favs = favSids(S), inFav = new Set(favs)
@@ -180,9 +181,11 @@ export function WorkView({ S }: { S: Snapshot }) {
     return () => removeEventListener('keydown', on, true)
   }, [])
   const [unfav, setUnfav] = useState(false) // 즐겨찾기를 목록 위로 끌고 왔을 때
-  return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(200px, 250px) minmax(0, 1fr)' + (s ? ' minmax(300px, 420px)' : ''),
-    gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
-    <Paper withBorder p={6} className={unfav ? 'hq-drop-over' : undefined} style={{ gridRow: '1 / -1', minHeight: 0, display: 'flex' }}
+  // 목록 | 즐겨찾기 | 나머지(머리·대화·핀) 사이 경계를 끌어 너비를 바꾼다. 바꾼 비율은 이 브라우저에 남는다(핀·메모·btw 높이와 같은 방식)
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-work' })
+  return <Split orientation="horizontal" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
+    <Panel id="list" defaultSize={290} minSize={180} maxSize={560}>
+    <Paper withBorder p={6} h="100%" className={unfav ? 'hq-drop-over' : undefined} style={{ minHeight: 0, display: 'flex' }}
       onDragOver={e => { if (!dragging(e)) return; e.preventDefault(); setUnfav(true) }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setUnfav(false) }}
       onDrop={e => {
@@ -205,18 +208,24 @@ export function WorkView({ S }: { S: Snapshot }) {
         </Stack>
       </ScrollArea>
     </Paper>
-    <Favs S={S} sel={ui.sel} />
-    {!s ? <Paper withBorder p="xl" style={{ gridRow: '1 / -1', borderStyle: 'dashed' }}>
+    </Panel>
+    <Separator className="hq-split-v" />
+    <Panel id="favs" defaultSize={240} minSize={210} maxSize={480}><Favs S={S} sel={ui.sel} /></Panel>
+    <Separator className="hq-split-v" />
+    <Panel id="main" minSize={480}>
+    {/* 나머지: 2행 격자. 위: 세션 머리(두 칸에 걸침) / 아래: 대화 | 핀·메모·btw. 오른쪽 칸이 대화창과 같은 높이에서 시작한다 */}
+    {!s ? <Paper withBorder p="xl" h="100%" style={{ borderStyle: 'dashed' }}>
       <Stack align="flex-start">
         <Text>{ui.pendingSel ? '세션을 여는 중입니다…' : '왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.'}</Text>
         {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
       </Stack>
-    </Paper> : <>
-      <Box style={{ gridColumn: '3 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>
-      <Box style={{ gridColumn: 3, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+    </Paper> : <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 420px)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
+      <Box style={{ gridColumn: '1 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>
+      <Box style={{ gridColumn: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
       </Box>
-      <Box style={{ gridColumn: 4, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
-    </>}
-  </Box>
+      <Box style={{ gridColumn: 2, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
+    </Box>}
+    </Panel>
+  </Split>
 }

@@ -110,3 +110,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 /* 즐겨찾기: 끌어다 놓을 자리 표시 */
 .hq-fav-ghost { position: absolute; left: 0; right: 0; border: 2px dashed var(--mantine-color-indigo-4); border-radius: 8px; background: color-mix(in srgb, var(--mantine-color-indigo-6) 12%, transparent); pointer-events: none; }
 .hq-fav-line { height: 2px; margin: 1px 4px; background: var(--mantine-color-indigo-4); border-radius: 1px; }
+/* 작업 보기의 목록·즐겨찾기·나머지 사이 너비 조절 경계 */
+.hq-split-v { width: 12px; display: grid; place-items: center; outline: none; }
+.hq-split-v::after { content: ''; width: 3px; height: 44px; border-radius: 2px; background: var(--mantine-color-default-border); }
+.hq-split-v[data-separator="hover"]::after, .hq-split-v[data-separator="active"]::after, .hq-split-v[data-separator="focus"]::after { height: 100%; background: var(--mantine-color-indigo-5); }
