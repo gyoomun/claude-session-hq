@@ -33,8 +33,10 @@ const on = (list: CalEvent[] | null, t: number) => (list || []).filter(e => e.st
 
 function Row({ e, t }: { e: CalEvent; t: number }) {
   return <UnstyledButton className="hq-cal-row" title="구글 캘린더에서 열기" onClick={() => openMonth(t)}>
-    <Text size="xs" ff="monospace" c={e.allDay ? 'yellow.5' : 'indigo.4'}>{e.allDay ? '종일' : `${hm(e.start)}~${hm(e.end)}`}</Text>
-    <Text size="sm" className="hq-wrap">{e.title}</Text>
+    <Group gap={6} wrap="nowrap">
+      <Text size="xs" ff="monospace" c={e.allDay ? 'yellow.5' : 'indigo.4'} style={{ flex: 'none' }}>{e.allDay ? '종일' : `${hm(e.start)}~${hm(e.end)}`}</Text>
+      <Text size="sm" truncate title={e.title}>{e.title}</Text>
+    </Group>
   </UnstyledButton>
 }
 
