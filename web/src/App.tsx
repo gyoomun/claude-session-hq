@@ -127,6 +127,11 @@ export function App() {
   useEffect(() => {
     if (S?.focus && S.focus.at > focusSeen.current) { focusSeen.current = S.focus.at; pickNew(S.focus.name) }
   }, [S?.focus?.at])
+  // 서버 알림(모두 재시작이 끝났을 때 등): 이 화면을 연 뒤에 생긴 것만 한 번 띄운다
+  const noticeSeen = useRef(Date.now())
+  useEffect(() => {
+    if (S?.notice && S.notice.at > noticeSeen.current) { noticeSeen.current = S.notice.at; toast(S.notice.text, S.notice.color) }
+  }, [S?.notice?.at])
   // 방금 연 웹 세션이 목록에 나타나면 고른다
   useEffect(() => {
     const s = S && ui.pendingSel ? S.sessions.find(x => x.tmux === ui.pendingSel) : null
@@ -137,6 +142,8 @@ export function App() {
   useEffect(() => {
     const keys: Record<string, Mode> = { F1: 'work', F2: 'task', F3: 'all', F4: 'memo' }
     const onKey = (e: KeyboardEvent) => {
+      // Cmd+T(윈도우는 Ctrl+T): 새 세션. 브라우저·터미널에서 새 탭 열던 손버릇 그대로. 크롬 일반 탭에서는 크롬이 먼저 가져가고, 앱 창에서는 여기로 온다
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') { e.preventDefault(); e.stopPropagation(); setUI({ newFor: '' }); return }
       const m = keys[e.key]
       if (!m || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
       e.preventDefault(); e.stopPropagation()

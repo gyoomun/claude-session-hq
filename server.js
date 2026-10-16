@@ -34,7 +34,7 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, pins: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 // 서버가 꺼지면서 끊긴 곁가지 질문은 실패로 표시한다
 for (const list of Object.values(db.btw || {})) for (const it of list) if (it.state === 'asking') { it.state = 'error'; it.a = '서버가 다시 시작돼 답을 받지 못했습니다.'; }
@@ -301,7 +301,13 @@ function scan() {
     }
     const h = hookInfo(s);
     const t = transcriptInfo(s);
-    const [state, since] = stateOf(s, h, now);
+    let [state, since] = stateOf(s, h, now);
+    // 다시 띄운 세션은 상태가 그대로면 상태가 시작된 시각도 그대로 둔다(안 그러면 모두 '1분째'가 된다)
+    const kept = keepSince.get(s.sessionId);
+    if (kept && kept.state === state) since = kept.since;
+    else if (kept && !restarting.has(s.sessionId)) keepSince.delete(s.sessionId);
+    // 핀보드는 Claude 프로세스 메모리에만 있어 다시 띄우면 Claude 쪽은 비워진다. 화면에는 마지막 보드를 저장해 두고 계속 보인다
+    if (t.pin && (!db.pins[s.sessionId] || t.pin.at > db.pins[s.sessionId].at)) { db.pins[s.sessionId] = { text: t.pin.text, at: t.pin.at }; dirty = true; }
     const toolNow = h && h.at >= (s.statusUpdatedAt || 0) - 2000 && /^(PreToolUse|PostToolUse|PermissionRequest)$/.test(h.event);
     let msg = clip(t.lastText, 600);
     if (state === 'approval') msg = '실행 허락을 기다립니다 · ' + toolLine(h);
@@ -314,8 +320,7 @@ function scan() {
       cwd: s.cwd.replace(HOME, '~'), dir: s.cwd, state, since, startedAt: s.startedAt,
       act: state === 'working' ? (toolNow ? toolLine(h) : '생각 중') : state === 'compact' ? '대화 압축 중' : '',
       msg, prompt: clip(t.lastPrompt, 400), task: db.assign[s.sessionId] || '',
-      // 핀보드는 Claude 프로세스 메모리에만 있어 다시 띄우면 비워진다. 이 프로세스가 뜬 뒤의 기록만 믿는다
-      pin: t.pin && t.pin.at >= s.startedAt ? pinItems(t.pin.text) : [],
+      pin: db.pins[s.sessionId] ? pinItems(db.pins[s.sessionId].text) : [],
       host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '',
     };
   });
@@ -349,7 +354,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -504,6 +509,8 @@ function askBtw(sid, cwd, item) {
 
 let migrating = false;
 const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '최근 닫힌 세션'에 넣지 않는다
+const keepSince = new Map(); // 다시 띄운 세션의 sid -> 끄기 전 { state, since }
+let notice = null; // 화면에 한 번 띄울 알림 { text, color, at } (모두 재시작이 끝났을 때 등)
 async function migrateOne(pid) {
   // Orca 세션을 웹으로: Orca 쪽 claude를 /exit로 끝내고, 원래 옵션 그대로 --resume으로 이어 띄운다
   const s = snapshot.sessions.find(x => x.pid === pid);
@@ -697,6 +704,7 @@ const routes = {
     (async () => {
       for (const { w, s } of list) {
         restarting.add(s.sid);
+        keepSince.set(s.sid, { state: s.state, since: s.since });
         w.sid = s.sid; w.createdAt = Date.now(); // 끈 사이에 목록에서 빠지지 않게
         if (s.state !== 'myturn' && s.state !== 'approval') db.seen[s.sid] = Date.now() + 30e3;
         try {
@@ -707,6 +715,13 @@ const routes = {
       }
       save();
       setTimeout(() => list.forEach(({ s }) => restarting.delete(s.sid)), 30e3);
+      // 다 뜨면(새 프로세스로 목록에 돌아오면) 알린다. 30초 안에 안 뜬 것은 몇 개인지 알린다
+      const old = new Set(list.map(({ s }) => s.pid));
+      const back = () => list.filter(({ s }) => snapshot.sessions.some(x => x.sid === s.sid && x.host === 'web' && !old.has(x.pid))).length;
+      for (let i = 0; i < 60 && back() < list.length; i++) await sleep(500);
+      const n = back();
+      notice = { text: n === list.length ? `웹 세션 ${n}개를 다시 띄웠습니다.` : `웹 세션 ${list.length}개 중 ${n}개만 다시 떴습니다. 나머지는 확인이 필요합니다.`, color: n === list.length ? 'teal' : 'red', at: Date.now() };
+      scan();
     })();
     return list.length;
   },
