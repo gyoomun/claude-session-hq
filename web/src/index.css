@@ -205,3 +205,18 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 [data-area]:focus { outline: none; }
 /* 일하던 중 Esc로 멈춘 자리(터미널의 'Interrupted'): 내 말풍선이 아니라 흐린 한 줄 */
 .hq-notice { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--mantine-color-dimmed); border-left: 2px solid var(--mantine-color-orange-7); padding-left: 8px; }
+
+/* 화면 왼쪽 빈 여백(앱 폭 2032px 바깥)의 카드들: 아래부터 쌓는다. 여백이 160px이 안 되면 숨긴다 */
+.hq-aside { --w: calc((100vw - 2032px) / 2 - 2 * var(--mantine-spacing-md)); position: fixed; left: var(--mantine-spacing-md); bottom: var(--mantine-spacing-md); width: var(--w); display: flex; flex-direction: column; gap: var(--mantine-spacing-md); z-index: 150; }
+@media (max-width: 2415px) { .hq-aside { display: none; } }
+/* 일정 카드: 평소엔 오늘 한 칸, 펼치면 옆으로 7칸(화면을 덮는다) */
+.hq-cal { height: 26vh; width: 100%; display: flex; overflow: hidden; transition: width .25s ease, box-shadow .25s ease; }
+.hq-cal.open { width: min(calc(var(--w) + 6 * 230px), calc(100vw - 2 * var(--mantine-spacing-md))); box-shadow: var(--mantine-shadow-xl); }
+.hq-cal-days { flex: 1; min-width: 0; display: flex; overflow-x: auto; }
+.hq-cal-day { flex: 0 0 230px; min-width: 0; overflow-y: auto; padding: 10px 8px 10px 12px; border-left: 1px solid var(--mantine-color-default-border); }
+.hq-cal-day:first-child { flex-basis: calc(var(--w) - 30px); border-left: 0; }
+.hq-cal-row { display: block; width: 100%; padding: 4px 6px; margin-left: -6px; border-radius: 6px; transition: background-color .12s ease; }
+.hq-cal-row:hover, .hq-cal-row:focus-visible { background: var(--mantine-color-default-hover); }
+.hq-cal-more { flex: none; width: 28px; display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--mantine-color-default-border); color: var(--mantine-color-dimmed); }
+.hq-cal-more:hover { background: var(--mantine-color-default-hover); color: var(--mantine-color-text); }
+@media (prefers-reduced-motion: reduce) { :root:not([data-motion="on"]) .hq-cal { transition: none; } }

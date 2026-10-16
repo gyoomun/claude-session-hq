@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Box, Button, Center, Code, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { Alert, Box, Button, Center, Code, Group, Kbd, Loader, SegmentedControl, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
 import { type Mode, pickNew, rememberSel, setMode, setUI, useUI } from './ui'
-import type { CalEvent, Snapshot } from './types'
+import type { Snapshot } from './types'
 import { stale } from './util'
 import { WorkView } from './Work'
+import { CalendarCard } from './Calendar'
 import { copyText, useFlash } from './Chat'
 import { isRecording, useAreaKeys } from './Keys'
 import { BoardView } from './Board'
@@ -82,34 +83,6 @@ function Notices({ S }: { S: Snapshot }) {
   </>
 }
 
-// 회사 일정(구글 캘린더): 오늘부터 7일을 하루 한 칸으로, 상태 카드가 있던 자리에 늘 펼쳐 둔다(사용자 요청: 늘 눈에 들어오게).
-// 칸마다 3개까지, 넘치면 +N(칸에 마우스를 올리면 전부). 캘린더를 안 이었으면 안 보인다(환경설정 '일정')
-const hm = (t: number) => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
-const evText = (e: CalEvent) => e.allDay ? e.title : `${hm(e.start)} ${e.title}`
-function Week({ S }: { S: Snapshot }) {
-  const c = S.calendar
-  if (!c || !c.sources) return null
-  const day = (n: number) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + n); return +d }
-  const days = Array.from({ length: 7 }, (_, n) => ({ n, from: day(n), list: c.events.filter(e => e.start < day(n + 1) && e.end > day(n)) }))
-  return <SimpleGrid cols={{ base: 2, xs: 4, md: 7 }} spacing="sm">
-    {days.map(d => {
-      const shown = d.list.length > 3 ? d.list.slice(0, 2) : d.list
-      return <Paper key={d.n} withBorder p="8px 12px" title={d.list.map(evText).join('\n') || undefined}
-        bg={d.n ? undefined : 'color-mix(in srgb, var(--mantine-color-indigo-6) 8%, var(--mantine-color-body))'} style={d.n ? undefined : { borderColor: 'var(--mantine-color-indigo-7)' }}>
-        <Group justify="space-between" gap={4} wrap="nowrap">
-          <Text size="sm" fw={d.n ? 400 : 600} c={d.n ? 'dimmed' : undefined}>{new Date(d.from).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' })}{d.n ? '' : ' · 오늘'}</Text>
-          {!d.n && c.error && <Text size="xs" c="red.4" title={c.error}>일부 못 읽음</Text>}
-        </Group>
-        <Stack gap={2} mt={4}>
-          {shown.map(e => <Text key={e.id} size="xs" truncate><Text span inherit ff="monospace" c={e.allDay ? 'yellow.5' : 'indigo.4'}>{e.allDay ? '종일' : hm(e.start)}</Text> {e.title}</Text>)}
-          {!d.list.length && <Text size="xs" c="dimmed">일정 없음</Text>}
-          {d.list.length > shown.length && <Text size="xs" c="dimmed">+{d.list.length - shown.length}개 더</Text>}
-        </Stack>
-      </Paper>
-    })}
-  </SimpleGrid>
-}
-
 function Header({ S }: { S: Snapshot }) {
   const un = S.sessions.filter(s => !s.task).length, waits = S.tasks.flatMap(t => t.waits).length
   const mine = S.sessions.filter(s => s.state === 'myturn' || s.state === 'approval').length
@@ -172,14 +145,15 @@ export function App() {
 
   if (!S) return <Center h="100vh"><Loader /></Center>
   // 화면 전체를 한 덩어리로 가운데에 놓는다(좌우 여백이 같다). 폭은 모든 보기에서 같다(작업 보기의 세 칸 기준. 보기마다 다르면 넘길 때 화면이 움찔한다).
-  // 격자 2행: 위(머리·일정·보기 전환) / 아래(내용). 페이지 자체는 스크롤하지 않고 아래 내용 영역이 화면 높이를 채운다
+  // 격자 2행: 위(머리·빈 자리·보기 전환) / 아래(내용). 페이지 자체는 스크롤하지 않고 아래 내용 영역이 화면 높이를 채운다
   return <Box h="100dvh" py="md" px="md" maw={2032} mx="auto"
     style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', rowGap: 'var(--mantine-spacing-md)' }}>
     <Stack gap="md" style={{ minWidth: 0 }}>
       <Header S={S} />
       {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
       <Notices S={S} />
-      <Week S={S} />
+      {/* 예전 상태 카드·일정 줄 자리. 쓸모를 찾을 때까지 비워 두되 아래 화면이 움직이지 않게 높이는 둔다(사용자 요청) */}
+      <Box h={97} />
       <Group justify="space-between">
         <SegmentedControl value={ui.mode} onChange={v => setMode(v as Mode)}
           data={[['작업', 'work', 'F1'], ['업무별', 'task', 'F2'], ['세션 전체', 'all', 'F3'], ['메모', 'memo', 'F4']].map(([label, value, key]) => ({
@@ -200,5 +174,7 @@ export function App() {
     <AddTaskModal />
     <BriefModal S={S} />
     <SettingsWindow S={S} />
+    {/* 화면 왼쪽 빈 여백(넓은 모니터에서만 생긴다). 아래부터 일정 */}
+    <div className="hq-aside"><CalendarCard S={S} /></div>
   </Box>
 }
