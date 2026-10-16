@@ -161,7 +161,7 @@ export function WorkView({ S }: { S: Snapshot }) {
     { id: '', name: '미배치', ss: S.sessions.filter(s => !s.task && !inFav.has(s.sid)).sort(bySt) }]
   const s = S.sessions.find(x => x.sid === ui.sel)
   // Ctrl+Tab / Ctrl+Shift+Tab: 지금 세션이 즐겨찾기에 있으면 즐겨찾기 안에서, 아니면 목록 안에서 다음·이전으로(끝에서 처음으로 돈다).
-  // 크롬은 이 키를 탭 전환에 먼저 쓰므로 일반 탭에서는 오지 않는다. 머리의 '전체 화면'(키보드 잠금)에서 받는다
+  // 크롬은 일반 탭에서 이 키를 탭 전환에 먼저 쓴다. '앱으로 설치'한 창에서는 브라우저가 키를 가져가지 않아 여기로 온다
   const order = useRef({ favs, normal: [] as string[], sel: '' })
   order.current = { favs, normal: groups.flatMap(g => g.ss.map(x => x.sid)), sel: ui.sel }
   useEffect(() => {

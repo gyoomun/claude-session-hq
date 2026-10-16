@@ -886,7 +886,8 @@ function send(res, code, type, body) {
 }
 const json = (res, code, obj) => send(res, code, 'application/json; charset=utf-8', JSON.stringify(obj));
 const file = (res, f, type) => fs.readFile(f, (e, b) => e ? json(res, 404, { error: 'not found' }) : send(res, 200, type, b));
-const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json' };
+const TYPES = { '.webmanifest': 'application/manifest+json', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json' };
+const APP_FILES = new Set(['/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png']);
 // 빌드된 화면 파일. dist/ 밖의 파일은 내주지 않는다
 function asset(res, url) {
   const f = path.join(DIST, path.normalize(decodeURIComponent(url)).replace(/^(\.\.[/\\])+/, ''));
@@ -930,6 +931,8 @@ const accessRoutes = {
 http.createServer((req, res) => {
   const who = auth.identify(req);
   const [url, qs] = req.url.split('?');
+  // 앱 설치 정보와 아이콘(web/public)은 로그인 전에도 내준다: 크롬이 쿠키 없이 받아 가고, 로그인 화면 탭에도 아이콘이 보인다
+  if (req.method === 'GET' && APP_FILES.has(url)) return asset(res, url);
   if (!who || !who.local) {
     if (!db.settings.lan) return send(res, 403, 'text/plain; charset=utf-8', '사내망 접속이 꺼져 있습니다. 이 맥에서 HQ를 열어 접속 설정에서 켜 주세요.');
     if (req.method === 'GET' && url === '/login') return file(res, LOGIN_PAGE, 'text/html; charset=utf-8');
