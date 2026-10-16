@@ -713,6 +713,8 @@ const routes = {
     const text = list.length === 1 && list[0].text;
     const where = handles.get(+b.pid) || {};
     if (!where.tmux && !where.orca) throw new Error('이 세션에는 입력을 넣을 수 없습니다');
+    // 되감기 창이 떠 있으면 친 글과 Enter가 그 창의 항목을 고른다(되감기가 실행될 수 있다)
+    if (where.tmux && await rewindScreen(where.tmux)) throw new Error('Claude 쪽에 되감기 창이 열려 있습니다. 되감기를 마치거나 취소한 뒤 보내세요');
     // 글은 친 것처럼 넣고(줄바꿈은 Ctrl-J), 이미지 경로만 붙여넣기로 넣는다(그래야 이미지로 붙는다).
     // 글을 붙여넣기로 넣으면 Claude Code가 <pasted_content>로 감싸 Claude가 '남이 쓴 글'로 다룬다. 내 말인데도
     const paste = async t => {
@@ -748,7 +750,93 @@ const routes = {
       if (text) { await clearInput(where.tmux, text); return { restored: text }; }
     }
   },
+  // 되감기: Claude Code의 되감기 창(/rewind)을 tmux 화면에서 읽고 키를 보내 웹 창에서 고르게 한다(웹 세션만).
+  // 목록은 맨 아래 (current)에서 위로 한 칸씩 올라가며 고른 줄을 읽어 모은다(창은 몇 줄만 보여서). 고를 때는 그 자리로 옮긴 뒤 글이 맞는지 확인하고 Enter
+  'rewind/open': async b => {
+    const { name, s } = webPane(b.pid);
+    if (['working', 'compact', 'approval'].includes(s.state)) throw new Error('일하는 중에는 되감을 수 없습니다. 먼저 중단하세요');
+    if (await inputBox(name)) throw new Error('Claude 입력칸에 글이 남아 있습니다. 터미널 화면에서 비운 뒤 다시 하세요');
+    await tmux(['send-keys', '-t', name, '-l', '--', '/rewind']);
+    await sleep(300);
+    await tmux(['send-keys', '-t', name, 'Enter']);
+    let screen = await waitScreen(name, x => x && x.some(l => l.includes('(current)')));
+    if (!screen) throw new Error('되감기 창이 열리지 않았습니다');
+    const items = [];
+    for (let i = 0; i < 50; i++) {
+      await tmux(['send-keys', '-t', name, 'Up']);
+      const next = await waitScreen(name, x => x && x.join('\n') !== screen.join('\n'), 600);
+      if (!next) break; // 맨 위
+      screen = next;
+      const at = screen.findIndex(l => /^\s*❯ /.test(l));
+      if (at < 0) break;
+      items.push({ k: i + 1, text: screen[at].replace(/^\s*❯ /, '').trim(), detail: (screen[at + 1] || '').trim() });
+    }
+    rewinds.set(name, items.length);
+    return items.reverse(); // 오래된 것부터
+  },
+  'rewind/pick': async b => {
+    const { name } = webPane(b.pid);
+    const pos = rewinds.get(name);
+    if (pos === undefined) throw new Error('되감기 창이 열려 있지 않습니다');
+    const k = Number(b.k), move = k - pos;
+    if (move) await tmux(['send-keys', '-t', name, '-N', String(Math.abs(move)), move > 0 ? 'Up' : 'Down']);
+    rewinds.set(name, k);
+    await sleep(250);
+    const screen = await rewindScreen(name);
+    const sel = (screen || []).find(l => /^\s*❯ /.test(l));
+    if (!sel || sel.replace(/^\s*❯ /, '').trim() !== String(b.text)) throw new Error('고른 말이 화면과 맞지 않습니다. 다시 열어 주세요');
+    await tmux(['send-keys', '-t', name, 'Enter']);
+    const confirm = await waitScreen(name, x => x && x.some(l => /^\s*❯ \d+\. /.test(l)));
+    if (!confirm) throw new Error('확인 창이 뜨지 않았습니다');
+    rewinds.set(name, 'confirm');
+    return {
+      message: confirm.filter(l => /^\s*│/.test(l)).map(l => l.replace(/^\s*│ ?/, '')).filter(l => !/^\(.+ ago\)$/.test(l)).join('\n').trim(),
+      notes: confirm.filter(l => /^\s*(The (code|conversation) |⚠)/.test(l)).map(l => l.trim()),
+      // 항목이 많으면 창이 스크롤되어 앞에 ↑·↓가 붙는다
+      options: confirm.map(l => l.match(/^\s*(?:[❯↑↓] )?(\d+)\. (.+)$/)).filter(Boolean).map(m => ({ n: +m[1], label: m[2].trim() })),
+    };
+  },
+  'rewind/confirm': async b => {
+    const { name } = webPane(b.pid);
+    if (rewinds.get(name) !== 'confirm') throw new Error('확인 창이 열려 있지 않습니다');
+    const screen = await rewindScreen(name) || [];
+    const opts = screen.map(l => l.match(/^\s*([❯↑↓] )?(\d+)\. /)).filter(Boolean);
+    const cur = opts.findIndex(m => m[1] === '❯ '), want = opts.findIndex(m => +m[2] === Number(b.n));
+    if (cur < 0 || want < 0) throw new Error('고를 수 없는 항목입니다');
+    if (want !== cur) await tmux(['send-keys', '-t', name, '-N', String(Math.abs(want - cur)), want > cur ? 'Down' : 'Up']);
+    await sleep(200);
+    await tmux(['send-keys', '-t', name, 'Enter']);
+    rewinds.delete(name);
+    await waitScreen(name, x => !x, 3000);
+    // 대화를 되돌리면 그때 보낸 말이 Claude 입력칸에 돌아온다. 비우고 웹 입력칸으로 돌려준다
+    await sleep(300);
+    const text = await inputBox(name);
+    if (text) await clearInput(name, text);
+    return { restored: text };
+  },
+  'rewind/cancel': async b => {
+    const { name } = webPane(b.pid);
+    rewinds.delete(name);
+    for (let i = 0; i < 3 && await rewindScreen(name); i++) { await tmux(['send-keys', '-t', name, 'Escape']); await sleep(300); }
+  },
 };
+// 되감기 창: 화면에서 맨 아래 'Rewind' 제목 아래 줄들. 창이 없으면 null
+const rewinds = new Map(); // tmux 이름 -> 목록에서 (current) 위로 몇 칸 올라가 있는지, 또는 'confirm'(확인 창)
+async function rewindScreen(name) {
+  const lines = (await tmux(['capture-pane', '-p', '-t', name])).split('\n');
+  const t = lines.map(l => l.trim());
+  const top = t.findLastIndex((l, i) => l === 'Rewind' && /^(Restore the code|Confirm you want)/.test(t.slice(i + 1).find(x => x) || ''));
+  return top < 0 ? null : lines.slice(top + 1).map(l => l.replace(/\s+$/, '')).filter(l => l.trim());
+}
+async function waitScreen(name, ok, ms = 2000) {
+  for (const t0 = Date.now(); Date.now() - t0 < ms; await sleep(40)) { const x = await rewindScreen(name); if (ok(x)) return x || []; }
+  return null;
+}
+function webPane(pid) {
+  const name = (handles.get(+pid) || {}).tmux, s = snapshot.sessions.find(x => x.pid === +pid);
+  if (!name || !s) throw new Error('웹에서 띄운 세션만 되감을 수 있습니다');
+  return { name, s };
+}
 // Claude Code 입력칸(화면 맨 아래 두 가로줄 사이)에 들어 있는 글. 흐린 글씨(빈 칸 안내·다음 말 추천)는 빈 것으로 본다
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
 async function inputBox(name) {

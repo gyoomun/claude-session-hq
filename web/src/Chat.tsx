@@ -1,6 +1,6 @@
 // 대화 화면: 대화 기록을 읽어 웹 UI로 그리고, 아래 입력칸으로 그 세션에 바로 말한다.
 // Orca 세션도 Claude를 하나 더 띄우지 않고, 이미 돌고 있는 그 Claude에 입력을 넣는다.
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Box, Button, CloseButton, Group, Kbd, Loader, Modal, Paper, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
@@ -8,6 +8,7 @@ import { api, serverNow, toast } from './store'
 import { pickNew } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
+import { RewindModal } from './Rewind'
 
 interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'result'; text: string; name?: string; toolId?: string; error?: boolean }
 
@@ -111,7 +112,7 @@ function useDraft(sid: string) {
 }
 type Draft = ReturnType<typeof useDraft>
 
-function Composer({ s, d, working, onSent, interrupt }: { s: Session; d: Draft; working: boolean; onSent: () => void; interrupt: () => void }) {
+function Composer({ s, d, working, onSent, interrupt, onRewind }: { s: Session; d: Draft; working: boolean; onSent: () => void; interrupt: () => void; onRewind: () => void }) {
   const { text, setText, imgs, setImgs, uploading, attach } = d
   const [busy, setBusy] = useState(false)
   const box = useRef<HTMLTextAreaElement>(null)
@@ -160,6 +161,7 @@ function Composer({ s, d, working, onSent, interrupt }: { s: Session; d: Draft; 
         <Text size="xs" c="dimmed"><Kbd size="xs">Enter</Kbd> 보내기 · <Kbd size="xs">Shift</Kbd>+<Kbd size="xs">Enter</Kbd> 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기</Text>
         <Group gap={6}>
           {working && <Button size="xs" variant="default" onClick={interrupt}>중단 (Esc)</Button>}
+          {!working && s.host === 'web' && <Button size="xs" variant="subtle" color="gray" onClick={onRewind} title="Claude Code의 되감기(Esc 두 번)">되감기 (Esc Esc)</Button>}
           <Button size="xs" loading={busy || uploading > 0} onClick={send}>보내기</Button>
         </Group>
       </Group>
@@ -234,9 +236,25 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
     const back = r?.result?.restored
     if (back) { draft.setText(p => back + (p ? '\n' + p : '')); toast('중단했습니다. 보낸 말이 입력칸으로 돌아왔습니다.') }
   }
-  // Esc 키로 중단. 일하는 중일 때만 보낸다(쉬는 중에 Esc를 두 번 보내면 Claude Code의 되감기 창이 열린다). 창(설정 등)이 떠 있으면 그 창을 닫는 Esc다
+  // 되감기: 고른 말부터 아래는 새 말이 와서 대화가 새로 그려질 때까지 가린다(Claude Code는 되감을 때 기록 파일에 아무것도 쓰지 않는다)
+  const [rewind, setRewind] = useState(false)
+  const [cutAt, setCutAt] = useState('')
+  const rewound = (r: { restored: string; picked: string; label: string }) => {
+    const head = r.picked.replace(/…$/, '')
+    const hit = [...items].reverse().find(i => i.t === 'user' && i.text.startsWith(head))
+    if (r.restored) { if (hit) setCutAt(hit.id); draft.setText(p => r.restored + (p ? '\n' + p : '')); toast('되감았습니다. 그때 보낸 말이 입력칸에 있습니다.') }
+    else toast('되감기를 했습니다.')
+  }
+  const shown = useMemo(() => { const i = cutAt ? items.findIndex(x => x.id === cutAt) : -1; return i >= 0 ? items.slice(0, i) : items }, [items, cutAt])
+  // Esc 키: 일하는 중이면 중단. 쉬는 중에 두 번 빨리 누르면 되감기(터미널의 Claude Code와 같다). 쉬는 중 한 번은 아무것도 보내지 않는다.
+  // 창(설정 등)이 떠 있으면 그 창을 닫는 Esc다
   const esc = useRef(() => {})
-  esc.current = () => { if (working && s.host) interrupt() }
+  const lastEsc = useRef(0)
+  esc.current = () => {
+    if (!s.host) return
+    if (working) { interrupt(); return }
+    if (s.host === 'web' && Date.now() - lastEsc.current < 600) { lastEsc.current = 0; setRewind(true) } else lastEsc.current = Date.now()
+  }
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.isComposing || document.querySelector('.mantine-Modal-content, .mantine-Drawer-content')) return
@@ -264,11 +282,12 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
         <Stack gap={10} p="md" maw={980} mx="auto">
           {missing && <Text c="dimmed">이 세션의 대화 기록을 찾지 못했습니다.</Text>}
           {!missing && !items.length && <Group gap={8}><Loader size="xs" /><Text c="dimmed" size="sm">대화를 불러오는 중입니다…</Text></Group>}
-          <Messages items={items} detail={detail} />
+          <Messages items={shown} detail={detail} />
           {(s.state === 'working' || s.state === 'compact') && <Group gap={8}><Loader size="xs" color={COLOR[s.state]} /><Text size="sm" c={`${COLOR[s.state]}.4`} ff="monospace">{s.act || '생각 중'}</Text></Group>}
         </Stack>
       </ScrollArea>
     </Paper>
-    {s.host ? <Composer s={s} d={draft} working={working} onSent={() => setSentAt(serverNow())} interrupt={interrupt} /> : <NoInput s={s} />}
+    {s.host ? <Composer s={s} d={draft} working={working} onSent={() => setSentAt(serverNow())} interrupt={interrupt} onRewind={() => setRewind(true)} /> : <NoInput s={s} />}
+    {s.host === 'web' && <RewindModal s={s} opened={rewind} onClose={() => setRewind(false)} onDone={rewound} />}
   </Stack>
 }

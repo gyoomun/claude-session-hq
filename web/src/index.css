@@ -102,3 +102,5 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-split { height: 10px; display: grid; place-items: center; outline: none; }
 .hq-split::after { content: ''; width: 44px; height: 3px; border-radius: 2px; background: var(--mantine-color-default-border); }
 .hq-split[data-separator="hover"]::after, .hq-split[data-separator="active"]::after, .hq-split[data-separator="focus"]::after { width: 100%; background: var(--mantine-color-indigo-5); }
+.hq-rewind-item { display: block; width: 100%; border-radius: 8px; border: 1px solid var(--mantine-color-default-border); }
+.hq-rewind-item:hover { background: var(--mantine-color-indigo-light); border-color: var(--mantine-color-indigo-5); }
