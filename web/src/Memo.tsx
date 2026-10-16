@@ -102,7 +102,6 @@ function Section({ area, title, sub, children }: { area: Area; title: string; su
 
 // 대화 오른쪽 칸: 핀·메모·btw를 위아래로 늘 펼쳐 둔다. 사이 경계를 끌어 높이를 바꾸고, 바꾼 비율은 이 브라우저에 남는다
 export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
-  const asking = (S.btw?.[s.sid] || []).some(x => x.state === 'asking')
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-side' })
   const { layoutKey } = useUI()
   return <Split key={layoutKey} orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
@@ -112,7 +111,7 @@ export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
     <Separator className="hq-split" />
     <Panel id="btw" minSize={200}>
       <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area="btw" tabIndex={-1} onKeyDown={areaKeys()}>
-        <Group p="8px 12px 0" gap={6} wrap="nowrap"><Text fw={600} size="sm">btw{asking ? ' …' : ''}</Text><Box ml="auto"><KeyRec area="btw" /></Box></Group>
+        <Group p="8px 12px 0" gap={6} wrap="nowrap"><Text fw={600} size="sm">btw</Text><Box ml="auto"><KeyRec area="btw" /></Box></Group>
         <BtwTab S={S} s={s} />
       </Paper>
     </Panel>

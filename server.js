@@ -484,6 +484,7 @@ const isUpload = f => typeof f === 'string' && path.resolve(f).startsWith(UPLOAD
 /* btw: Claude Code의 /btw를 그 세션(웹, tmux)에 쳐 넣는다. Claude가 일하는 중에도 끊지 않고 화면 위 상자에 답한다.
    상자 바닥 줄에 'c to copy'가 뜨고 답이 더 바뀌지 않으면 c(복사)를 눌러 tmux 복사 칸에 든 답 전체를 읽고(화면은 길면 잘린다),
    Esc로 닫는다. 질문·답은 db.btw에 남는다. 대화를 복사해 따로 묻던 예전 방식(claude -p --fork-session)은 무거워서 버렸다 */
+const typing = new Set(); // tmux 이름: 대화에 보낼 말을 넣는 중. 이때 /btw를 치면 보낼 말 뒤에 붙는다
 const btwBusy = new Set(); // tmux 이름: 상자가 떠 있는 동안. 이때 친 글자는 상자의 키(c·f·x)가 되므로 대화 보내기를 막는다
 async function btwBox(name) {
   const lines = (await tmux(['capture-pane', '-p', '-t', name])).split('\n').map(l => l.trimEnd());
@@ -500,6 +501,11 @@ async function askBtw(name, item) {
     const before = await topBuffer();
     await tmux(['send-keys', '-t', name, '-l', '--', '/btw ' + q]);
     await sleep(300);
+    // 입력칸에 다른 글(전해지지 않은 말 등)이 있었으면 /btw가 그 뒤에 붙어 보통 말로 간다. 내가 친 것만 지우고 묻지 않는다
+    if ((await inputBox(name)).replace(/\s+/g, '') !== ('/btw ' + q).replace(/\s+/g, '')) {
+      await tmux(['send-keys', '-t', name, '-N', String([...('/btw ' + q)].length), 'BSpace']);
+      throw new Error('Claude 입력칸에 다른 글이 있어 묻지 않았습니다');
+    }
     await tmux(['send-keys', '-t', name, 'Enter']);
     // 상자 맨 아래 질문이 이것이고, 답이 다 나와(c to copy) 두 번 연달아 같으면 끝난 것으로 본다
     let prev = null, ready = false;
@@ -739,6 +745,7 @@ const routes = {
     const s = snapshot.sessions.find(x => x.sid === b.sid && x.host === 'web');
     if (!s) throw new Error('btw는 웹에서 띄운 세션에서만 쓸 수 있습니다(Claude Code 화면을 읽어야 해서)');
     if (btwBusy.has(s.tmux)) throw new Error('앞의 btw 답을 받는 중입니다');
+    if (typing.has(s.tmux)) throw new Error('대화에 보낼 말을 넣는 중입니다. 잠깐 뒤에 물으세요');
     if (s.state === 'approval') throw new Error('실행 허락을 기다리는 중에는 물을 수 없습니다');
     if (await rewindScreen(s.tmux)) throw new Error('Claude 쪽에 되감기 창이 열려 있습니다');
     if (await inputBox(s.tmux)) throw new Error('Claude 입력칸에 글이 남아 있어 물을 수 없습니다');
@@ -852,11 +859,17 @@ const routes = {
     // 한 번의 tmux 호출로: 줄마다 send-keys -l, 줄 사이에 C-j. 글 안의 줄바꿈 문자는 Claude Code가 버린다
     const type = t => tmux(t.split('\n').flatMap((line, i) => [...(i ? ['send-keys', '-t', where.tmux, 'C-j', ';'] : []),
       ...(line ? ['send-keys', '-t', where.tmux, '-l', '--', line, ';'] : [])]).slice(0, -1));
-    if (!where.tmux) { if (text && !text.includes('\n')) return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']); for (const x of list) await paste(x.image || x.paste || x.text); }
-    else for (const x of list) { if (x.image || x.paste) await paste(x.image || x.paste); else await type(x.text); }
-    await sleep(120);
-    if (where.tmux) return tmux(['send-keys', '-t', where.tmux, 'Enter']);
-    return orca(b.pid, ['terminal', 'send', '--text', '', '--enter']);
+    if (!where.tmux) {
+      if (text && !text.includes('\n')) return orca(b.pid, ['terminal', 'send', '--text', text, '--enter']);
+      for (const x of list) await paste(x.image || x.paste || x.text);
+      await sleep(120);
+      return orca(b.pid, ['terminal', 'send', '--text', '', '--enter']);
+    }
+    typing.add(where.tmux);
+    try {
+      for (const x of list) { if (x.image || x.paste) await paste(x.image || x.paste); else await type(x.text); }
+      await submit(where.tmux);
+    } finally { typing.delete(where.tmux); }
   },
   // 대화 화면의 단축 키: 중단(Esc), 승인 창의 번호 고르기
   'term/key': async b => {
@@ -973,6 +986,19 @@ async function inputBox(name) {
   const at = plain[a + 1]?.indexOf('❯\u00a0') ?? -1;
   if (at < 0 || raw[a + 1].slice(raw[a + 1].indexOf('❯\u00a0') + 2).startsWith('\x1b[2m')) return '';
   return plain.slice(a + 1, b).map((l, i) => i ? l.replace(/^  /, '') : l.slice(at + 2)).join('\n').trim();
+}
+// 보내기(Enter). 이미지를 붙여넣은 바로 뒤의 Enter는 Claude Code가 버릴 때가 있어(글은 입력칸에 남는다) 입력칸이 빌 때까지 다시 누른다.
+// 끝내 안 가면 입력칸을 비우고 실패로 돌려준다(웹이 입력칸에 되살리므로, 남겨 두면 다음 말에 붙는다)
+async function submit(name) {
+  for (let i = 0; i < 5; i++) {
+    await sleep(i ? 400 : 120);
+    await tmux(['send-keys', '-t', name, 'Enter']);
+    await sleep(250);
+    if (!(await inputBox(name))) return;
+  }
+  const left = await inputBox(name);
+  if (left) await clearInput(name, left);
+  throw new Error('Claude가 보낸 말을 받지 않았습니다. 다시 보내 주세요');
 }
 // 입력칸 비우기: 커서가 어디 있든 앞뒤로 지운다. Ctrl-C는 빈 칸에서 두 번이면 Claude가 꺼지고, Ctrl-U는 여러 줄을 다 못 지워서 쓰지 않는다
 async function clearInput(name, text) {

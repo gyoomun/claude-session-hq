@@ -23,7 +23,7 @@ export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
   return <>
     <Group justify="space-between" p="6px 10px" gap={4} wrap="nowrap">
       <Text size="xs" c="dimmed">{s.host === 'web' || !s.sid ? 'Claude Code의 /btw로 묻습니다. 하던 일을 끊지 않고, 원래 대화에는 남지 않습니다' : '웹에서 띄운 세션에서만 쓸 수 있습니다'}</Text>
-      {list.length > 0 && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('btw/clear', { sid: s.sid })}>비우기</Button>}
+      {list.length > 0 && <Button size="compact-xs" variant="subtle" color="gray" style={{ flex: 'none' }} onClick={() => api('btw/clear', { sid: s.sid })}>비우기</Button>}
     </Group>
     <ScrollArea viewportRef={view} style={{ flex: 1 }} viewportProps={{ tabIndex: 0, className: 'hq-scrollfocus' }}>
       <Stack gap="sm" p="sm">
