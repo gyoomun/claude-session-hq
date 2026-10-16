@@ -118,3 +118,22 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-pending { opacity: .6; animation: hq-in .16s ease-out; }
 @keyframes hq-in { from { opacity: 0; transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) { .hq-pending { animation: none; } }
+
+/* 움직임: 짧고 은은하게. 새로 생긴 것에만 넣는다(처음 불러온 것은 그대로) */
+.hq-in { animation: hq-in .2s ease-out; }                       /* 대화에 새로 온 답·도구 */
+.hq-fade { animation: hq-fade .18s ease-out; }                  /* 보기(F1~F4)·세션 바꿀 때 */
+@keyframes hq-fade { from { opacity: 0; } }
+.hq-pop { animation: hq-pop .16s ease-out; }                    /* 입력칸에 붙인 이미지·글 표시 */
+@keyframes hq-pop { from { opacity: 0; transform: scale(.9); } }
+.hq-item { transition: background-color .15s ease, box-shadow .15s ease; }   /* 세션 목록 한 줄 */
+.hq-item:hover { background-color: var(--mantine-color-default-hover); }
+.hq-dot { transition: background-color .3s ease; }              /* 상태 점: 색이 서서히 바뀌고 작업중이면 숨 쉰다 */
+.hq-dot.busy { animation: hq-breathe 1.6s ease-in-out infinite; }
+@keyframes hq-breathe { 50% { opacity: .35; } }
+.hq-slide { transition: top .22s ease; }                        /* 즐겨찾기 자유 배치에서 칸을 옮길 때 */
+.hq-room:not(.editing) { transition: left .22s ease, top .22s ease, width .22s ease, height .22s ease; }  /* 사무실 방(끄는 중에는 바로 따라온다) */
+.hq-rewind-item { transition: background-color .15s ease, border-color .15s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .hq-in, .hq-fade, .hq-pop, .hq-dot.busy { animation: none; }
+  .hq-item, .hq-dot, .hq-slide, .hq-room, .hq-rewind-item { transition: none; }
+}

@@ -20,10 +20,10 @@ function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; 
   // 고른 세션은 목록에서 보이게 스크롤한다(새로고침·Ctrl+Tab·다른 데서 열기). 고른 순간에만 해서, 손으로 스크롤한 목록을 되돌리지 않는다
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (on) ref.current?.scrollIntoView({ block: 'nearest' }) }, [on])
-  return <UnstyledButton ref={ref} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%"
+  return <UnstyledButton ref={ref} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%" className="hq-item"
     style={{ borderRadius: 8, background: on ? 'var(--mantine-color-indigo-light)' : undefined, boxShadow: on ? 'inset 0 0 0 1px var(--mantine-color-indigo-5)' : undefined }}>
     <Group gap={8} wrap="nowrap" align="flex-start">
-      <Box w={8} h={8} mt={6} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} />
+      <Box w={8} h={8} mt={6} className={'hq-dot' + (s.state === 'working' || s.state === 'compact' ? ' busy' : '')} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} />
       <Stack gap={0} style={{ minWidth: 0 }}>
         <Text size="sm" fw={600} className="hq-wrap" lh={1.35} lineClamp={clamp ? 2 : undefined} title={clamp ? s.title : undefined}>{s.title}{memo && <IconPinFilled size={12} style={{ marginLeft: 4, verticalAlign: -1, color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}</Text>
         <Text size="xs" c="dimmed"><Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
@@ -140,7 +140,7 @@ function Favs({ S, sel }: { S: Snapshot; sel: string }) {
         {f.mode === 'free'
           ? <>
               {hover !== null && <Box className="hq-fav-ghost" style={{ top: hover * SLOT, height: SLOT }} />}
-              {live.map(x => <Box key={x.sid} data-fav={x.sid} pos="absolute" left={0} right={0} style={{ top: x.slot * SLOT, height: SLOT }}>
+              {live.map(x => <Box key={x.sid} data-fav={x.sid} pos="absolute" left={0} right={0} className="hq-slide" style={{ top: x.slot * SLOT, height: SLOT }}>
                 <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} clamp />
               </Box>)}
             </>

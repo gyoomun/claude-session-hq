@@ -166,7 +166,7 @@ export function App() {
         </Group>
       </Group>
     </Stack>
-    <Box style={{ minHeight: 0, minWidth: 0 }}>
+    <Box key={ui.mode} className="hq-fade" style={{ minHeight: 0, minWidth: 0 }}>
       {ui.mode === 'work' ? <WorkView S={S} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
     </Box>
     <SessionDrawer S={S} />

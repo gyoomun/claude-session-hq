@@ -26,19 +26,19 @@ const UserText = ({ text }: { text: string }) => <>{text.split(PASTED).map((x, i
 })}</>
 const Linkify = ({ text }: { text: string }) => <>{text.split(/(https?:\/\/[^\s<>"')\]]*[^\s<>"')\].,])/).map((x, i) => i % 2 ? <NewTab key={i} href={x} className="hq-link">{x}</NewTab> : x)}</>
 
-function Tool({ it, result }: { it: Item; result?: Item }) {
-  return <details className={'hq-tool' + (result?.error ? ' err' : '')}>
+function Tool({ it, result, cls = '' }: { it: Item; result?: Item; cls?: string }) {
+  return <details className={'hq-tool' + (result?.error ? ' err' : '') + cls}>
     <summary><span className="name">{it.name}</span> <span className="arg">{it.text}</span>{!result && <Loader size={10} ml={6} />}</summary>
     {result && <pre>{result.text || '(출력 없음)'}</pre>}
   </details>
 }
 
 // 작업 과정을 접어 볼 때: 연달아 쓴 도구를 한 줄로 묶는다. 누르면 하나하나 펼친다
-function ToolGroup({ tools, results }: { tools: Item[]; results: Map<string | undefined, Item> }) {
+function ToolGroup({ tools, results, cls = '' }: { tools: Item[]; results: Map<string | undefined, Item>; cls?: string }) {
   const count = new Map<string, number>()
   tools.forEach(t => count.set(t.name!, (count.get(t.name!) || 0) + 1))
   const running = tools.some(t => !results.has(t.toolId))
-  return <details className={'hq-tool' + (tools.some(t => results.get(t.toolId)?.error) ? ' err' : '')}>
+  return <details className={'hq-tool' + (tools.some(t => results.get(t.toolId)?.error) ? ' err' : '') + cls}>
     <summary>도구 {tools.length}번 · <span className="arg">{[...count].map(([n, c]) => c > 1 ? `${n} ${c}` : n).join(', ')}</span>{running && <Loader size={10} ml={6} />}</summary>
     <Stack gap={4} mt={4}>{tools.map(t => <Tool key={t.id} it={t} result={results.get(t.toolId)} />)}</Stack>
   </details>
@@ -177,12 +177,12 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
         <Button size="xs" variant="outline" color="red" onClick={() => key('3')}>3 · 거부</Button>
       </Group>}
       {(shown.length > 0 || shownPastes.length > 0) && <Group gap={6} align="flex-end">
-        {shown.map(i => <Box key={i.n} pos="relative">
+        {shown.map(i => <Box key={i.n} pos="relative" className="hq-pop">
           <img src={i.url} alt={tok(i.n)} style={{ height: 64, borderRadius: 6, display: 'block', border: '1px solid var(--mantine-color-default-border)' }} />
           <Text fz={10} pos="absolute" bottom={2} left={4} px={4} style={{ background: 'rgba(0,0,0,.6)', color: '#fff', borderRadius: 4 }}>{i.n}</Text>
           <CloseButton size="xs" variant="filled" pos="absolute" top={2} right={2} aria-label="이미지 빼기" onClick={() => setText(p => p.replace(tok(i.n), ''))} />
         </Box>)}
-        {shownPastes.map(p => <Group key={p.n} gap={4} wrap="nowrap" className="hq-paste-chip" title={p.text.slice(0, 600)}>
+        {shownPastes.map(p => <Group key={p.n} gap={4} wrap="nowrap" className="hq-paste-chip hq-pop" title={p.text.slice(0, 600)}>
           <Text size="xs">{p.n} · 붙여넣은 글 {p.text.split('\n').length}줄</Text>
           <CloseButton size="xs" aria-label="붙여넣은 글 빼기" onClick={() => setText(x => x.replace(ptok(p), ''))} />
         </Group>)}
@@ -254,12 +254,19 @@ const Messages = memo(function Messages({ items, detail }: { items: Item[]; deta
   const results = new Map(items.filter(i => i.t === 'result').map(i => [i.toolId, i]))
   const all = detail ? items.filter(i => i.t !== 'result') : grouped(items)
   const list = all.slice(-limit)
+  // 처음 불러온 것과 '이전 대화 더 보기'로 연 것은 그대로, 그 뒤에 새로 온 답·도구만 아래에서 올라오며 나타난다.
+  // 내 말은 '보내는 중' 말풍선이 이미 나타났으므로 다시 움직이지 않는다
+  const seen = useRef<Set<string> | null>(null)
+  const idOf = (it: Item | Item[]) => Array.isArray(it) ? it[0].id : it.id
+  if (!seen.current && items.length) seen.current = new Set(items.map(i => i.id))
+  const cls = (it: Item | Item[]) => seen.current && !seen.current.has(idOf(it)) && (Array.isArray(it) || it.t !== 'user') ? ' hq-in' : ''
+  useEffect(() => { list.forEach(it => seen.current?.add(idOf(it))) })
   return <>
-    {all.length > list.length && <Button size="xs" variant="subtle" color="gray" onClick={() => setLimit(l => l + PAGE)}>이전 대화 더 보기 ({all.length - list.length}개 남음)</Button>}
-    {list.map(it => Array.isArray(it) ? <ToolGroup key={it[0].id} tools={it} results={results} />
+    {all.length > list.length && <Button size="xs" variant="subtle" color="gray" onClick={() => { all.forEach(it => seen.current?.add(idOf(it))); setLimit(l => l + PAGE) }}>이전 대화 더 보기 ({all.length - list.length}개 남음)</Button>}
+    {list.map(it => Array.isArray(it) ? <ToolGroup key={it[0].id} tools={it} results={results} cls={cls(it)} />
       : it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><UserText text={it.text} /></Text></Box>
-      : it.t === 'assistant' ? <Box key={it.id} className="hq-say"><Md text={it.text} /></Box>
-      : <Tool key={it.id} it={it} result={results.get(it.toolId)} />)}
+      : it.t === 'assistant' ? <Box key={it.id} className={'hq-say' + cls(it)}><Md text={it.text} /></Box>
+      : <Tool key={it.id} it={it} result={results.get(it.toolId)} cls={cls(it)} />)}
   </>
 })
 
@@ -329,7 +336,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   }, [])
   const [dropOver, setDropOver] = useState(false)
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
-  return <Stack gap={8} style={{ flex: 1, minHeight: 0, position: 'relative' }}
+  return <Stack gap={8} className="hq-fade" style={{ flex: 1, minHeight: 0, position: 'relative' }}
     onDragOver={e => { if (s.host && hasFiles(e)) { e.preventDefault(); setDropOver(true) } }}
     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(false) }}
     onDrop={e => {
