@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Badge, Box, Button, Center, Code, Group, Kbd, Loader, Paper, Popover, ScrollArea, SegmentedControl, SimpleGrid, Stack, Text, Title, UnstyledButton } from '@mantine/core'
+import { Alert, Box, Button, Center, Code, Group, Kbd, Loader, Paper, SegmentedControl, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
 import { type Mode, pickNew, rememberSel, setMode, setUI, useUI } from './ui'
@@ -82,57 +82,48 @@ function Notices({ S }: { S: Snapshot }) {
   </>
 }
 
-// 오늘 회사 일정(구글 캘린더): 머리에 한 줄. 누르면 이번 7일을 날짜별로 본다. 캘린더를 안 이었으면 안 보인다(환경설정 '일정')
+// 회사 일정(구글 캘린더): 오늘부터 7일을 하루 한 칸으로, 상태 카드가 있던 자리에 늘 펼쳐 둔다(사용자 요청: 늘 눈에 들어오게).
+// 칸마다 3개까지, 넘치면 +N(칸에 마우스를 올리면 전부). 캘린더를 안 이었으면 안 보인다(환경설정 '일정')
 const hm = (t: number) => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
 const evText = (e: CalEvent) => e.allDay ? e.title : `${hm(e.start)} ${e.title}`
-function Today({ S }: { S: Snapshot }) {
+function Week({ S }: { S: Snapshot }) {
   const c = S.calendar
   if (!c || !c.sources) return null
   const day = (n: number) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + n); return +d }
-  const today = c.events.filter(e => e.start < day(1) && e.end > day(0))
   const days = Array.from({ length: 7 }, (_, n) => ({ n, from: day(n), list: c.events.filter(e => e.start < day(n + 1) && e.end > day(n)) }))
-  return <Popover width={440} position="bottom" shadow="md" withArrow>
-    <Popover.Target>
-      <UnstyledButton className="hq-today" title="이번 7일 일정 보기">
-        <Group gap={6} wrap="nowrap">
-          <Text size="xs" c="dimmed" style={{ flex: 'none' }}>오늘</Text>
-          {c.error && <Text size="xs" c="red.4" style={{ flex: 'none' }} title={c.error}>일정을 다 읽지 못함</Text>}
-          {today.length ? today.slice(0, 4).map(e => <Badge key={e.id} variant="light" color={e.allDay ? 'yellow' : 'indigo'} radius="sm" tt="none" fw={500} maw={220}>{evText(e)}</Badge>)
-            : <Text size="xs" c="dimmed">일정 없음</Text>}
-          {today.length > 4 && <Text size="xs" c="dimmed">+{today.length - 4}</Text>}
+  return <SimpleGrid cols={{ base: 2, xs: 4, md: 7 }} spacing="sm">
+    {days.map(d => {
+      const shown = d.list.length > 3 ? d.list.slice(0, 2) : d.list
+      return <Paper key={d.n} withBorder p="8px 12px" title={d.list.map(evText).join('\n') || undefined}
+        bg={d.n ? undefined : 'color-mix(in srgb, var(--mantine-color-indigo-6) 8%, var(--mantine-color-body))'} style={d.n ? undefined : { borderColor: 'var(--mantine-color-indigo-7)' }}>
+        <Group justify="space-between" gap={4} wrap="nowrap">
+          <Text size="sm" fw={d.n ? 400 : 600} c={d.n ? 'dimmed' : undefined}>{new Date(d.from).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' })}{d.n ? '' : ' · 오늘'}</Text>
+          {!d.n && c.error && <Text size="xs" c="red.4" title={c.error}>일부 못 읽음</Text>}
         </Group>
-      </UnstyledButton>
-    </Popover.Target>
-    <Popover.Dropdown>
-      <ScrollArea.Autosize mah="60vh">
-        <Stack gap="sm">
-          {days.map(d => <Stack key={d.n} gap={4}>
-            <Text size="xs" fw={600} c={d.n ? 'dimmed' : undefined}>{new Date(d.from).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' })}{d.n === 0 ? ' · 오늘' : ''}</Text>
-            {d.list.length ? d.list.map(e => <Group key={e.id} gap={8} wrap="nowrap" pl={6}>
-              <Text size="xs" ff="monospace" c="dimmed" w={42} style={{ flex: 'none' }}>{e.allDay ? '종일' : hm(e.start)}</Text>
-              <Text size="sm" style={{ flex: 1, minWidth: 0 }} className="hq-wrap">{e.title}</Text>
-              {e.cal && <Text size="xs" c="dimmed" style={{ flex: 'none' }}>{e.cal}</Text>}
-            </Group>) : <Text size="xs" c="dimmed" pl={6}>없음</Text>}
-          </Stack>)}
+        <Stack gap={2} mt={4}>
+          {shown.map(e => <Text key={e.id} size="xs" truncate><Text span inherit ff="monospace" c={e.allDay ? 'yellow.5' : 'indigo.4'}>{e.allDay ? '종일' : hm(e.start)}</Text> {e.title}</Text>)}
+          {!d.list.length && <Text size="xs" c="dimmed">일정 없음</Text>}
+          {d.list.length > shown.length && <Text size="xs" c="dimmed">+{d.list.length - shown.length}개 더</Text>}
         </Stack>
-      </ScrollArea.Autosize>
-    </Popover.Dropdown>
-  </Popover>
+      </Paper>
+    })}
+  </SimpleGrid>
 }
 
 function Header({ S }: { S: Snapshot }) {
   const un = S.sessions.filter(s => !s.task).length, waits = S.tasks.flatMap(t => t.waits).length
   const mine = S.sessions.filter(s => s.state === 'myturn' || s.state === 'approval').length
+  const st = (x: string) => S.sessions.filter(s => s.state === x).length
+  const count = (label: string, n: number, color: string) => <Text span inherit c={n ? color : undefined} fw={n ? 600 : undefined}>{label} {n}</Text>
   useEffect(() => { document.title = (mine ? `(${mine}) ` : '') + 'Claude Session HQ' }, [mine])
   return <Group justify="space-between" wrap="wrap" gap="sm">
     <Group gap="sm" wrap="nowrap">
       <Logo />
       <div>
         <Title order={1} size={24} fw={400} className="hq-display">Claude Session HQ</Title>
-        <Text size="xs" c="dimmed">업무 {S.tasks.length} · 열린 세션 {S.sessions.length} (미배치 {un}) · 사람 대기 {waits}</Text>
+        <Text size="xs" c="dimmed">업무 {S.tasks.length} · 열린 세션 {S.sessions.length} (미배치 {un}) · {count('내 차례', st('myturn'), 'yellow.5')} · {count('승인 필요', st('approval'), 'red.5')} · 작업중 {st('working')} · 쉼 {st('idle')} · 사람 대기 {waits} · {count('정체 업무', S.tasks.filter(t => stale(S, t)).length, 'pink.5')}</Text>
       </div>
     </Group>
-    <Today S={S} />
     <Group gap="xs">
       <LanAddress S={S} />
       <Clock />
@@ -140,26 +131,6 @@ function Header({ S }: { S: Snapshot }) {
       <Button onClick={() => setUI({ brief: true })}>지금 상황 브리핑</Button>
     </Group>
   </Group>
-}
-
-function Counters({ S }: { S: Snapshot }) {
-  const c = (st: string) => S.sessions.filter(s => s.state === st).length
-  const items: [string, string, number, string, boolean][] = [
-    ['열린 세션', 'SESSIONS', S.sessions.length, 'indigo', false],
-    ['내 차례', 'MY TURN', c('myturn'), 'yellow', true],
-    ['승인 필요', 'APPROVE', c('approval'), 'red', true],
-    ['남 기다림', 'WAITING', S.tasks.flatMap(t => t.waits).length, 'grape', false],
-    ['작업중', 'WORKING', c('working'), 'teal', false],
-    ['쉼', 'IDLE', c('idle'), 'gray', false],
-    ['정체 업무', 'STALLED', S.tasks.filter(t => stale(S, t)).length, 'pink', true],
-  ]
-  return <SimpleGrid cols={{ base: 2, xs: 4, md: 7 }} spacing="sm">
-    {items.map(([k, e, v, col, hot]) => <Paper key={k} withBorder p="10px 14px"
-      bg={hot && v ? `color-mix(in srgb, var(--mantine-color-${col}-6) 10%, var(--mantine-color-body))` : undefined} style={hot && v ? { borderColor: `var(--mantine-color-${col}-7)` } : undefined}>
-      <Group justify="space-between" gap={4}><Text size="sm" c="dimmed">{k}</Text><span className="hq-pixel" style={{ fontSize: 9 }}>{e}</span></Group>
-      <Text className="hq-display" fz={30} lh={1.1} c={`${col}.5`} style={{ fontVariantNumeric: 'tabular-nums' }}>{String(v).padStart(2, '0')}</Text>
-    </Paper>)}
-  </SimpleGrid>
 }
 
 export function App() {
@@ -201,14 +172,14 @@ export function App() {
 
   if (!S) return <Center h="100vh"><Loader /></Center>
   // 화면 전체를 한 덩어리로 가운데에 놓는다(좌우 여백이 같다). 폭은 모든 보기에서 같다(작업 보기의 세 칸 기준. 보기마다 다르면 넘길 때 화면이 움찔한다).
-  // 격자 2행: 위(머리·카운터·보기 전환) / 아래(내용). 페이지 자체는 스크롤하지 않고 아래 내용 영역이 화면 높이를 채운다
+  // 격자 2행: 위(머리·일정·보기 전환) / 아래(내용). 페이지 자체는 스크롤하지 않고 아래 내용 영역이 화면 높이를 채운다
   return <Box h="100dvh" py="md" px="md" maw={2032} mx="auto"
     style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', rowGap: 'var(--mantine-spacing-md)' }}>
     <Stack gap="md" style={{ minWidth: 0 }}>
       <Header S={S} />
       {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
       <Notices S={S} />
-      <Counters S={S} />
+      <Week S={S} />
       <Group justify="space-between">
         <SegmentedControl value={ui.mode} onChange={v => setMode(v as Mode)}
           data={[['작업', 'work', 'F1'], ['업무별', 'task', 'F2'], ['세션 전체', 'all', 'F3'], ['메모', 'memo', 'F4']].map(([label, value, key]) => ({
