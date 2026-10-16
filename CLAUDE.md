@@ -76,7 +76,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 기기 이름: 주인이 붙인 이름(`db.deviceNames`, IP별) → `~/.claude/board/ip-names.json`(회사 IP 목록 `04note/work/engsoft/handover/trilium/network/office-lan/attachments/engsoft-ip-list.xlsx`의 '내부' 시트에서 사용 중인 IP·이름·부서를 뽑아 만든 것. 동료 이름이 들어 있어 저장소에 넣지 않는다) → NetBIOS PC 이름 → 기기 종류. 엑셀이 바뀌면 파일을 다시 뽑는다
 - 화면 규칙: 페이지 자체는 스크롤하지 않는다(body overflow hidden, 앱이 100dvh). 머리·카운터·보기 전환은 고정이고, 내용 영역의 각 칸(`.hq-pane`, ScrollArea)이 자기 안에서 스크롤한다. 새 화면을 만들 때도 지킨다
 - 같은 대화(sid)가 두 프로세스로 돌 수 있으므로 화면 목록의 key와 사무실 자리 표는 pid 기준이다
-- 자주 바꾸지 않는 것(웹 세션을 대화/터미널로 볼지, 작업 과정 자세히, 접속 관리, 모두 재시작)은 머리의 '환경설정' 창(`Modals.tsx`의 SettingsModal)에 모은다. 화면 설정은 `ui.view`·`ui.detail`(localStorage `hq-view`·`hq-detail`)
+- 자주 바꾸지 않는 것(웹 세션을 대화/터미널로 볼지, 작업 과정 자세히, 칸 높이·너비 되돌리기, 접속 관리, 모두 재시작)은 머리의 '환경설정' 창(`Modals.tsx`의 SettingsModal)에 모은다. 화면 설정은 `ui.view`·`ui.detail`(localStorage `hq-view`·`hq-detail`). 칸 되돌리기는 저장된 비율을 지우고 `ui.layoutKey`를 올려 경계 묶음을 다시 그린다(처음 그릴 때만 저장값을 읽어서)
 - 보기 전환 단축키 F1~F4(작업·업무별·세션 전체·메모). 입력칸·터미널에 커서가 있어도 먹게 `App.tsx`에서 capture 단계로 가로채고 브라우저 기본 동작(도움말·찾기)을 막는다
 - 보기 전환은 주소 끝(`#work`·`#task`·`#all`)에 남겨 브라우저·마우스 뒤로가기로 돌아간다. 보기를 바꿀 때는 `ui.ts`의 `setMode()`/`pick()`을 쓴다
 - 인증번호·로그인 토큰은 해시로만 `hq.json`에 저장한다. 메일 설정(`~/.claude/board/mail.env`)은 사용자가 직접 만든다(비밀번호가 들어가므로 Claude가 쓰지 않는다)

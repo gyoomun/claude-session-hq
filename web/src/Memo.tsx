@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Badge, Box, Button, Checkbox, CloseButton, Group, Paper, ScrollArea, SimpleGrid, Stack, Text, Textarea, UnstyledButton } from '@mantine/core'
 import { api } from './store'
-import { pick } from './ui'
+import { pick, useUI } from './ui'
 import type { Memo, Session, Snapshot } from './types'
 import { Since } from './util'
 import { BtwTab } from './Btw'
@@ -74,7 +74,8 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
 export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
   const asking = (S.btw?.[s.sid] || []).some(x => x.state === 'asking')
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-side' })
-  return <Split orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
+  const { layoutKey } = useUI()
+  return <Split key={layoutKey} orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
     <Panel id="pin" defaultSize="25" minSize={70}><Section title="핀" sub="Claude 핀보드"><PinList s={s} /></Section></Panel>
     <Separator className="hq-split" />
     <Panel id="memo" defaultSize="30" minSize={70}><Section title="메모"><MemoList S={S} sid={s.sid} /></Section></Panel>

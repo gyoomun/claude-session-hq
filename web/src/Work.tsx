@@ -183,7 +183,7 @@ export function WorkView({ S }: { S: Snapshot }) {
   const [unfav, setUnfav] = useState(false) // 즐겨찾기를 목록 위로 끌고 왔을 때
   // 목록 | 즐겨찾기 | 나머지(머리·대화·핀) 사이 경계를 끌어 너비를 바꾼다. 바꾼 비율은 이 브라우저에 남는다(핀·메모·btw 높이와 같은 방식)
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-work' })
-  return <Split orientation="horizontal" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
+  return <Split key={ui.layoutKey} orientation="horizontal" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
     <Panel id="list" defaultSize={290} minSize={180} maxSize={560}>
     <Paper withBorder p={6} h="100%" className={unfav ? 'hq-drop-over' : undefined} style={{ minHeight: 0, display: 'flex' }}
       onDragOver={e => { if (!dragging(e)) return; e.preventDefault(); setUnfav(true) }}

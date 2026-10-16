@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Autocomplete, Badge, Button, Code, Group, List, Modal, NativeSelect, Paper, SegmentedControl, Stack, Switch, Text, TextInput, Textarea } from '@mantine/core'
 import { api, toast } from './store'
-import { lastCwd, pickNew, rememberCwd, setDetail, setMode, setUI, setView, useUI } from './ui'
+import { lastCwd, pickNew, rememberCwd, resetLayout, setDetail, setMode, setUI, setView, useUI } from './ui'
 import type { Snapshot } from './types'
 import { Since, bySt, fmt, lastOf, overdue, stale, tname, waiting } from './util'
 
@@ -160,6 +160,8 @@ export function SettingsModal({ S }: { S: Snapshot }) {
         data={[{ label: '대화', value: 'chat' }, { label: '터미널', value: 'term' }]} />)}
       {row('작업 과정 자세히', '대화 화면에서 도구 사용을 하나하나 봅니다', <Switch checked={ui.detail} onChange={e => setDetail(e.currentTarget.checked)} aria-label="작업 과정 자세히" />)}
       {row('접속', '사내망 접속과 로그인한 기기를 관리합니다', <Button size="xs" variant="default" onClick={() => setUI({ settings: false, access: true })}>열기</Button>)}
+      {row('칸 높이 되돌리기', '핀·메모·btw 사이 경계를 처음 높이로', <Button size="xs" variant="default" onClick={() => { resetLayout('hq-side'); toast('핀·메모·btw 높이를 처음으로 되돌렸습니다.') }}>되돌리기</Button>)}
+      {row('칸 너비 되돌리기', '세션 목록·즐겨찾기·대화 사이 경계를 처음 너비로', <Button size="xs" variant="default" onClick={() => { resetLayout('hq-work'); toast('목록·즐겨찾기·대화 너비를 처음으로 되돌렸습니다.') }}>되돌리기</Button>)}
       {row('모두 재시작', '웹 세션을 모두 끄고 같은 대화로 다시 띄웁니다(일하는 중이어도)', <RestartAll S={S} />)}
     </Stack>
   </Modal>
