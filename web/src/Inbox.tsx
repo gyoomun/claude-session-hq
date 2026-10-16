@@ -13,8 +13,8 @@ export function MailCard({ S }: { S: Snapshot }) {
   const b = S.inbox
   if (!b?.accounts.length) return <div className="hq-mail" />
   const many = b.accounts.length > 1
-  return <Paper className="hq-mail">
-    <Group justify="space-between" gap={6} wrap="nowrap" px={12} pb={4}>
+  return <Paper withBorder className="hq-mail">
+    <Group justify="space-between" gap={6} wrap="nowrap" px={12} pt={10} pb={4}>
       <Text size="sm" fw={600}>메일</Text>
       <Group gap={8} wrap="nowrap">
         {b.error && <Text size="xs" c="red.4" title={b.error}>일부 못 읽음</Text>}

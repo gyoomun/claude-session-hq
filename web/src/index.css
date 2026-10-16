@@ -208,23 +208,23 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 
 /* 바깥 틀: 왼쪽 사이드바(창 맨 왼쪽) | 본문(나머지의 가운데). 사이드바를 접고 펼 때 폭이 부드럽게 바뀐다 */
 .hq-shell { display: grid; transition: grid-template-columns .2s ease; }
-.hq-sidebar { height: 100dvh; overflow-y: auto; padding: var(--mantine-spacing-md) 10px var(--mantine-spacing-md) var(--mantine-spacing-md); border-right: 1px solid var(--mantine-color-default-border); }
+.hq-sidebar { height: 100dvh; overflow-y: auto; padding: var(--mantine-spacing-md) 12px; border-right: 1px solid var(--mantine-color-default-border); }
 /* 본문 아래 줄: 일정(왼쪽)·메일. 메인 내용과 위의 줄로 나누고, 평소엔 테두리 없는 칸(눈에 덜 띄게). 카드가 없어도 높이는 둔다 */
-.hq-sub { position: relative; height: 196px; flex: none; display: flex; padding-top: 10px; border-top: 1px solid var(--mantine-color-default-border); }
-.hq-mail { width: 480px; flex: none; display: flex; flex-direction: column; background: transparent; border-left: 1px solid var(--mantine-color-default-border); border-radius: 0; }
-.hq-mail-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 0 12px; }
-/* 일정 카드: 자리 칸(slot)이 자리를 지키고 카드는 .hq-sub 기준으로 아래 왼쪽에 붙어 위·옆으로 커진다(펼치면 메일·메인 내용을 덮는다) */
+.hq-right { height: 100dvh; min-width: 0; display: flex; flex-direction: column; }
+.hq-sub { flex: none; border-top: 1px solid var(--mantine-color-default-border); }
+.hq-sub-in { position: relative; width: 100%; max-width: 2032px; margin: 0 auto; height: 218px; padding: var(--mantine-spacing-md); display: flex; gap: var(--mantine-spacing-md); }
+.hq-mail { width: 480px; flex: none; display: flex; flex-direction: column; }
+.hq-mail-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 8px 12px; }
+/* 일정 카드: 자리 칸(slot)이 자리를 지키고 카드는 .hq-sub-in 기준으로 아래 왼쪽에 붙어 위·옆으로 커진다(펼치면 메일·메인 내용을 덮는다) */
 .hq-cal-slot { width: 360px; flex: none; }
-.hq-cal { position: absolute; left: 0; bottom: 0; z-index: 150; height: 186px; width: 360px; display: flex; overflow: hidden; background: transparent; transition: width .25s ease, height .25s ease, box-shadow .25s ease; }
-.hq-cal.open { box-shadow: var(--mantine-shadow-xl); background: var(--mantine-color-body); }
-.hq-cal.strip { width: 100%; }
-.hq-cal.month { width: min(1100px, 100%); height: 72vh; }
-.hq-cal-today { flex: 1; min-width: 0; overflow-y: auto; padding: 0 8px 34px 4px; }
+.hq-cal { position: absolute; left: var(--mantine-spacing-md); bottom: var(--mantine-spacing-md); z-index: 150; height: calc(218px - 2 * var(--mantine-spacing-md)); width: 360px; display: flex; overflow: hidden; transition: width .25s ease, height .25s ease, box-shadow .25s ease; }
+.hq-cal.open { box-shadow: var(--mantine-shadow-xl); }
+.hq-cal.strip { width: calc(100% - 2 * var(--mantine-spacing-md)); }
+.hq-cal.month { width: min(1100px, 100% - 2 * var(--mantine-spacing-md)); height: 72vh; }
+.hq-cal-today { flex: 1; min-width: 0; overflow-y: auto; padding: 10px 8px 34px 12px; }
 .hq-cal-row { display: block; width: 100%; padding: 4px 6px; margin-left: -6px; border-radius: 6px; transition: background-color .12s ease; }
 .hq-cal-row:hover, .hq-cal-row:focus-visible { background: var(--mantine-color-default-hover); }
-.hq-cal-more { flex: none; width: 28px; display: flex; align-items: center; justify-content: center; color: var(--mantine-color-dimmed); border-radius: 6px; }
-.hq-cal.open .hq-cal-more { border-left: 1px solid var(--mantine-color-default-border); border-radius: 0; }
-.hq-cal.open .hq-cal-today, .hq-cal-day { padding-top: 10px; }
+.hq-cal-more { flex: none; width: 28px; display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--mantine-color-default-border); color: var(--mantine-color-dimmed); }
 .hq-cal-more:hover, .hq-cal-more.on { background: var(--mantine-color-default-hover); color: var(--mantine-color-text); }
 .hq-cal-zoom { position: absolute; right: 36px; bottom: 8px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--mantine-color-default-border); background: var(--mantine-color-body); color: var(--mantine-color-dimmed); }
 .hq-cal-zoom:hover, .hq-cal-zoom.on { background: var(--mantine-color-default-hover); color: var(--mantine-color-text); }

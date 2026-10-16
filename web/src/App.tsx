@@ -163,15 +163,17 @@ export function App() {
   const side = ui.slim ? 68 : 224
   return <Box h="100dvh" className="hq-shell" style={{ gridTemplateColumns: `${side}px minmax(0, 1fr)` }}>
     <Sidebar S={S} />
-    <Box h="100dvh" py="md" px="md" w="100%" maw={2032} mx="auto" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--mantine-spacing-md)', minWidth: 0, minHeight: 0 }}>
+    <div className="hq-right">
+    <Box p="md" w="100%" maw={2032} mx="auto" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--mantine-spacing-md)', minWidth: 0, minHeight: 0 }}>
       {offline && <Alert color="red" title="서버에 연결할 수 없습니다">서버(node server.js)가 실행 중인지 확인하세요. 다시 연결되면 자동으로 이어집니다.</Alert>}
       <Notices S={S} />
       <Box key={ui.mode} className="hq-fade" style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
         {ui.mode === 'work' ? <WorkView S={S} /> : ui.mode === 'memo' ? <MemoView S={S} /> : <BoardView S={S} mode={ui.mode} />}
       </Box>
-      {/* 아래 줄: 일정·메일. 메인 내용과 줄로 나눈다. 카드가 없어도 높이는 둔다 */}
-      <div className="hq-sub"><CalendarCard S={S} /><MailCard S={S} /></div>
     </Box>
+    {/* 아래 줄: 일정·메일 카드. 메인 내용과 창 폭 전체를 가로지르는 줄로 나눈다. 카드가 없어도 높이는 둔다 */}
+    <div className="hq-sub"><div className="hq-sub-in"><CalendarCard S={S} /><MailCard S={S} /></div></div>
+    </div>
     <SessionDrawer S={S} />
     <TaskDrawer S={S} />
     <NewSessionModal S={S} />

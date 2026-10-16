@@ -1,4 +1,4 @@
-// 회사 일정(구글 캘린더): 본문 아래 줄(`.hq-sub`)의 왼쪽 카드. 평소엔 오늘 것만 보인다.
+// 회사 일정(구글 캘린더): 본문 아래 줄(`.hq-sub-in`)의 왼쪽 카드. 평소엔 오늘 것만 보인다.
 // - 오른쪽 › : 옆으로 펼쳐져 이번 달(오늘이 속한 달)을 하루 한 칸으로 보인다. 처음엔 오늘 칸이 맨 앞(보기만. 다른 달은 못 본다)
 // - 오른쪽 아래 돋보기: 한 달 달력. 연월 양옆 ‹ › 로 앞뒤 달, 연월을 누르면 달 고르기
 // 펼치면 위·옆으로 커져 다른 화면을 덮는다. Esc나 바깥을 누르면 닫혀 오늘만 보인다(달 고르기가 떠 있으면 Esc는 그것만 닫는다).
@@ -58,7 +58,7 @@ export function CalendarCard({ S }: { S: Snapshot }) {
   if (!c?.sources) return <div className="hq-cal-slot" />
   const now = new Date(), today = midnight(now.getFullYear(), now.getMonth(), now.getDate())
   const toggle = (m: 'strip' | 'month') => { setPick(false); setMode(x => x === m ? '' : m) }
-  return <div className="hq-cal-slot"><Paper ref={ref} withBorder={!!mode} className={'hq-cal' + (mode ? ' open ' + mode : '')}>
+  return <div className="hq-cal-slot"><Paper ref={ref} withBorder className={'hq-cal' + (mode ? ' open ' + mode : '')}>
     {mode === 'month' ? <Month today={today} pick={pick} setPick={setPick} />
       : mode === 'strip' ? <Strip today={today} />
       : <div className="hq-cal-today">
