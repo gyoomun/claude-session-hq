@@ -1,6 +1,6 @@
 // 가운데 창들: 새 세션, 세션 종료 확인, 업무 추가, 상황 브리핑. 접속 관리는 환경설정 창(Settings.tsx)의 '접속'
 import { useEffect, useState } from 'react'
-import { Autocomplete, Badge, Button, Code, Group, List, Modal, NativeSelect, Paper, Stack, Text, TextInput, Textarea } from '@mantine/core'
+import { Autocomplete, Badge, Button, Code, Group, List, Modal, NativeSelect, Paper, Stack, Text, TextInput } from '@mantine/core'
 import { api, toast } from './store'
 import { lastCwd, pickNew, rememberCwd, setMode, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
@@ -10,7 +10,6 @@ export function NewSessionModal({ S }: { S: Snapshot }) {
   const ui = useUI()
   const [cwd, setCwd] = useState(lastCwd())
   const [task, setTask] = useState('')
-  const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState(false)
   useEffect(() => { if (ui.newFor !== null) setTask(ui.newFor) }, [ui.newFor])
   // 폴더 후보: 지금 세션들이 쓰는 폴더 + Orca 워크스페이스. 목록에 없는 폴더도 직접 적을 수 있다
@@ -21,17 +20,15 @@ export function NewSessionModal({ S }: { S: Snapshot }) {
       e.preventDefault()
       if (!cwd.trim()) { toast('폴더를 적거나 골라 주세요.', 'red'); return }
       setBusy(true)
-      const r = await api<string>('session/new', { cwd: cwd.trim(), task, prompt })
+      const r = await api<string>('session/new', { cwd: cwd.trim(), task })
       setBusy(false)
-      if (r) { rememberCwd(cwd.trim()); setPrompt(''); close(); pickNew(r.result, { task, cwd: cwd.trim().replace(/\/+$/, '').replace(/^\/Users\/[^/]+/, '~'), working: !!prompt.trim() }) }
+      if (r) { rememberCwd(cwd.trim()); close(); pickNew(r.result, { task, cwd: cwd.trim().replace(/\/+$/, '').replace(/^\/Users\/[^/]+/, '~') }) }
     }}>
       <Stack gap="sm">
         <Autocomplete label="폴더" placeholder="예: ~/01dev/13engsoft" data={dirs} value={cwd} onChange={setCwd} data-autofocus={!cwd || undefined} />
         <NativeSelect label="업무" value={task} onChange={e => setTask(e.currentTarget.value)}
           data={[{ value: '', label: '미배치' }, ...S.tasks.map(t => ({ value: t.id, label: t.name }))]} />
-        <Textarea label="첫 지시" description="비워 두면 빈 세션으로 엽니다" autosize minRows={3} maxRows={10} value={prompt}
-          onChange={e => setPrompt(e.currentTarget.value)} data-autofocus={cwd ? true : undefined} />
-        <Group justify="flex-end"><Button variant="default" onClick={close}>취소</Button><Button type="submit" loading={busy}>시작</Button></Group>
+        <Group justify="flex-end"><Button variant="default" onClick={close}>취소</Button><Button type="submit" loading={busy} data-autofocus={cwd ? true : undefined}>시작</Button></Group>
       </Stack>
     </form>
   </Modal>
