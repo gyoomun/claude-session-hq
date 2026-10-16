@@ -22,7 +22,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - `auth.js`: 사내망 접속 인증(메일 인증번호 → 로그인 쿠키, 로그인 기기 목록·끊기). 외부 라이브러리 없이 SMTP로 메일을 보낸다
 - `public/login.html`: 다른 PC가 처음 들어올 때 보는 로그인 화면
 - `skills/hq-open`: 웹 안의 Claude가 지난 대화를 기록에서 찾아 `/api/session/resume`으로 다시 여는 스킬. install.js가 `~/.claude/skills`에 링크한다
-- `skills/hq-restart`: "웹 재시작"이라고 하면 Claude가 `/api/session/restart`를 불러 웹 세션을 모두 다시 띄운다(Orca의 "오르카 재시작" 대신). 환경설정 창의 "모두 재시작" 버튼도 같은 API다. 세션 머리의 '재시작'은 그 세션 하나만(`names: [tmux 이름]`). 일하는 중이어도 바로 끄는 것은 사용자가 정한 것이다
+- `skills/hq-restart`: "웹 재시작"이라고 하면 Claude가 `/api/session/restart`를 불러 웹 세션을 모두 다시 띄운다(Orca의 "오르카 재시작" 대신). 환경설정 창의 "모두 재시작" 버튼도 같은 API다. 세션 머리의 '세션 재시작'(주황, 한 번에)은 그 세션 하나만(`names: [tmux 이름]`). 일하는 중이어도 바로 끄는 것은 사용자가 정한 것이다
 - `skills/hq-memo`: 사용자가 시킬 때만 Claude가 세션 메모를 적고 읽고 고친다(`/api/memo/*`, `by: claude`)
 - `skills/hq-task`: 세션 안의 Claude가 자기 대화 ID(`~/.claude/sessions/$CLAUDE_PID.json`)로 `/api/assign`·`/api/task/*`를 불러 업무를 만들고·바꾸고·지우고, 자기나 다른 세션을 업무에 넣고 뺀다. 업무를 지우면 그 안의 세션은 미배치로 간다
 - `scripts/install.js`: settings.json 훅 등록 + 스킬 링크 + launchd plist
