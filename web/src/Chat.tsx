@@ -15,7 +15,22 @@ interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'res
 // 링크는 새 탭에서 연다(이 화면을 떠나지 않게)
 const NewTab = (p: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...p} target="_blank" rel="noopener noreferrer" />
 // 마크다운 해석이 가장 무겁다. 같은 글은 다시 해석하지 않는다
-const Md = memo(({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab }}>{text}</ReactMarkdown></div>)
+// 코드 블록: 오른쪽 위 '복사'로 한 번에 복사한다. 사내망(http)에서는 clipboard API가 막혀 있어 예전 방식(execCommand)으로도 시도한다
+export async function copyText(t: string) {
+  try { await navigator.clipboard.writeText(t); return true } catch { /* 아래로 */ }
+  const el = Object.assign(document.createElement('textarea'), { value: t }); el.style.position = 'fixed'; el.style.opacity = '0'
+  document.body.appendChild(el); el.select()
+  const ok = document.execCommand('copy'); el.remove(); return ok
+}
+function Pre(p: React.HTMLAttributes<HTMLPreElement>) {
+  const ref = useRef<HTMLPreElement>(null)
+  const [done, setDone] = useState(false)
+  return <div className="hq-code">
+    <pre ref={ref} {...p} />
+    <button type="button" className="hq-copy" onClick={async () => { if (await copyText(ref.current?.innerText.replace(/\n$/, '') || '')) { setDone(true); setTimeout(() => setDone(false), 1500) } }}>{done ? '복사됨' : '복사'}</button>
+  </div>
+}
+const Md = memo(({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab, pre: Pre }}>{text}</ReactMarkdown></div>)
 // 내 말풍선은 마크다운이 아니라 그대로 보이되, 주소만 링크로
 // 붙여넣은 긴 글(Claude Code가 <pasted_content>로 감싼 것)은 접을 수 있는 칸으로 따로 보인다. 짧으면 펼쳐 둔다
 const PASTED = /<pasted_content(?: id="[^"]*")?>\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/
@@ -149,6 +164,8 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
 }) {
   const { text, setText, imgs, setImgs, pastes, setPastes, uploading, attach, addPaste } = d
   const box = useRef<HTMLTextAreaElement>(null)
+  // 세션을 고르면(누르기·Ctrl+Tab·다른 데서 열기) 바로 칠 수 있게 입력칸에 커서를 둔다
+  useEffect(() => { box.current?.focus({ preventScroll: true }) }, [s.sid])
   const shown = imgs.filter(i => text.includes(tok(i.n))) // 표시를 지운 이미지·글은 보내지 않는다
   const shownPastes = pastes.filter(p => text.includes(ptok(p)))
   const send = async () => {

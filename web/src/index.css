@@ -157,3 +157,9 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 8px 10px; border-radius: 6px; border-left: 2px solid transparent; transition: opacity .12s ease; }
 .hq-set-row:hover { background: var(--mantine-color-default-hover); }
 .hq-set-row.changed { border-left-color: var(--mantine-color-indigo-4); }
+/* 코드 블록 복사 버튼: 블록에 마우스를 올리면 오른쪽 위에 보인다 */
+.hq-code { position: relative; }
+.hq-copy { position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 11px; border-radius: 5px; cursor: pointer; opacity: 0; transition: opacity .12s ease;
+  color: #e7ebf5; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .15); }
+.hq-code:hover .hq-copy, .hq-copy:focus-visible { opacity: 1; }
+.hq-copy:hover { background: rgba(255, 255, 255, .16); }
