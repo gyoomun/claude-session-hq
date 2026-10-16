@@ -5,7 +5,7 @@ import { ActionIcon, Group, Kbd, Text, Tooltip } from '@mantine/core'
 import { IconKeyboard } from '@tabler/icons-react'
 import { toast } from './store'
 import { copyName } from './Chat'
-import { AREAS, type Area, type Combo, setKeys, setMode, useUI } from './ui'
+import { AREAS, ACTIONS, KEY_LABEL, type Area, type Combo, type KeyId, setKeys, setMode, setView, useUI } from './ui'
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform)
 const keyName = (code: string) => code.replace(/^Key|^Digit|^Numpad/, '').replace(/^Arrow(\w+)$/, (_, d) => ({ Up: '↑', Down: '↓', Left: '←', Right: '→' } as Record<string, string>)[d] || d)
@@ -20,7 +20,7 @@ const MODS = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']
 const reserved = (c: Combo) => /^F[1-4]$/.test(c.code) || ((c.meta || c.ctrl) && c.code === 'KeyT') || (c.ctrl && c.code === 'Tab') || ['Escape', 'Enter', 'Tab'].includes(c.code)
 
 // 영역 이름 옆: 지금 키와 녹화 버튼. 누르고 키를 누르면 정해진다. Esc 취소, ⌫ 지우기
-export function KeyRec({ area }: { area: Area }) {
+export function KeyRec({ area }: { area: KeyId }) {
   const { keys } = useUI()
   const [rec, setRec] = useState(false)
   useEffect(() => {
@@ -37,7 +37,7 @@ export function KeyRec({ area }: { area: Area }) {
       if (!(c.ctrl || c.alt || c.meta) && !/^F([5-9]|1[0-2])$/.test(c.code)) { toast('Ctrl·⌥(Alt)·⌘ 중 하나를 같이 누르거나 F5~F12를 쓰세요.', 'orange'); return }
       if (reserved(c)) { toast(`${comboText(c)}는 이미 쓰는 키입니다.`, 'orange'); return }
       const next = { ...keys, [area]: c }
-      const taken = AREAS.find(([a]) => a !== area && keys[a] && comboText(keys[a]!) === comboText(c))
+      const taken = [...AREAS, ...ACTIONS].find(([a]) => a !== area && keys[a] && comboText(keys[a]!) === comboText(c))
       if (taken) { next[taken[0]] = null; toast(`${comboText(c)}를 ${taken[1]}에서 떼어 이쪽에 붙였습니다.`) }
       setKeys(next); done()
     }
@@ -49,7 +49,7 @@ export function KeyRec({ area }: { area: Area }) {
     {rec ? <Text size="xs" c="indigo.3" className="hq-recording">키를 누르세요 · Esc 취소 · ⌫ 지우기</Text>
       : k ? <Kbd size="xs">{comboText(k)}</Kbd> : <Text size="xs" c="dimmed">단축키 없음</Text>}
     <Tooltip label={rec ? '녹화 취소' : '단축키 녹화'} openDelay={300}>
-      <ActionIcon size="sm" variant={rec ? 'filled' : 'subtle'} color={rec ? 'indigo' : 'gray'} aria-label={`${AREAS.find(([a]) => a === area)![1]} 단축키 녹화`}
+      <ActionIcon size="sm" variant={rec ? 'filled' : 'subtle'} color={rec ? 'indigo' : 'gray'} aria-label={`${KEY_LABEL[area]} 단축키 녹화`}
         onClick={() => setRec(r => !r)} onMouseDown={e => e.preventDefault()}><IconKeyboard size={15} stroke={1.6} /></ActionIcon>
     </Tooltip>
   </Group>
@@ -69,10 +69,12 @@ export function focusArea(area: Area) {
 
 // 영역 단축키: 작업 보기(F1)의 영역으로 옮긴다. 다른 보기면 작업 보기로 넘어간 뒤 옮긴다
 export function useAreaKeys() {
-  const { keys, settings } = useUI()
+  const { keys, settings, view } = useUI()
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (recording || settings || e.isComposing) return
+      // 터미널·UI 전환(터미널에 글을 쓰는 중에도 먹도록 capture에서 먼저 가로챈다)
+      if (keys.view && sameKey(e, keys.view)) { e.preventDefault(); e.stopPropagation(); setView(view === 'term' ? 'chat' : 'term'); return }
       const hit = AREAS.find(([a]) => keys[a] && sameKey(e, keys[a]!))
       if (!hit) return
       e.preventDefault(); e.stopPropagation()
@@ -80,7 +82,7 @@ export function useAreaKeys() {
     }
     addEventListener('keydown', on, true)
     return () => removeEventListener('keydown', on, true)
-  }, [keys, settings])
+  }, [keys, settings, view])
 }
 
 // 영역 안에서: Esc는 대화 입력칸으로 돌아간다(Claude를 멈추지 않는다). 목록·즐겨찾기는 ↑↓·Home·End로 옮기고 Enter로 열고 입력칸으로 가며, ⌘C는 세션 이름 복사.

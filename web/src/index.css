@@ -262,3 +262,5 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-cal-yr { padding: 4px; border-radius: 6px; display: flex; }
 .hq-cal-yr:hover { background: var(--mantine-color-default-hover); }
 @media (prefers-reduced-motion: reduce) { :root:not([data-motion="on"]) .hq-cal, :root:not([data-motion="on"]) .hq-shell { transition: none; } }
+/* 대화 칸 오른쪽 위의 UI·터미널 바꾸기(대화·터미널 위에 떠 있다) */
+.hq-viewtoggle { position: absolute; top: 8px; right: 12px; z-index: 5; padding: 3px 4px 3px 3px; border-radius: 8px; background: var(--mantine-color-body); border: 1px solid var(--mantine-color-default-border); box-shadow: var(--mantine-shadow-xs); }

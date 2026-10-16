@@ -7,8 +7,12 @@ export type ToastPos = typeof TOAST_POS[number]
 // 영역 단축키: 영역마다 키 하나. 이 브라우저에 남는다(localStorage hq-keys). 처음 값은 ⌥1~⌥6
 export const AREAS = [['list', '세션 목록'], ['favs', '즐겨찾기'], ['chat', '대화'], ['pin', '핀'], ['memo', '메모'], ['btw', 'btw']] as const
 export type Area = typeof AREAS[number][0]
+// 영역이 아닌 동작 단축키(같은 녹화 버튼으로 바꾼다). view: 대화 칸을 UI(대화 화면)와 터미널 사이에서 바꾼다
+export const ACTIONS = [['view', '터미널·UI 전환']] as const
+export type KeyId = Area | typeof ACTIONS[number][0]
+export const KEY_LABEL = Object.fromEntries([...AREAS, ...ACTIONS]) as Record<KeyId, string>
 export type Combo = { code: string; ctrl: boolean; alt: boolean; shift: boolean; meta: boolean }
-export const DEFAULT_KEYS = Object.fromEntries(AREAS.map(([a], i) => [a, { code: `Digit${i + 1}`, ctrl: false, alt: true, shift: false, meta: false }])) as Record<Area, Combo | null>
+export const DEFAULT_KEYS = { ...Object.fromEntries(AREAS.map(([a], i) => [a, { code: `Digit${i + 1}`, ctrl: false, alt: true, shift: false, meta: false }])), view: { code: 'KeyT', ctrl: false, alt: true, shift: false, meta: false } } as Record<KeyId, Combo | null>
 export type Mode = 'work' | 'task' | 'all' | 'memo'
 const MODES: Mode[] = ['work', 'task', 'all', 'memo']
 const get = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
@@ -33,7 +37,7 @@ interface UI {
   detail: boolean // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
   motion: 'system' | 'on' // 움직임: 컴퓨터의 '동작 줄이기'를 따를지, 항상 켤지
   toast: ToastPos // 알림(토스트)이 뜨는 자리: 네 꼭짓점과 네 변의 가운데
-  keys: Record<Area, Combo | null>
+  keys: Record<KeyId, Combo | null>
   sideW: number // 펼친 사이드바 폭(px). 오른쪽 경계를 끌어 바꾼다(이 브라우저에 남는다)
   slimW: number // 접은 사이드바 폭(px). 펼친 폭과 따로 끌어 바꾼다
   slim: boolean // 왼쪽 사이드바를 아이콘만 남기고 접었는지(이 브라우저에 남는다)
@@ -83,7 +87,7 @@ export function setSlim(v: boolean) { set('hq-slim', v ? '1' : ''); setUI({ slim
 export function setMotion(v: UI['motion']) { set('hq-motion', v === 'on' ? 'on' : ''); document.documentElement.dataset.motion = v; setUI({ motion: v }) }
 document.documentElement.dataset.motion = ui.motion
 document.documentElement.dataset.toast = ui.toast
-export function setKeys(k: Record<Area, Combo | null>) { set('hq-keys', JSON.stringify(k)); setUI({ keys: k }) }
+export function setKeys(k: Record<KeyId, Combo | null>) { set('hq-keys', JSON.stringify(k)); setUI({ keys: k }) }
 export function setToast(v: ToastPos) { set('hq-toast', v); document.documentElement.dataset.toast = v; setUI({ toast: v }) }
 export function setDetail(v: boolean) { set('hq-detail', v ? '1' : '0'); setUI({ detail: v }) }
 // 칸 경계(react-resizable-panels가 localStorage에 저장한 비율)를 지우고 기본값으로 다시 그린다. id: 'hq-side'(핀·메모·btw 높이), 'hq-work'(목록·즐겨찾기·대화 너비)

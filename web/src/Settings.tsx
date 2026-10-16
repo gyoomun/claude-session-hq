@@ -6,17 +6,17 @@ import { createPortal } from 'react-dom'
 import { Box, Button, CloseButton, Code, Group, SegmentedControl, Stack, Switch, Text, TextInput, UnstyledButton } from '@mantine/core'
 import { IconAccessPoint, IconCalendar, IconKeyboard, IconLayoutColumns, IconMail, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { api, toast } from './store'
-import { AREAS, DEFAULT_KEYS, TOAST_POS, type ToastPos, resetLayout, setKeys, setDetail, setMotion, setToast, setUI, setView, useUI } from './ui'
+import { ACTIONS, AREAS, DEFAULT_KEYS, TOAST_POS, type ToastPos, resetLayout, setKeys, setDetail, setMotion, setToast, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
 import { AccessPanel } from './Modals'
 import { KeyRec, isRecording } from './Keys'
 
-interface Draft { view: 'chat' | 'term'; detail: boolean; motion: 'system' | 'on'; toast: ToastPos }
+interface Draft { detail: boolean; motion: 'system' | 'on'; toast: ToastPos }
 // 분류와 그 안의 항목 글(검색에 쓴다)
 const PAGES = [
   { id: 'view', name: '화면', icon: IconPalette, words: '웹 세션 화면 대화 터미널 작업 과정 자세히 도구 움직임 애니메이션 동작 줄이기 알림 토스트 위치 자리' },
   { id: 'layout', name: '배치', icon: IconLayoutColumns, words: '칸 높이 너비 핀 메모 btw 세션 목록 즐겨찾기 대화 경계 되돌리기 기본값 아래 칸 일정 메일 카드' },
-  { id: 'keys', name: '단축키', icon: IconKeyboard, words: '단축키 키보드 영역 세션 목록 즐겨찾기 대화 핀 메모 btw 녹화 F1 F2 F3 F4 Ctrl Tab Cmd T Esc 되감기' },
+  { id: 'keys', name: '단축키', icon: IconKeyboard, words: '단축키 키보드 영역 세션 목록 즐겨찾기 대화 핀 메모 btw 녹화 F1 F2 F3 F4 Ctrl Tab Cmd T Esc 되감기 터미널 UI 전환 화면' },
   { id: 'calendar', name: '일정', icon: IconCalendar, words: '일정 캘린더 구글 연차 반차 휴가 회사 iCal 다시 읽기' },
   { id: 'mail', name: '메일', icon: IconMail, words: '메일 이메일 Gmail 지메일 받은편지함 앱 비밀번호 다시 읽기' },
   { id: 'session', name: '세션', icon: IconRefresh, words: '모두 재시작 웹 세션 CLAUDE.md zshrc' },
@@ -71,9 +71,6 @@ function RestartAll({ S }: { S: Snapshot }) {
 function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (p: Partial<Draft>) => void; ui: Draft }) {
   if (id === 'view') return <>
     <Section title="대화 화면">
-      <Row label="웹 세션 화면" help="터미널은 Claude Code 화면 그대로입니다" changed={d.view !== ui.view}>
-        <SegmentedControl size="xs" value={d.view} onChange={v => set({ view: v as Draft['view'] })} data={[{ label: '대화', value: 'chat' }, { label: '터미널', value: 'term' }]} />
-      </Row>
       <Row label="작업 과정 자세히" help="도구 사용을 한 줄로 접지 않고 하나하나 봅니다" changed={d.detail !== ui.detail}>
         <Switch checked={d.detail} onChange={e => set({ detail: e.currentTarget.checked })} aria-label="작업 과정 자세히" />
       </Row>
@@ -107,7 +104,10 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
     return <>
       <Section title="영역 옮기기">
         {AREAS.map(([a, label]) => <Row key={a} label={label} help={`${label}(으)로 커서를 옮깁니다. 영역 이름 옆 ⌨로도 바꿉니다`}><KeyRec area={a} /></Row>)}
-        <Row label="처음 값으로" help="영역 단축키를 ⌥1~⌥6으로 되돌립니다"><Button size="xs" variant="default" onClick={() => { setKeys(DEFAULT_KEYS); toast('영역 단축키를 처음 값으로 되돌렸습니다.') }}>기본값으로</Button></Row>
+      </Section>
+      <Section title="동작">
+        {ACTIONS.map(([a, label]) => <Row key={a} label={label} help="웹 세션의 대화 칸을 대화 화면(UI)과 터미널(Claude Code 화면 그대로) 사이에서 바꿉니다. 대화 칸 오른쪽 위에서도 바꿉니다"><KeyRec area={a} /></Row>)}
+        <Row label="처음 값으로" help="영역 단축키를 ⌥1~⌥6, 터미널·UI 전환을 ⌥T로 되돌립니다"><Button size="xs" variant="default" onClick={() => { setKeys(DEFAULT_KEYS); toast('영역 단축키를 처음 값으로 되돌렸습니다.') }}>기본값으로</Button></Row>
       </Section>
       <Section title="정해진 키">
         {fixed.map(([k, what]) => <Row key={k} label={what}><Text size="xs" ff="monospace" c="dimmed">{k}</Text></Row>)}
@@ -162,7 +162,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
 
 export function SettingsWindow({ S }: { S: Snapshot }) {
   const ui = useUI()
-  const cur: Draft = { view: ui.view, detail: ui.detail, motion: ui.motion, toast: ui.toast }
+  const cur: Draft = { detail: ui.detail, motion: ui.motion, toast: ui.toast }
   const [d, setD] = useState<Draft>(cur)
   const [q, setQ] = useState('')
   const [pos, setPos] = useState({ x: 0, y: 0 })
@@ -175,9 +175,8 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
     setPos({ x: Math.round((innerWidth - w) / 2), y: Math.round((innerHeight - h) / 2) })
   }, [ui.settings])
   const close = () => setUI({ settings: false, settingsPage: '' }) // 다음엔 맨 위에서 연다
-  const changed = d.view !== ui.view || d.detail !== ui.detail || d.motion !== ui.motion || d.toast !== ui.toast
+  const changed = d.detail !== ui.detail || d.motion !== ui.motion || d.toast !== ui.toast
   const apply = () => {
-    if (d.view !== ui.view) setView(d.view)
     if (d.detail !== ui.detail) setDetail(d.detail)
     if (d.motion !== ui.motion) setMotion(d.motion)
     if (d.toast !== ui.toast) { setToast(d.toast); setTimeout(() => toast('알림은 이제 여기에 뜹니다.'), 50) }

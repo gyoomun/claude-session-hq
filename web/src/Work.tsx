@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Badge, Box, Button, Group, Paper, Progress, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast, useNow } from './store'
-import { pick, setUI, useUI } from './ui'
+import { pick, setUI, setView, useUI } from './ui'
 import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
@@ -144,12 +144,21 @@ function ItemSkeleton({ state, since }: { state: Session['state']; since: number
 function WorkSkeleton({ S, ghost }: { S: Snapshot; ghost: Session }) {
   return <Box inert className="hq-ghost" aria-busy="true"><SessionArea S={S} s={ghost} /></Box>
 }
+// 대화 칸 오른쪽 위: 대화 화면(UI)과 터미널(Claude Code 화면 그대로) 바꾸기. 단축키는 옆 ⌨로 정한다(처음 ⌥T, 환경설정 '단축키'에도 있다). 웹 세션만(터미널을 띄울 수 있어서)
+function ViewToggle() {
+  const ui = useUI()
+  return <Group className="hq-viewtoggle" gap={4} wrap="nowrap">
+    <SegmentedControl size="xs" value={ui.view} onChange={v => setView(v as 'chat' | 'term')} data={[{ label: 'UI', value: 'chat' }, { label: '터미널', value: 'term' }]} />
+    <KeyRec area="view" />
+  </Group>
+}
 // 고른 세션: 위 머리(두 칸에 걸침) / 아래 대화 | 핀·메모·btw. 오른쪽 칸은 대화창과 같은 높이에서 시작한다
 function SessionArea({ S, s }: { S: Snapshot; s: Session }) {
   const ui = useUI()
   return <Box className={s.sid ? undefined : 'hq-fade'} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 420px)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
     <Box style={{ gridColumn: '1 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>
-    <Box style={{ gridColumn: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+    <Box style={{ gridColumn: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {s.host === 'web' && <ViewToggle />}
       {s.sid && s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
     </Box>
     <Box style={{ gridColumn: 2, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
