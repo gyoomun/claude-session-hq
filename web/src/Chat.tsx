@@ -3,7 +3,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Badge, Box, Button, CloseButton, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
+import { Box, Button, CloseButton, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
 import { pickNew } from './ui'
 import type { Session } from './types'
@@ -241,9 +241,10 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
         }} />
       <Group justify="space-between" gap={6}>
-        <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
-          {s.mode && MODE[s.mode] && <Badge variant="light" color={MODE[s.mode][1] === 'dimmed' ? 'gray' : MODE[s.mode][1].split('.')[0]} radius="sm" title={`권한 모드: ${s.mode}`} style={{ textTransform: 'none', flex: 'none' }}>{MODE[s.mode][0]}</Badge>}
-          {s.model && <Badge variant="light" color="gray" radius="sm" title={`모델 ${s.model} · effort ${s.effort || '?'} (마지막 답 기준)`} style={{ textTransform: 'none', flex: 'none' }}>{modelName(s.model)}{s.effort && ` · ${s.effort}`}</Badge>}
+        <Group gap={14} wrap="nowrap" style={{ minWidth: 0 }}>
+          {s.mode && MODE[s.mode] && <Text size="sm" fw={600} c={MODE[s.mode][1] === 'dimmed' ? 'gray.4' : MODE[s.mode][1]} title={`권한 모드: ${s.mode}`} style={{ whiteSpace: 'nowrap' }}>{MODE[s.mode][0]}</Text>}
+          {s.model && <Text size="sm" fw={600} c="gray.3" title={`모델 ${s.model} (마지막 답 기준)`} style={{ whiteSpace: 'nowrap' }}>{modelName(s.model)}</Text>}
+          {s.model && s.effort && <Text size="sm" fw={600} c="gray.5" title={`effort ${s.effort} (마지막 답 기준)`} style={{ whiteSpace: 'nowrap' }}>{s.effort}</Text>}
           {bgCount(s) > 0 && <Text size="xs" c="teal.4" title={bgText(s)} style={{ whiteSpace: 'nowrap' }}>뒤 작업 {[s.bg.shells && `셸 ${s.bg.shells}`, s.bg.agents.length && `에이전트 ${s.bg.agents.length}`].filter(Boolean).join(' · ')}</Text>}
         </Group>
         <Group gap={8} wrap="nowrap">
