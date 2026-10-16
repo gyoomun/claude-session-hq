@@ -45,7 +45,7 @@ function MemoRow({ sid, m }: { sid: string; m: Memo }) {
         : <UnstyledButton onClick={() => setEdit(m.text)} title="눌러서 고치기">
             <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', textDecoration: m.done ? 'line-through' : undefined }} c={m.done ? 'dimmed' : undefined}>{m.text}</Text>
           </UnstyledButton>}
-      <Text fz={11} c="dimmed">{m.by === 'claude' && <Badge size="xs" variant="light" color="grape" mr={4}>Claude</Badge>}<Since t={m.at} suf=" 전" /></Text>
+      <Text fz={11} c="dimmed"><Since t={m.at} suf=" 전" /></Text>
     </Stack>
     <CloseButton size="xs" aria-label="메모 지우기" onClick={() => api('memo/delete', { sid, id: m.id })} />
   </Group>
