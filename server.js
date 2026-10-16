@@ -362,7 +362,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, usage: readUsage(), account: readAccount(), usageShare: db.usageShare, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, flow, usage: readUsage(), account: readAccount(), usageShare: db.usageShare, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -626,6 +626,25 @@ async function loadInbox() {
   scan();
 }
 
+/* 플로우 안 읽음: ~/.claude/flow.py inbox-json 을 30초마다 돌려 안 읽은 채팅방(마지막 메시지)과 안 읽은 알림을 받는다. 읽기만 한다.
+   flow.py 의 세션이 만료되면 flow.py 가 새로 받는데, 그때 브라우저(flow.team)의 로그인이 풀린다(플로우는 웹 로그인을 한 곳만 유지). 데스크톱 앱은 그대로 */
+const FLOW_PY = path.join(HOME, '.claude', 'flow.py');
+let flow = { at: 0, error: '', chats: [], alarms: [] }, flowBusy = false;
+const flowTime = t => { const m = String(t).match(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/); return m ? +new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : 0; };
+function loadFlow() {
+  if (flowBusy || !fs.existsSync(FLOW_PY)) return Promise.resolve();
+  flowBusy = true;
+  return new Promise(ok => execFile('/opt/homebrew/bin/python3', [FLOW_PY, 'inbox-json'], { timeout: 60000 }, (e, out, err) => {
+    flowBusy = false;
+    try {
+      if (e) throw new Error(clip(String(err || e.message).trim().split('\n').pop(), 300));
+      const d = JSON.parse(out);
+      flow = { at: Date.now(), error: '', chats: d.chats.map(c => ({ ...c, at: flowTime(c.at) })).sort((a, b) => b.at - a.at), alarms: d.alarms.map(a => ({ ...a, at: flowTime(a.at) })).sort((a, b) => b.at - a.at) };
+    } catch (x) { flow = { ...flow, at: Date.now(), error: x.message }; }
+    scan(); ok();
+  }));
+}
+
 /* Claude 사용량 한도(5시간·주간): 플러그인 hq-usage(~/.claude/my-mods)가 응답마다 ~/.claude/board/usage.json에 남긴다(계정 단위) */
 const USAGE_FILE = path.join(BOARD_DIR, 'usage.json');
 let usage = null, usageMtime = 0;
@@ -865,6 +884,8 @@ const routes = {
   },
   'calendar/reload': async () => { await loadCalendar(); return calendar.error || ''; },
   'inbox/reload': async () => { await loadInbox(); return inbox.error || ''; },
+  'flow/reload': async () => { await loadFlow(); return flow.error || ''; },
+  'flow/open': () => run('/usr/bin/open', ['-a', 'flow']),
   // 달 보기: 그 달 칸(앞뒤 주 포함)의 일정. 받아 둔 캘린더를 펼치기만 한다
   'calendar/range': b => {
     const from = +b.from, to = +b.to;
@@ -1310,6 +1331,7 @@ restoreWeb().finally(() => {
   setInterval(readFooters, 3000);
   loadCalendar(); setInterval(loadCalendar, 10 * 60e3);
   loadInbox(); setInterval(loadInbox, 2 * 60e3);
+  loadFlow(); setInterval(loadFlow, 30e3);
   // 새 세션은 Claude가 세션 파일을 쓰는 순간 바로 훑어 목록에 띄운다(2초 간격을 기다리면 새 세션이 늦게 보인다)
   try { fs.watch(SESS_DIR, scanSoon); } catch (e) { console.error('세션 폴더 감시 실패:', e.message); }
 });

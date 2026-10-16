@@ -7,6 +7,7 @@ import type { Snapshot } from './types'
 import { WorkView } from './Work'
 import { CalendarCard } from './Calendar'
 import { MailCard } from './Inbox'
+import { FlowCard } from './Flow'
 import { copyText, useFlash } from './Chat'
 import { isRecording, useAreaKeys } from './Keys'
 import { BoardView } from './Board'
@@ -156,6 +157,8 @@ function MainSplit({ S, offline }: { S: Snapshot; offline: boolean }) {
           <Panel id="cal" defaultSize={360} minSize={220} style={{ overflow: 'visible' }}><CalendarCard S={S} /></Panel>
           <Separator className="hq-split-v" />
           <Panel id="mail" defaultSize={480} minSize={240}><MailCard S={S} /></Panel>
+          <Separator className="hq-split-v" />
+          <Panel id="flow" defaultSize={480} minSize={240}><FlowCard S={S} /></Panel>
           <Separator className="hq-split-v" />
           <Panel id="rest" minSize={0}><div /></Panel>
         </Split>
