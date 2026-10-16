@@ -51,6 +51,7 @@ export interface Snapshot {
   focus: { name: string; at: number } | null
   access: Access
   layout: Record<string, { x: number; y: number }> // 가상 사무실의 책상 위치(방 안 0~1 비율)
+  favs: { mode: 'auto' | 'free'; items: { sid: string; slot: number }[] } // 즐겨찾기: 순서(자동 정렬)와 칸 번호(자유 배치)
   rooms: Record<string, Rect> // 가상 사무실의 방 자리·크기(칸 단위). 키는 업무 id 또는 'lobby'
   btw: Record<string, BtwItem[]> // 세션별 곁가지 질문
   memos: Record<string, { title: string; items: Memo[] }> // 세션(대화 ID)별 메모

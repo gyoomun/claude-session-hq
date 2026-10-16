@@ -34,7 +34,7 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 // 서버가 꺼지면서 끊긴 곁가지 질문은 실패로 표시한다
 for (const list of Object.values(db.btw || {})) for (const it of list) if (it.state === 'asking') { it.state = 'error'; it.a = '서버가 다시 시작돼 답을 받지 못했습니다.'; }
@@ -344,7 +344,7 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -552,6 +552,18 @@ const routes = {
     if (b.reset) { delete db.layout[b.sid]; return; } // 자동 배치로 되돌리기
     if ('task' in b) routes.assign({ sid: b.sid, task: b.task || '' });
     db.layout[b.sid] = { x: n(b.x), y: n(b.y) };
+  },
+  // 즐겨찾기(작업 보기의 목록과 대화 사이 칸): 넣은 순서(자동 정렬)와 칸 번호(자유 배치). 칸은 겹치지 않는다
+  'favs': b => {
+    const mode = b.mode === 'free' ? 'free' : 'auto';
+    const seen = new Set(), slots = new Set(), items = [];
+    for (const x of Array.isArray(b.items) ? b.items.slice(0, 200) : []) {
+      if (!x || typeof x.sid !== 'string' || !/^[0-9a-f-]{36}$/.test(x.sid) || seen.has(x.sid)) continue;
+      let slot = Math.min(500, Math.max(0, Math.round(Number(x.slot) || 0)));
+      while (slots.has(slot)) slot++;
+      seen.add(x.sid); slots.add(slot); items.push({ sid: x.sid, slot });
+    }
+    db.favs = { mode, items };
   },
   // 가상 사무실의 방(업무 id 또는 'lobby') 자리와 크기. 칸(24px) 단위. 하나를 옮겨도 나머지가 밀리지 않게 화면에 보이는 방 전부를 한꺼번에 받는다
   'rooms': b => {

@@ -76,6 +76,24 @@ function Notices({ S }: { S: Snapshot }) {
   </>
 }
 
+// 전체 화면 + 키보드 잠금: 크롬은 Ctrl+Tab(탭 전환)과 Esc(전체 화면 끝내기)를 페이지보다 먼저 쓴다. 전체 화면에서 이 두 키를 잠그면 이 화면이 받는다
+// (작업 보기의 Ctrl+Tab 순회, Esc 중단·되감기). 끝내려면 이 버튼을 누르거나 Esc를 길게 누른다
+function FullScreen() {
+  const [on, setOn] = useState(!!document.fullscreenElement)
+  useEffect(() => {
+    const f = () => { setOn(!!document.fullscreenElement); if (!document.fullscreenElement) (navigator as Navigator & { keyboard?: { unlock(): void } }).keyboard?.unlock() }
+    document.addEventListener('fullscreenchange', f)
+    return () => document.removeEventListener('fullscreenchange', f)
+  }, [])
+  return <Button variant="default" title="전체 화면에서는 Ctrl+Tab·Esc를 이 화면이 받습니다. 끝내려면 이 버튼이나 Esc를 길게" onClick={async () => {
+    if (document.fullscreenElement) { document.exitFullscreen(); return }
+    try {
+      await document.documentElement.requestFullscreen()
+      await (navigator as Navigator & { keyboard?: { lock(keys?: string[]): Promise<void> } }).keyboard?.lock(['Tab', 'Escape'])
+    } catch (e) { toast('전체 화면이나 키보드 잠금을 켜지 못했습니다: ' + (e as Error).message, 'red') }
+  }}>{on ? '전체 화면 끝내기' : '전체 화면'}</Button>
+}
+
 function Header({ S }: { S: Snapshot }) {
   const un = S.sessions.filter(s => !s.task).length, waits = S.tasks.flatMap(t => t.waits).length
   const mine = S.sessions.filter(s => s.state === 'myturn' || s.state === 'approval').length
@@ -91,6 +109,7 @@ function Header({ S }: { S: Snapshot }) {
     <Group gap="xs">
       <LanAddress S={S} />
       <Clock />
+      <FullScreen />
       <Button variant="default" leftSection={<IconSettings size={16} />} onClick={() => setUI({ settings: true })}>환경설정</Button>
       <Button onClick={() => setUI({ brief: true })}>지금 상황 브리핑</Button>
     </Group>

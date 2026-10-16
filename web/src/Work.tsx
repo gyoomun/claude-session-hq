@@ -1,6 +1,6 @@
-// 작업 보기: 왼쪽 세션 목록(업무별로 묶음) + 오른쪽 고른 세션의 터미널
-import { useState } from 'react'
-import { Badge, Box, Button, Group, Paper, ScrollArea, Stack, Text, UnstyledButton } from '@mantine/core'
+// 작업 보기: 왼쪽 세션 목록(업무별로 묶음) | 즐겨찾기 | 고른 세션(머리 + 대화) | 핀·메모·btw
+import { useEffect, useRef, useState } from 'react'
+import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast } from './store'
 import { pick, setUI, useUI } from './ui'
 import type { Session, Snapshot } from './types'
@@ -11,13 +11,17 @@ import { ChatView } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
 import { IconPinFilled } from '@tabler/icons-react'
 
-function Item({ s, on, memo }: { s: Session; on: boolean; memo: boolean }) {
-  return <UnstyledButton onClick={() => pick(s.sid)} p="7px 8px" w="100%"
+// 목록·즐겨찾기의 세션 한 줄. 끌어서 즐겨찾기에 넣고 빼고, 즐겨찾기 안에서 자리를 옮긴다(HTML 끌어다 놓기, 넘기는 값은 대화 ID)
+const DRAG = 'application/x-hq-sid'
+const dragging = (e: React.DragEvent) => e.dataTransfer.types.includes(DRAG)
+let dragSid = '' // 끄는 중에는 dataTransfer 값을 읽을 수 없어서(놓을 때만 된다) 따로 둔다. 제 자리는 빈 칸으로 본다
+function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; clamp?: boolean }) {
+  return <UnstyledButton draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%"
     style={{ borderRadius: 8, background: on ? 'var(--mantine-color-indigo-light)' : undefined, boxShadow: on ? 'inset 0 0 0 1px var(--mantine-color-indigo-5)' : undefined }}>
     <Group gap={8} wrap="nowrap" align="flex-start">
       <Box w={8} h={8} mt={6} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} />
       <Stack gap={0} style={{ minWidth: 0 }}>
-        <Text size="sm" fw={600} className="hq-wrap" lh={1.35}>{s.title}{memo && <IconPinFilled size={12} style={{ marginLeft: 4, verticalAlign: -1, color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}</Text>
+        <Text size="sm" fw={600} className="hq-wrap" lh={1.35} lineClamp={clamp ? 2 : undefined} title={clamp ? s.title : undefined}>{s.title}{memo && <IconPinFilled size={12} style={{ marginLeft: 4, verticalAlign: -1, color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}</Text>
         <Text size="xs" c="dimmed"><Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
           {s.host !== 'web' && <Badge size="xs" variant="outline" color="gray" ml={6}>{s.host === 'orca' ? 'Orca' : '외부'}</Badge>}</Text>
       </Stack>
@@ -72,15 +76,119 @@ function ClosedList({ S }: { S: Snapshot }) {
   </Stack>
 }
 
-// 세 칸 × 2행: 세션 목록(두 행) | 위: 세션 머리(둘째·셋째 칸에 걸침) / 아래: 대화 | 핀·메모·btw(늘 펼쳐 둔다)
+// 즐겨찾기 칸. 비어 있어도 칸은 늘 있다(끌어다 놓을 자리).
+// 자동 정렬: 넣은 순서대로 위부터 빈틈없이, 놓은 높이에 끼워 넣는다. 자유 배치: 바탕화면 아이콘처럼 원하는 높이의 칸(SLOT)에 놓고, 찬 칸이면 가장 가까운 빈 칸으로 간다(겹치지 않는다)
+const SLOT = 66 // 자유 배치의 칸 높이. 제목은 두 줄까지 보이고 넘치면 잘라 칸을 넘지 않는다
+type Fav = Snapshot['favs']['items'][number]
+export const favSids = (S: Snapshot) => {
+  const live = new Set(S.sessions.map(s => s.sid)), f = S.favs || { mode: 'auto', items: [] }
+  const items = f.items.filter(x => live.has(x.sid))
+  return (f.mode === 'free' ? [...items].sort((a, b) => a.slot - b.slot) : items).map(x => x.sid)
+}
+function Favs({ S, sel }: { S: Snapshot; sel: string }) {
+  const f = S.favs || { mode: 'auto' as const, items: [] }
+  const byId = new Map(S.sessions.map(s => [s.sid, s]))
+  const live = f.items.filter(x => byId.has(x.sid)) // 닫힌 세션은 목록에 남겨 두고(다시 열면 돌아온다) 보이지만 않는다
+  const box = useRef<HTMLDivElement>(null)
+  const [hover, setHover] = useState<number | null>(null) // 자동: 끼워 넣을 자리, 자유: 놓을 칸
+  const save = (items: Fav[], mode = f.mode) => api('favs', { mode, items })
+  const freeSlot = (want: number, sid: string) => {
+    const used = new Set(live.filter(x => x.sid !== sid).map(x => x.slot))
+    for (let d = 0; ; d++) { if (!used.has(want + d)) return want + d; if (want - d >= 0 && !used.has(want - d)) return want - d }
+  }
+  const target = (e: React.DragEvent, sid: string) => {
+    if (f.mode === 'free') return freeSlot(Math.max(0, Math.floor((e.clientY - box.current!.getBoundingClientRect().top) / SLOT)), sid)
+    return [...box.current!.querySelectorAll<HTMLElement>('[data-fav]')].filter(k => k.dataset.fav !== sid)
+      .filter(k => { const r = k.getBoundingClientRect(); return e.clientY > r.top + r.height / 2 }).length
+  }
+  const drop = (e: React.DragEvent) => {
+    const sid = e.dataTransfer.getData(DRAG)
+    setHover(null)
+    if (!sid) return
+    e.preventDefault()
+    const at = target(e, sid), rest = f.items.filter(x => x.sid !== sid)
+    if (f.mode === 'free') return save([...rest, { sid, slot: at }])
+    const others = live.filter(x => x.sid !== sid), used = new Set(rest.map(x => x.slot))
+    let slot = f.items.find(x => x.sid === sid)?.slot ?? 0
+    if (!f.items.some(x => x.sid === sid)) while (used.has(slot)) slot++
+    // 자동 정렬은 배열 순서가 곧 보이는 순서다. at은 보이는(살아 있는) 것들 사이의 자리
+    const before = others[at]?.sid
+    const i = before ? rest.findIndex(x => x.sid === before) : rest.length
+    save([...rest.slice(0, i), { sid, slot }, ...rest.slice(i)])
+  }
+  const mode = (m: string) => {
+    if (m === f.mode) return
+    // 자유 배치로 바꾸면 지금 보이는 순서대로 칸을 채우고, 자동 정렬로 바꾸면 칸 순서를 그대로 순서로 쓴다
+    const order = m === 'free' ? f.items : [...f.items].sort((a, b) => a.slot - b.slot)
+    save(order.map((x, i) => ({ sid: x.sid, slot: m === 'free' ? i : x.slot })), m as 'auto' | 'free')
+  }
+  const rows = f.mode === 'free' ? Math.max(0, ...live.map(x => x.slot + 1), (hover ?? -1) + 1) : 0
+  return <Paper withBorder p={6} style={{ gridRow: '1 / -1', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
+    onDragOver={e => { if (!dragging(e)) return; e.preventDefault(); setHover(target(e, dragSid)) }}
+    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHover(null) }} onDrop={drop}>
+    <Group justify="space-between" px={4} gap={4} wrap="nowrap">
+      <Text size="xs" fw={600} c="dimmed">즐겨찾기</Text>
+      <SegmentedControl size="xs" value={f.mode} onChange={mode} data={[{ label: '자동 정렬', value: 'auto' }, { label: '자유 배치', value: 'free' }]} />
+    </Group>
+    <ScrollArea style={{ flex: 1 }}>
+      <Box ref={box} pos="relative" style={{ minHeight: f.mode === 'free' ? (rows + 1) * SLOT : undefined }}>
+        {!live.length && hover === null && <Text size="xs" c="dimmed" p={8}>목록에서 대화를 끌어다 놓으세요. 빼려면 목록으로 다시 끌어다 놓습니다.</Text>}
+        {f.mode === 'free'
+          ? <>
+              {hover !== null && <Box className="hq-fav-ghost" style={{ top: hover * SLOT, height: SLOT }} />}
+              {live.map(x => <Box key={x.sid} data-fav={x.sid} pos="absolute" left={0} right={0} style={{ top: x.slot * SLOT, height: SLOT }}>
+                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} clamp />
+              </Box>)}
+            </>
+          : <Stack gap={2}>
+              {live.filter(x => x.sid !== dragSid || hover === null).map((x, i) => <Box key={x.sid} data-fav={x.sid}>
+                {hover === i && <Box className="hq-fav-line" />}
+                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} />
+              </Box>)}
+              {hover !== null && hover >= live.length && <Box className="hq-fav-line" />}
+            </Stack>}
+      </Box>
+    </ScrollArea>
+  </Paper>
+}
+
+// 네 칸 × 2행: 세션 목록(두 행) | 즐겨찾기(두 행) | 위: 세션 머리(셋째·넷째 칸에 걸침) / 아래: 대화 | 핀·메모·btw(늘 펼쳐 둔다)
 export function WorkView({ S }: { S: Snapshot }) {
   const ui = useUI()
-  const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, ss: sessOf(S, t) })),
-    { id: '', name: '미배치', ss: S.sessions.filter(s => !s.task).sort(bySt) }]
+  const favs = favSids(S), inFav = new Set(favs)
+  // 즐겨찾기에 넣은 세션은 목록에서 빠지고, 빼면 원래 업무 묶음의 원래 순서 자리로 돌아간다
+  const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, ss: sessOf(S, t).filter(x => !inFav.has(x.sid)) })),
+    { id: '', name: '미배치', ss: S.sessions.filter(s => !s.task && !inFav.has(s.sid)).sort(bySt) }]
   const s = S.sessions.find(x => x.sid === ui.sel)
-  return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(0, 1fr)' + (s ? ' minmax(300px, 420px)' : ''),
+  // Ctrl+Tab / Ctrl+Shift+Tab: 지금 세션이 즐겨찾기에 있으면 즐겨찾기 안에서, 아니면 목록 안에서 다음·이전으로(끝에서 처음으로 돈다).
+  // 크롬은 이 키를 탭 전환에 먼저 쓰므로 일반 탭에서는 오지 않는다. 머리의 '전체 화면'(키보드 잠금)에서 받는다
+  const order = useRef({ favs, normal: [] as string[], sel: '' })
+  order.current = { favs, normal: groups.flatMap(g => g.ss.map(x => x.sid)), sel: ui.sel }
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !e.ctrlKey || e.altKey || e.metaKey) return
+      e.preventDefault(); e.stopPropagation()
+      const { favs, normal, sel } = order.current, list = favs.includes(sel) ? favs : normal
+      if (!list.length) return
+      const i = list.indexOf(sel)
+      pick(list[i < 0 ? 0 : (i + (e.shiftKey ? -1 : 1) + list.length) % list.length])
+    }
+    addEventListener('keydown', on, true)
+    return () => removeEventListener('keydown', on, true)
+  }, [])
+  const [unfav, setUnfav] = useState(false) // 즐겨찾기를 목록 위로 끌고 왔을 때
+  return <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 290px) minmax(200px, 250px) minmax(0, 1fr)' + (s ? ' minmax(300px, 420px)' : ''),
     gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
-    <Paper withBorder p={6} style={{ gridRow: '1 / -1', minHeight: 0, display: 'flex' }}>
+    <Paper withBorder p={6} className={unfav ? 'hq-drop-over' : undefined} style={{ gridRow: '1 / -1', minHeight: 0, display: 'flex' }}
+      onDragOver={e => { if (!dragging(e)) return; e.preventDefault(); setUnfav(true) }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setUnfav(false) }}
+      onDrop={e => {
+        setUnfav(false)
+        const sid = e.dataTransfer.getData(DRAG)
+        if (!sid || !inFav.has(sid)) return
+        e.preventDefault()
+        api('favs', { mode: S.favs.mode, items: S.favs.items.filter(x => x.sid !== sid) })
+      }}>
       <ScrollArea style={{ flex: 1 }}>
         <Stack gap="md" p={4}>
           {groups.map(g => <Stack key={g.id || 'none'} gap={2}>
@@ -94,17 +202,18 @@ export function WorkView({ S }: { S: Snapshot }) {
         </Stack>
       </ScrollArea>
     </Paper>
+    <Favs S={S} sel={ui.sel} />
     {!s ? <Paper withBorder p="xl" style={{ gridRow: '1 / -1', borderStyle: 'dashed' }}>
       <Stack align="flex-start">
         <Text>{ui.pendingSel ? '세션을 여는 중입니다…' : '왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.'}</Text>
         {!ui.pendingSel && <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>}
       </Stack>
     </Paper> : <>
-      <Box style={{ gridColumn: '2 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>
-      <Box style={{ gridColumn: 2, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <Box style={{ gridColumn: '3 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>
+      <Box style={{ gridColumn: 3, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
       </Box>
-      <Box style={{ gridColumn: 3, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
+      <Box style={{ gridColumn: 4, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
     </>}
   </Box>
 }
