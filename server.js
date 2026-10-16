@@ -530,18 +530,37 @@ async function askBtw(name, item) {
   }
 }
 
-/* 회사 일정(구글 캘린더): ~/.claude/board/calendar.env 에 '이름=비공개 iCal 주소'를 한 줄에 하나(# 주석). 10분마다 읽어 오늘부터 7일 일정을 화면에 준다.
+/* 회사 일정(구글 캘린더): ~/.claude/board/calendar.env 에 '이름=비공개 iCal 주소'를 한 줄에 하나(# 주석). 10분마다 캘린더 전체를 받아 두고,
+   상태에는 오늘부터 7일을, 달 보기는 요청한 범위(`calendar/range`)를 그때 펼쳐 준다(받아 둔 것을 펼치기만 해서 가볍다).
    반복 일정과 그 예외(한 번만 옮긴 회차)는 ical.js가 펼친다. 주소는 비밀이라 화면·API로 내보내지 않는다 */
 const ICAL = require('ical.js');
 const CAL_FILE = path.join(BOARD_DIR, 'calendar.env');
 let calendar = { at: 0, error: '', events: [], sources: 0 };
+let calSources = []; // [{ cal, masters }] 마지막으로 받은 캘린더(펼치기 전)
+function expand(from, to) {
+  const events = [];
+  for (const { cal, masters } of calSources) {
+    const push = (ev, s, e) => {
+      const start = s.toJSDate(), end = (e || s).toJSDate();
+      if (end > from && start < to) events.push({ id: ev.uid + ':' + +start, title: ev.summary || '(제목 없음)', start: +start, end: +end, allDay: s.isDate, cal });
+    };
+    for (const ev of masters.values()) {
+      if (!ev.isRecurring()) { push(ev, ev.startDate, ev.endDate); continue; }
+      const it = ev.iterator();
+      for (let next, n = 0; (next = it.next()) && n < 5000; n++) {
+        if (next.toJSDate() >= to) break;
+        const o = ev.getOccurrenceDetails(next);
+        push(o.item, o.startDate, o.endDate); // 한 번만 옮긴 회차는 그 회차의 제목을 쓴다
+      }
+    }
+  }
+  return events.sort((a, b) => a.start - b.start || b.allDay - a.allDay);
+}
 async function loadCalendar() {
   let lines = [];
   try { lines = fs.readFileSync(CAL_FILE, 'utf8').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')); }
-  catch { calendar = { at: Date.now(), error: '', events: [], sources: 0 }; return; }
-  const from = new Date(); from.setHours(0, 0, 0, 0);
-  const to = new Date(from.getTime() + 7 * 864e5);
-  const events = [], errors = [];
+  catch { calSources = []; calendar = { at: Date.now(), error: '', events: [], sources: 0 }; return; }
+  const sources = [], errors = [];
   for (const line of lines) {
     const m = line.match(/^(?:([^=]+)=)?(https?:\/\/\S+)$/);
     if (!m) { errors.push('알아볼 수 없는 줄이 있습니다'); continue; }
@@ -553,23 +572,12 @@ async function loadCalendar() {
       const all = comp.getAllSubcomponents('vevent').map(v => new ICAL.Event(v));
       const masters = new Map(all.filter(e => !e.isRecurrenceException()).map(e => [e.uid, e]));
       for (const e of all) if (e.isRecurrenceException() && masters.has(e.uid)) masters.get(e.uid).relateException(e);
-      const push = (ev, s, e) => {
-        const start = s.toJSDate(), end = (e || s).toJSDate();
-        if (end > from && start < to) events.push({ id: ev.uid + ':' + +start, title: ev.summary || '(제목 없음)', start: +start, end: +end, allDay: s.isDate, cal });
-      };
-      for (const ev of masters.values()) {
-        if (!ev.isRecurring()) { push(ev, ev.startDate, ev.endDate); continue; }
-        const it = ev.iterator();
-        for (let next, n = 0; (next = it.next()) && n < 5000; n++) {
-          if (next.toJSDate() >= to) break;
-          const o = ev.getOccurrenceDetails(next);
-          push(o.item, o.startDate, o.endDate); // 한 번만 옮긴 회차는 그 회차의 제목을 쓴다
-        }
-      }
+      sources.push({ cal, masters });
     } catch (e) { errors.push(((m[1] || '').trim() || '캘린더') + ': ' + e.message); }
   }
-  events.sort((a, b) => a.start - b.start || b.allDay - a.allDay);
-  calendar = { at: Date.now(), error: errors.join(' · '), events, sources: lines.length };
+  calSources = sources;
+  const from = new Date(); from.setHours(0, 0, 0, 0);
+  calendar = { at: Date.now(), error: errors.join(' · '), events: expand(from, new Date(from.getTime() + 7 * 864e5)), sources: lines.length };
   scan();
 }
 
@@ -755,6 +763,12 @@ const routes = {
     askBtw(s.tmux, item);
   },
   'calendar/reload': async () => { await loadCalendar(); return calendar.error || ''; },
+  // 달 보기: 그 달 칸(앞뒤 주 포함)의 일정. 받아 둔 캘린더를 펼치기만 한다
+  'calendar/range': b => {
+    const from = +b.from, to = +b.to;
+    if (!(to > from) || to - from > 62 * 864e5) throw new Error('일정 범위가 잘못됐습니다');
+    return expand(new Date(from), new Date(to));
+  },
   'btw/clear': b => { delete db.btw[b.sid]; },
   // 세션 메모: 내가 적거나, 내가 시킬 때 Claude가 적는다(skills/hq-memo). 대화 ID에 붙어 있어 닫았다 다시 열어도 남는다
   'memo/add': b => {
