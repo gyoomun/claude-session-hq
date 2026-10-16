@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActionIcon, Badge, Box, Button, HoverCard, Group, Paper, Progress, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast, useNow } from './store'
-import { pick, setUI, setView, useUI } from './ui'
+import { pick, pickNew, setUI, setView, useUI } from './ui'
 import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
@@ -210,9 +210,12 @@ function UsagePanel({ S }: { S: Snapshot }) {
   const u = S.usage
   const old = u && Date.now() - u.at > 3 * 3600e3 // 오래 응답이 없어 낡은 값
   return <Paper withBorder p="8px 10px" h="100%" style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
-    <Group justify="space-between" gap={4} wrap="nowrap"><Group gap={4} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">사용량</Text><AllCoin S={S} sids={S.sessions.map(x => x.sid)} /></Group>
+    <Group justify="space-between" gap={4} wrap="nowrap"><Group gap={4} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">계정</Text><AllCoin S={S} sids={S.sessions.map(x => x.sid)} /></Group>
       {old && <Text size="xs" c="dimmed" title={new Date(u.at).toLocaleString('ko-KR')}><Since t={u.at} suf=" 전 값" /></Text>}</Group>
-    {S.account && <Text size="xs" c="dimmed" lineClamp={1} title={`${S.account.email}${S.account.plan ? ' · ' + S.account.plan : ''}`}>{S.account.email}</Text>}
+    {S.account && <UnstyledButton className="hq-item" p="2px 4px" m="-2px -4px" style={{ borderRadius: 6 }} title="누르면 새 세션을 열어 /login 합니다. 로그인하면 새로 뜨는 세션부터 그 계정을 씁니다"
+      onClick={async () => { const cwd = '~/01dev/80ai/claude-session-hq', r = await api<string>('session/new', { cwd, prompt: '/login' }); if (r) pickNew(r.result, { cwd, task: '', working: true }) }}>
+      <Group gap={6} wrap="nowrap"><Text size="xs" fw={600} w={30} style={{ flex: 'none' }}>계정</Text><Text size="xs" c="dimmed" lineClamp={1} style={{ flex: 1 }}>{S.account.email}{S.account.plan && <Text span c="dimmed" opacity={.7}> · {S.account.plan}</Text>}</Text></Group>
+    </UnstyledButton>}
     {!u?.limits?.length ? <Text size="xs" c="dimmed">세션에서 답을 한 번 받으면 보입니다(hq-usage 플러그인)</Text>
       : u.limits.map(l => {
         const color = l.percentUsed >= 90 ? 'red' : l.percentUsed >= 70 ? 'yellow' : 'teal'
