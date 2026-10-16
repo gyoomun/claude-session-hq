@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ActionIcon, Alert, Box, Button, Center, Code, Divider, Group, Kbd, Loader, Stack, Text, Title, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { api, serverNow, toast, useNow, useOffline, useSnapshot } from './store'
-import { type Mode, pickNew, rememberSel, setMode, setSlim, setUI, useUI } from './ui'
+import { type Mode, SIDE_W, pickNew, rememberSel, setMode, setSideW, setSlim, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
 import { WorkView } from './Work'
 import { CalendarCard } from './Calendar'
@@ -103,7 +103,18 @@ function Sidebar({ S }: { S: Snapshot }) {
     : <Button key={key} fullWidth justify="flex-start" variant={o.primary ? 'filled' : o.on ? 'light' : 'subtle'} color={o.primary || o.on ? 'indigo' : 'gray'}
       leftSection={<Icon size={16} />} rightSection={o.kbd && <Kbd size="xs">{o.kbd}</Kbd>} onClick={onClick} aria-label={label}
       px={10} styles={{ label: { flex: 1 }, section: { marginInlineEnd: 8 }, root: o.on || o.primary ? undefined : { color: 'var(--mantine-color-text)' } }}>{label}</Button>
-  return <Stack className="hq-sidebar" gap="xs" align={slim ? 'center' : 'stretch'}>
+  // 오른쪽 경계를 끌어 폭을 바꾼다(놓을 때 저장). 두 번 누르면 처음 폭
+  const grip = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const el = e.currentTarget, shell = el.closest('.hq-shell')
+    el.setPointerCapture(e.pointerId); shell?.classList.add('dragging')
+    const move = (m: PointerEvent) => setSideW(m.clientX)
+    const up = (m: PointerEvent) => { setSideW(m.clientX, true); shell?.classList.remove('dragging'); el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up) }
+    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up)
+  }
+  return <div className="hq-sidebar-wrap">
+  {!slim && <div className="hq-side-grip" onPointerDown={grip} onDoubleClick={() => setSideW(SIDE_W, true)} title="끌어서 폭 바꾸기 · 두 번 누르면 처음 폭" />}
+  <Stack className="hq-sidebar" gap="xs" align={slim ? 'center' : 'stretch'}>
     <Group gap={10} wrap="nowrap" mb="sm" title="Claude Session HQ">
       <Logo />
       {!slim && <Title order={1} size={18} lh={1.15} fw={400} className="hq-display">Claude Session HQ</Title>}
@@ -119,6 +130,7 @@ function Sidebar({ S }: { S: Snapshot }) {
     {item('settings', IconSettings, '환경설정', () => setUI({ settings: true }))}
     {item('slim', slim ? IconLayoutSidebarLeftExpand : IconLayoutSidebarLeftCollapse, slim ? '사이드바 펼치기' : '사이드바 접기', () => setSlim(!slim))}
   </Stack>
+  </div>
 }
 
 // 오른쪽: 메인(알림·보기의 내용) | 서브(일정·메일 같은 카드들). 서브는 사이드바 바로 옆부터 왼쪽으로 붙여 놓고, 카드마다 너비를 끌어 바꾼다
@@ -193,7 +205,7 @@ export function App() {
   // 사이드바는 창 맨 왼쪽에 붙고, 오른쪽은 위아래 두 칸(메인 | 서브)이며 사이 경계를 끌어 서브 높이를 바꾼다(비율은 localStorage react-resizable-panels:hq-main).
   // 메인 내용은 나머지 폭의 가운데에 놓는다(좌우 여백이 같다). 본문 폭은 모든 보기에서 같다(작업 보기의 세 칸 기준 2032px. 보기마다 다르면 넘길 때 화면이 움찔한다).
   // 페이지 자체는 스크롤하지 않는다
-  const side = ui.slim ? 68 : 164
+  const side = ui.slim ? 68 : ui.sideW
   return <Box h="100dvh" className="hq-shell" style={{ gridTemplateColumns: `${side}px minmax(0, 1fr)`, '--side': side + 'px' } as React.CSSProperties}>
     <Sidebar S={S} />
     <MainSplit S={S} offline={offline} />
