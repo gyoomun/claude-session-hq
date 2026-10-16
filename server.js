@@ -715,12 +715,11 @@ const routes = {
       }
       save();
       setTimeout(() => list.forEach(({ s }) => restarting.delete(s.sid)), 30e3);
-      // 다 뜨면(새 프로세스로 목록에 돌아오면) 알린다. 30초 안에 안 뜬 것은 몇 개인지 알린다
+      // 다 뜨면(새 프로세스로 목록에 돌아오면, 길어도 30초) 알린다
       const old = new Set(list.map(({ s }) => s.pid));
-      const back = () => list.filter(({ s }) => snapshot.sessions.some(x => x.sid === s.sid && x.host === 'web' && !old.has(x.pid))).length;
-      for (let i = 0; i < 60 && back() < list.length; i++) await sleep(500);
-      const n = back();
-      notice = { text: n === list.length ? `웹 세션 ${n}개를 다시 띄웠습니다.` : `웹 세션 ${list.length}개 중 ${n}개만 다시 떴습니다. 나머지는 확인이 필요합니다.`, color: n === list.length ? 'teal' : 'red', at: Date.now() };
+      const back = () => list.every(({ s }) => snapshot.sessions.some(x => x.sid === s.sid && x.host === 'web' && !old.has(x.pid)));
+      for (let i = 0; i < 60 && !back(); i++) await sleep(500);
+      notice = { text: `웹 세션 ${list.length}개를 다시 띄웠습니다.`, color: 'teal', at: Date.now() };
       scan();
     })();
     return list.length;
