@@ -1,6 +1,6 @@
 // 작업 보기: 왼쪽 세션 목록(업무별로 묶음) | 즐겨찾기 | 고른 세션(머리 + 대화) | 핀·메모·btw
 import { useEffect, useRef, useState } from 'react'
-import { Badge, Box, Button, Group, Paper, Progress, ScrollArea, SegmentedControl, Skeleton, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core'
+import { ActionIcon, Badge, Box, Button, HoverCard, Group, Paper, Progress, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast, useNow } from './store'
 import { pick, setUI, setView, useUI } from './ui'
 import type { Session, Snapshot } from './types'
@@ -17,7 +17,7 @@ import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resiza
 const DRAG = 'application/x-hq-sid'
 const dragging = (e: React.DragEvent) => e.dataTransfer.types.includes(DRAG)
 let dragSid = '' // 끄는 중에는 dataTransfer 값을 읽을 수 없어서(놓을 때만 된다) 따로 둔다. 제 자리는 빈 칸으로 본다
-function Item({ s, on, memo, clamp, coin }: { s: Session; on: boolean; memo: boolean; clamp?: boolean; coin?: CoinData }) {
+function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; clamp?: boolean }) {
   // 고른 세션은 목록에서 보이게 스크롤한다(새로고침·Ctrl+Tab·다른 데서 열기). 고른 순간에만 해서, 손으로 스크롤한 목록을 되돌리지 않는다
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (on) ref.current?.scrollIntoView({ block: 'nearest' }) }, [on])
@@ -31,29 +31,37 @@ function Item({ s, on, memo, clamp, coin }: { s: Session; on: boolean; memo: boo
           {bgCount(s) > 0 && <Text span c="teal.4" title={bgText(s)}> · 뒤 작업 {bgCount(s)}</Text>}
           {s.host !== 'web' && <Badge size="xs" variant="outline" color="gray" ml={6}>{s.host === 'orca' ? 'Orca' : '외부'}</Badge>}</Text>
       </Stack>
-      {coin && <Coin sid={s.sid} {...coin} />}
       <CopyName name={s.name} />
     </Group>
   </UnstyledButton>
 }
-// 즐겨찾기 줄의 동전: 누르면 그 세션이 이번 5시간 한도를 얼마나 썼는지 추정해 남긴다. 조회한 창이면 색이 켜지고 올리면 값이 보인다. 창이 지나면 꺼진다
-type CoinData = { rec?: { share: number; windowEnd: number; at: number }; end: number }
-function Coin({ sid, rec, end }: { sid: string } & CoinData) {
+const fiveEnd = (S: Snapshot) => Date.parse(S.usage?.limits.find(l => l.kind === 'five_hour')?.resetsAt || '') || 0
+// 사용량 칸의 동전: 누르면 떠 있는 세션 전체의 5시간 한도 사용량을 한꺼번에 조회한다. 올리면 요약 카드가 뜨고 '더보기'를 누르면 카드가 커져 순위(이번 창 기준)를 보여 준다
+function AllCoin({ S, sids }: { S: Snapshot; sids: string[] }) {
   const [busy, setBusy] = useState(false)
-  const now = rec && rec.windowEnd === end
-  const t = rec && new Date(rec.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-  const tip = busy ? '계산 중…' : !rec ? '이 세션이 5시간 한도를 얼마나 썼는지 추정(누르면 조회)' : now ? `세션 ${rec.share}% · ${t} 조회(다시 누르면 갱신)` : `지난 창 ${rec.share}% · 다시 누르면 이번 창으로 조회`
-  return <Tooltip label={tip} openDelay={0} withArrow position="left">
-    <span role="button" tabIndex={-1} className={'hq-rowcopy' + (now ? ' coin-on' : '')} aria-label="세션 한도 사용량 조회"
-      onMouseDown={e => e.stopPropagation()} onClick={async e => {
-        e.stopPropagation(); e.preventDefault()
-        if (busy) return
-        setBusy(true)
-        await api('session/limit-share', { sid }); setBusy(false)
-      }}>
-      <IconCoin size={18} stroke={1.6} />
-    </span>
-  </Tooltip>
+  const [more, setMore] = useState(false)
+  const end = fiveEnd(S)
+  const got = sids.filter(x => S.usageShare?.[x]?.windowEnd === end)
+    .map(x => ({ s: S.sessions.find(y => y.sid === x), share: S.usageShare[x].share })).sort((a, b) => b.share - a.share)
+  const sum = Math.round(got.reduce((a, x) => a + x.share, 0) * 10) / 10
+  const done = sids.length > 0 && got.length === sids.length
+  return <HoverCard openDelay={0} closeDelay={100} position="bottom-start" withArrow shadow="md" onClose={() => setMore(false)}>
+    <HoverCard.Target>
+      <ActionIcon size="sm" variant="subtle" color={done ? 'yellow' : 'gray'} aria-label="세션 한도 사용량 전체 조회" disabled={!sids.length}
+        onClick={async () => { if (busy) return; setBusy(true); await api('session/limit-share', { sids }); setBusy(false) }}>
+        <IconCoin size={16} stroke={1.6} />
+      </ActionIcon>
+    </HoverCard.Target>
+    <HoverCard.Dropdown p={8} style={{ width: more ? 340 : 'auto' }}>
+      <Text size="xs">{busy ? '계산 중…' : got.length ? `이번 5시간 창 · ${got.length}/${sids.length}개 조회 · 합계 ${sum}%` : `누르면 세션 ${sids.length}개의 5시간 한도 사용량을 한꺼번에 조회`}</Text>
+      {!!got.length && !more && <Button size="compact-xs" variant="subtle" mt={4} onClick={() => setMore(true)}>더보기</Button>}
+      {more && <Stack gap={2} mt={6}>
+        {got.map((x, i) => <UnstyledButton key={x.s?.sid ?? i} onClick={() => x.s && pick(x.s.sid)} className="hq-item" p="3px 4px" style={{ borderRadius: 6 }}>
+          <Group gap={6} wrap="nowrap"><Text size="xs" c="dimmed" w={18}>{i + 1}</Text><Text size="xs" lineClamp={1} style={{ flex: 1 }}>{x.s?.title ?? '(닫힌 세션)'}</Text><Text size="xs" fw={600}>{x.share}%</Text></Group>
+        </UnstyledButton>)}
+      </Stack>}
+    </HoverCard.Dropdown>
+  </HoverCard>
 }
 // 줄 오른쪽의 세션 이름 복사(다른 Claude에게 이름을 알려 줄 일이 많아서). 줄을 고르지 않는다. 키보드로는 줄에서 ⌘C(Ctrl+C)
 // 줄이 button이라 안에 button을 넣지 못해 span으로 만든다
@@ -98,7 +106,6 @@ function Title({ s }: { s: Session }) {
 }
 
 function Head({ S, s }: { S: Snapshot; s: Session }) {
-  const [confirm, setConfirm] = useState(false)
   const [named, flashName] = useFlash()
   return <Paper withBorder p="10px 12px">
     <Group gap="sm" wrap="wrap">
@@ -118,11 +125,7 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         {s.host === 'web' && <Button size="xs" variant="outline" color="orange" title="전역 CLAUDE.md·.zshrc 등을 바꾼 뒤. 같은 대화로 다시 띄워 이어집니다(일하는 중이어도 끊습니다)" onClick={async () => {
           if (await api('session/restart', { names: [s.tmux] })) toast('세션을 다시 띄웁니다. 대화는 그대로 이어집니다.')
         }}>세션 재시작</Button>}
-        {s.host === 'web' && <Button size="xs" variant="outline" color="red" onBlur={() => setConfirm(false)} onClick={async () => {
-          if (!confirm) { setConfirm(true); return }
-          setConfirm(false)
-          if (await api('session/close', { name: s.tmux })) toast('세션을 종료했습니다. 대화 기록은 남아 있습니다.')
-        }}>{confirm ? '한 번 더 누르면 종료' : '세션 종료'}</Button>}
+        {s.host === 'web' && <Button size="xs" variant="outline" color="red" onClick={() => setUI({ closeFor: s.sid })}>세션 종료</Button>}
       </Group>
     </Group>
   </Paper>
@@ -207,8 +210,9 @@ function UsagePanel({ S }: { S: Snapshot }) {
   const u = S.usage
   const old = u && Date.now() - u.at > 3 * 3600e3 // 오래 응답이 없어 낡은 값
   return <Paper withBorder p="8px 10px" h="100%" style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
-    <Group justify="space-between" gap={4} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">사용량</Text>
+    <Group justify="space-between" gap={4} wrap="nowrap"><Group gap={4} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">사용량</Text><AllCoin S={S} sids={S.sessions.map(x => x.sid)} /></Group>
       {old && <Text size="xs" c="dimmed" title={new Date(u.at).toLocaleString('ko-KR')}><Since t={u.at} suf=" 전 값" /></Text>}</Group>
+    {S.account && <Text size="xs" c="dimmed" lineClamp={1} title={`${S.account.email}${S.account.plan ? ' · ' + S.account.plan : ''}`}>{S.account.email}</Text>}
     {!u?.limits?.length ? <Text size="xs" c="dimmed">세션에서 답을 한 번 받으면 보입니다(hq-usage 플러그인)</Text>
       : u.limits.map(l => {
         const color = l.percentUsed >= 90 ? 'red' : l.percentUsed >= 70 ? 'yellow' : 'teal'
@@ -244,8 +248,6 @@ export const favSids = (S: Snapshot) => {
 function Favs({ S, sel }: { S: Snapshot; sel: string }) {
   const f = S.favs || { mode: 'auto' as const, items: [] }
   const byId = new Map(S.sessions.map(s => [s.sid, s]))
-  const end = Date.parse(S.usage?.limits.find(l => l.kind === 'five_hour')?.resetsAt || '') || 0
-  const coin = (sid: string): CoinData => ({ rec: S.usageShare?.[sid], end })
   const live = f.items.filter(x => byId.has(x.sid)) // 닫힌 세션은 목록에 남겨 두고(다시 열면 돌아온다) 보이지만 않는다
   const box = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<number | null>(null) // 자동: 끼워 넣을 자리, 자유: 놓을 칸
@@ -296,13 +298,13 @@ function Favs({ S, sel }: { S: Snapshot; sel: string }) {
           ? <>
               {hover !== null && <Box className="hq-fav-ghost" style={{ top: hover * SLOT, height: SLOT }} />}
               {live.map(x => <Box key={x.sid} data-fav={x.sid} pos="absolute" left={0} right={0} className="hq-slide" style={{ top: x.slot * SLOT, height: SLOT }}>
-                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} clamp coin={coin(x.sid)} />
+                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} clamp />
               </Box>)}
             </>
           : <Stack gap={2}>
               {live.filter(x => x.sid !== dragSid || hover === null).map((x, i) => <Box key={x.sid} data-fav={x.sid}>
                 {hover === i && <Box className="hq-fav-line" />}
-                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} coin={coin(x.sid)} />
+                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} />
               </Box>)}
               {hover !== null && hover >= live.length && <Box className="hq-fav-line" />}
             </Stack>}

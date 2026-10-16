@@ -1,4 +1,4 @@
-// 가운데 창들: 새 세션, 업무 추가, 상황 브리핑. 접속 관리는 환경설정 창(Settings.tsx)의 '접속'
+// 가운데 창들: 새 세션, 세션 종료 확인, 업무 추가, 상황 브리핑. 접속 관리는 환경설정 창(Settings.tsx)의 '접속'
 import { useEffect, useState } from 'react'
 import { Autocomplete, Badge, Button, Code, Group, List, Modal, NativeSelect, Paper, Stack, Text, TextInput, Textarea } from '@mantine/core'
 import { api, toast } from './store'
@@ -34,6 +34,24 @@ export function NewSessionModal({ S }: { S: Snapshot }) {
         <Group justify="flex-end"><Button variant="default" onClick={close}>취소</Button><Button type="submit" loading={busy}>시작</Button></Group>
       </Stack>
     </form>
+  </Modal>
+}
+
+export function CloseSessionModal({ S }: { S: Snapshot }) {
+  const ui = useUI()
+  const s = S.sessions.find(x => x.sid === ui.closeFor)
+  const close = () => setUI({ closeFor: '' })
+  return <Modal opened={!!s} onClose={close} title="세션 종료" size="sm">
+    <Stack gap="sm">
+      <Text size="sm">"{s?.title}" 세션을 종료할까요? 일하는 중이어도 끊깁니다. 대화 기록은 남습니다.</Text>
+      <Group justify="flex-end">
+        <Button variant="default" onClick={close}>취소</Button>
+        <Button color="red" data-autofocus onClick={async () => {
+          close()
+          if (s && await api('session/close', { name: s.tmux })) toast('세션을 종료했습니다. 대화 기록은 남아 있습니다.')
+        }}>종료</Button>
+      </Group>
+    </Stack>
   </Modal>
 }
 

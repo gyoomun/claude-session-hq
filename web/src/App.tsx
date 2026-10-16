@@ -12,7 +12,7 @@ import { isRecording, useAreaKeys } from './Keys'
 import { BoardView } from './Board'
 import { MemoView } from './Memo'
 import { SessionDrawer, TaskDrawer } from './Drawers'
-import { AddTaskModal, BriefModal, NewSessionModal } from './Modals'
+import { AddTaskModal, BriefModal, CloseSessionModal, NewSessionModal } from './Modals'
 import { SettingsWindow } from './Settings'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import { IconBuildingSkyscraper, IconCheck, IconFolderPlus, IconLayoutColumns, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconListDetails, IconNetwork, IconNote, IconPlus, IconReport, IconSettings } from '@tabler/icons-react'
@@ -168,6 +168,8 @@ export function App() {
   const S = useSnapshot()
   const offline = useOffline()
   const ui = useUI()
+  const latest = useRef({ S, ui })
+  latest.current = { S, ui }
   // 화면 밖(웹 안의 Claude 등)에서 세션을 열면 그 세션으로 넘어간다. 이 화면을 연 뒤에 생긴 요청만
   const focusSeen = useRef(Date.now())
   useEffect(() => {
@@ -192,6 +194,15 @@ export function App() {
       if (isRecording()) return // 단축키를 녹화하는 중
       // Cmd+T(윈도우는 Ctrl+T): 새 세션. 브라우저·터미널에서 새 탭 열던 손버릇 그대로. 크롬 일반 탭에서는 크롬이 먼저 가져가고, 앱 창에서는 여기로 온다
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') { e.preventDefault(); e.stopPropagation(); setUI({ newFor: '' }); return }
+      // Cmd+W(윈도우는 Ctrl+W): 고른 웹 세션의 종료 확인 창. 확인 버튼에 포커스가 있어 스페이스바로 종료한다
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault(); e.stopPropagation()
+        const { S, ui } = latest.current
+        const s = S?.sessions.find(x => x.sid === ui.sel)
+        if (!s || s.host !== 'web') return
+        setUI({ closeFor: s.sid })
+        return
+      }
       const m = keys[e.key]
       if (!m || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
       e.preventDefault(); e.stopPropagation()
@@ -213,6 +224,7 @@ export function App() {
     <TaskDrawer S={S} />
     <NewSessionModal S={S} />
     <AddTaskModal />
+    <CloseSessionModal S={S} />
     <BriefModal S={S} />
     <SettingsWindow S={S} />
   </Box>

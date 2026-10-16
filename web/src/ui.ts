@@ -22,6 +22,7 @@ const hashMode = () => (MODES as string[]).includes(location.hash.slice(1)) ? lo
 interface UI {
   mode: Mode
   sel: string // 작업 보기에서 고른 세션(sid)
+  closeFor: string // 종료 확인 창을 띄운 세션(sid), 없으면 ''. 머리 버튼과 ⌘W가 같이 쓴다
   pendingSel: string // 방금 연 웹 세션(tmux 이름). 목록에 나타나면 고른다. 그때까지 작업 보기는 뼈대(스켈레톤)를 보인다
   pendingTask: string // 그 세션이 들어갈 업무(목록의 뼈대 자리). ''는 미배치
   pendingCwd: string // 그 세션의 폴더(새 세션 창에서 고른 것). 뜨기 전에도 머리에 보인다
@@ -47,7 +48,7 @@ export const SIDE_W = 164, SLIM_W = 68 // 사이드바 처음 폭(펼침·접힘
 const clampSide = (v: number) => Math.round(Math.min(360, Math.max(120, v)))
 const clampSlim = (v: number) => Math.round(Math.min(110, Math.max(52, v)))
 let ui: UI = {
-  mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', pendingSel: '', pendingTask: '', pendingCwd: '', pendingWorking: false,
+  mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', closeFor: '', pendingSel: '', pendingTask: '', pendingCwd: '', pendingWorking: false,
   openTask: null, openSess: null, newFor: null, addTask: false, brief: false,
   settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system', slim: get('hq-slim') === '1', sideW: clampSide(Number(get('hq-sidew')) || SIDE_W), slimW: clampSlim(Number(get('hq-slimw')) || SLIM_W),
 }
