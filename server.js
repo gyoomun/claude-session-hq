@@ -945,7 +945,18 @@ const routes = {
     if (!['mode', 'model', 'effort'].includes(b.kind)) throw new Error('모르는 메뉴입니다');
     if (['working', 'compact', 'approval'].includes(s.state)) throw new Error('일하는 중에는 바꿀 수 없습니다. 먼저 중단하세요');
     if (await rewindScreen(name)) throw new Error('Claude 쪽에 되감기 창이 열려 있습니다');
-    if (b.kind === 'mode') return void await tmux(['send-keys', '-t', name, 'BTab']);
+    if (b.kind === 'mode') {
+      // Shift+Tab 뒤 화면 맨 아래 줄이 바뀔 때까지 기다려 바로 화면에 반영한다(주기 읽기는 3초마다라 늦다)
+      const before = footers.get(name)?.mode;
+      await tmux(['send-keys', '-t', name, 'BTab']);
+      for (let i = 0; i < 8; i++) {
+        await sleep(200);
+        const f = parseFooter(await tmux(['capture-pane', '-p', '-t', name]).catch(() => ''));
+        if (f && f.mode !== before) { footers.set(name, f); break; }
+      }
+      scanSoon();
+      return;
+    }
     if (await inputBox(name)) throw new Error('Claude 입력칸에 글이 남아 있습니다. 터미널 화면에서 비운 뒤 다시 하세요');
     await tmux(['send-keys', '-t', name, '-l', '--', '/' + b.kind]);
     await sleep(300);

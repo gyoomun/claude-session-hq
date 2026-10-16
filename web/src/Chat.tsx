@@ -187,17 +187,17 @@ function Pick({ kind, pid, web, tip, color, children }: { kind: 'mode' | 'model'
   const [busy, setBusy] = useState(false)
   // 글자 폭이 바뀌어도 줄이 움찔하지 않게 자리를 고정한다
   const width = { mode: '19ch', model: '16ch', effort: '8ch' }[kind]
-  // 권한 모드는 Shift+Tab을 보낸 뒤 화면 글자가 바뀔 때까지(몇 초 걸린다) 돌아가는 표시를 둔다. 안 바뀌어도 5초 뒤에는 끈다
+  // 권한 모드는 Shift+Tab을 보내고 서버가 화면이 바뀐 것을 확인할 때까지(최대 1.5초) '바꾸는 중…'을 글자로 보인다.
+  // 돌아가는 그림은 이 맥의 '동작 줄이기'와 작은 크기 때문에 안 보여서 쓰지 않는다
   useEffect(() => { setBusy(false) }, [children])
-  useEffect(() => { if (!busy) return; const t = setTimeout(() => setBusy(false), 5000); return () => clearTimeout(t) }, [busy])
-  const text = <Text size="sm" fw={600} c={color} style={{ whiteSpace: 'nowrap' }}>{children}</Text>
-  const body = <Group gap={6} wrap="nowrap" style={{ width, flex: 'none' }}>{text}<Box w={12} h={12} style={{ flex: 'none' }}>{busy && <Loader size={12} color="gray" />}</Box></Group>
+  const body = <Text size="sm" fw={600} c={busy ? 'indigo.3' : color} style={{ whiteSpace: 'nowrap', width, flex: 'none' }}>{busy ? '바꾸는 중…' : children}</Text>
   if (!web) return <Box title={tip}>{body}</Box>
   return <UnstyledButton disabled={busy} onClick={async () => {
     setBusy(true)
     const r = await api('session/menu', { pid, kind })
     if (!r || kind !== 'mode') setBusy(false)
     if (r && kind !== 'mode') setView('term')
+    if (r && kind === 'mode') setTimeout(() => setBusy(false), 1500) // 화면이 안 바뀌어도 풀어 준다
   }} title={tip} className="hq-item" p="2px 6px" m="-2px -6px" style={{ borderRadius: 6, width: `calc(${width} + 12px)`, flex: 'none' }}>
     {body}
   </UnstyledButton>
