@@ -16,7 +16,10 @@ const DRAG = 'application/x-hq-sid'
 const dragging = (e: React.DragEvent) => e.dataTransfer.types.includes(DRAG)
 let dragSid = '' // 끄는 중에는 dataTransfer 값을 읽을 수 없어서(놓을 때만 된다) 따로 둔다. 제 자리는 빈 칸으로 본다
 function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; clamp?: boolean }) {
-  return <UnstyledButton draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%"
+  // 고른 세션은 목록에서 보이게 스크롤한다(새로고침·Ctrl+Tab·다른 데서 열기). 고른 순간에만 해서, 손으로 스크롤한 목록을 되돌리지 않는다
+  const ref = useRef<HTMLButtonElement>(null)
+  useEffect(() => { if (on) ref.current?.scrollIntoView({ block: 'nearest' }) }, [on])
+  return <UnstyledButton ref={ref} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%"
     style={{ borderRadius: 8, background: on ? 'var(--mantine-color-indigo-light)' : undefined, boxShadow: on ? 'inset 0 0 0 1px var(--mantine-color-indigo-5)' : undefined }}>
     <Group gap={8} wrap="nowrap" align="flex-start">
       <Box w={8} h={8} mt={6} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} />
