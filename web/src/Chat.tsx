@@ -212,7 +212,7 @@ function Composer({ s, d, working, onSent, interrupt, onRewind }: {
           const t = e.clipboardData.getData('text/plain')
           if (bigPaste(t)) { e.preventDefault(); place(addPaste(t, sel), at) }
         }}
-        placeholder={`${s.title}에게 말하기`} aria-label="보낼 말"
+        placeholder={s.sid ? `${s.title}에게 말하기` : "새 세션을 여는 중…"} aria-label="보낼 말"
         onKeyDown={e => {
           // 한글 입력 중(조합 중)의 Enter는 글자 확정이라 보내지 않는다
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
@@ -348,7 +348,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   const esc = useRef(() => {})
   const lastEsc = useRef(0)
   esc.current = () => {
-    if (!s.host) return
+    if (!s.host || !s.sid) return // 새 세션을 여는 중(빈 세션)
     if (working) { interrupt(); return }
     if (s.host === 'web' && Date.now() - lastEsc.current < 600) { lastEsc.current = 0; setRewind(true) } else lastEsc.current = Date.now()
   }

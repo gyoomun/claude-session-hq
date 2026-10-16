@@ -1,7 +1,7 @@
 // 대화 오른쪽 칸(핀·메모·btw)과 메모 보기(F4).
 // 핀: Claude 핀보드 모드가 올린 할 일·결정할 것(읽기만). 메모: Claude가 알 수 없는 사정을 내가 적거나, 내가 시킬 때 Claude가 적는다(skills/hq-memo)
 import { useState } from 'react'
-import { Badge, Box, Button, Checkbox, CloseButton, Group, Paper, ScrollArea, SimpleGrid, Stack, Text, Textarea, UnstyledButton } from '@mantine/core'
+import { Badge, Box, Button, Checkbox, CloseButton, Group, Paper, ScrollArea, SimpleGrid, Skeleton, Stack, Text, Textarea, UnstyledButton } from '@mantine/core'
 import { api } from './store'
 import { pick, useUI } from './ui'
 import type { Memo, Session, Snapshot } from './types'
@@ -47,6 +47,7 @@ const MARK = { '>': ['▸', 'yellow.5'], ' ': ['○', undefined], 'x': ['✓', '
 function PinList({ s }: { s: Session }) {
   const decisions = s.pin.filter(p => p.mark === '?'), todos = s.pin.filter(p => p.mark !== '?')
   const done = todos.filter(p => p.mark === 'x').length
+  if (!s.sid) return <Stack gap={8}><Skeleton h={11} w="70%" /><Skeleton h={11} w="52%" /></Stack> // 새 세션을 여는 중
   if (!s.pin.length) return <Text size="sm" c="dimmed">비어 있습니다. Claude가 할 일·결정할 것을 핀에 올리면 보입니다.</Text>
   const row = (p: Session['pin'][number]) => <Group key={p.id} gap={8} wrap="nowrap" align="flex-start">
     <Text size="sm" c={MARK[p.mark][1]} w={12} ta="center" style={{ flex: 'none' }}>{MARK[p.mark][0]}</Text>

@@ -7,7 +7,7 @@ import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
-import { ChatSkeleton, ChatView } from './Chat'
+import { ChatView } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
 import { IconPinFilled } from '@tabler/icons-react'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
@@ -38,9 +38,11 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
   return <Paper withBorder p="10px 12px">
     <Group gap="sm" wrap="wrap">
       <Stack gap={0} style={{ minWidth: 0, flex: '1 1 260px' }}>
-        <Text fw={600} size="lg" className="hq-wrap">{s.title}</Text>
-        <Text size="xs" c="dimmed">{s.cwd} · <Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
-          {s.act && <Text span ff="monospace" c="teal.5"> · {s.act}</Text>}</Text>
+        {s.sid ? <>
+          <Text fw={600} size="lg" className="hq-wrap">{s.title}</Text>
+          <Text size="xs" c="dimmed">{s.cwd} · <Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
+            {s.act && <Text span ff="monospace" c="teal.5"> · {s.act}</Text>}</Text>
+        </> : <><Skeleton h={20} w="38%" my={4} /><Skeleton h={11} w="24%" my={4} /></>}
       </Stack>
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
@@ -83,22 +85,25 @@ function ClosedList({ S }: { S: Snapshot }) {
   </Stack>
 }
 
-// 새 세션을 여는 동안(Claude가 뜨는 데 2~3초): 세션 화면과 같은 배치를 미리 그리고 안만 반짝인다
+// 새 세션을 여는 동안(Claude가 뜨는 데 2~3초) 목록에서 그 세션이 들어갈 자리
 const ItemSkeleton = () => <Group gap={8} wrap="nowrap" align="flex-start" p="7px 8px">
   <Skeleton w={8} h={8} mt={6} radius={2} /><Stack gap={6} style={{ flex: 1 }}><Skeleton h={13} w="80%" /><Skeleton h={10} w="45%" /></Stack>
 </Group>
-function WorkSkeleton() {
-  const box = (h: number | string, rows = 2) => <Paper withBorder p="sm" h={h}><Stack gap={8}><Skeleton h={12} w="35%" />{Array.from({ length: rows }, (_, i) => <Skeleton key={i} h={10} w={`${80 - i * 15}%`} />)}</Stack></Paper>
-  return <Box className="hq-fade" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 420px)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
-    <Paper withBorder p="10px 12px" style={{ gridColumn: '1 / -1' }}>
-      <Group justify="space-between" wrap="nowrap"><Stack gap={8} style={{ flex: 1 }}><Skeleton h={18} w="32%" /><Skeleton h={10} w="22%" /></Stack>
-        <Group gap={6}>{[90, 54, 40, 76, 70].map((x, i) => <Skeleton key={i} h={26} w={x} radius="sm" />)}</Group></Group>
-    </Paper>
-    <Stack gap={8} style={{ minHeight: 0 }}>
-      <Paper withBorder p="md" style={{ flex: 1 }}><Box maw={980} mx="auto"><ChatSkeleton /></Box></Paper>
-      <Paper withBorder p="sm"><Stack gap={8}><Skeleton h={52} radius="sm" /><Group justify="space-between"><Skeleton h={10} w={220} /><Skeleton h={26} w={64} radius="sm" /></Group></Stack></Paper>
-    </Stack>
-    <Stack gap={10} style={{ minHeight: 0 }}>{box('25%')}{box('30%', 1)}<Box style={{ flex: 1 }}>{box('100%', 3)}</Box></Stack>
+// 새 세션을 여는 동안: 진짜 세션 화면을 빈 세션(ghost)으로 그리고 손대지 못하게 막는다(fieldset disabled).
+// 버튼·칸 제목·입력칸은 그대로 보이고, 아직 모르는 제목·핀·대화만 반짝인다. 배치가 같아 세션이 뜰 때 튀지 않는다
+function WorkSkeleton({ S, tmux, task }: { S: Snapshot; tmux: string; task: string }) {
+  const ghost: Session = { pid: 0, sid: '', name: '', title: '', cwd: '', dir: '', state: 'idle', since: Date.now(), startedAt: 0, act: '', msg: '', prompt: '', task, host: 'web', tmux, pin: [] }
+  return <fieldset disabled className="hq-ghost" aria-busy="true"><SessionArea S={S} s={ghost} /></fieldset>
+}
+// 고른 세션: 위 머리(두 칸에 걸침) / 아래 대화 | 핀·메모·btw. 오른쪽 칸은 대화창과 같은 높이에서 시작한다
+function SessionArea({ S, s }: { S: Snapshot; s: Session }) {
+  const ui = useUI()
+  return <Box className={s.sid ? undefined : 'hq-fade'} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 420px)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
+    <Box style={{ gridColumn: '1 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>
+    <Box style={{ gridColumn: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      {s.sid && s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
+    </Box>
+    <Box style={{ gridColumn: 2, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
   </Box>
 }
 
@@ -237,18 +242,12 @@ export function WorkView({ S }: { S: Snapshot }) {
     <Separator className="hq-split-v" />
     <Panel id="main" minSize={480}>
     {/* 나머지: 2행 격자. 위: 세션 머리(두 칸에 걸침) / 아래: 대화 | 핀·메모·btw. 오른쪽 칸이 대화창과 같은 높이에서 시작한다 */}
-    {!s && ui.pendingSel ? <WorkSkeleton /> : !s ? <Paper withBorder p="xl" h="100%" style={{ borderStyle: 'dashed' }}>
+    {!s && ui.pendingSel ? <WorkSkeleton S={S} tmux={ui.pendingSel} task={ui.pendingTask} /> : !s ? <Paper withBorder p="xl" h="100%" style={{ borderStyle: 'dashed' }}>
       <Stack align="flex-start">
         <Text>왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.</Text>
         <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>
       </Stack>
-    </Paper> : <Box style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 420px)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
-      <Box style={{ gridColumn: '1 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>
-      <Box style={{ gridColumn: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
-      </Box>
-      <Box style={{ gridColumn: 2, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
-    </Box>}
+    </Paper> : <SessionArea S={S} s={s} />}
     </Panel>
   </Split>
 }
