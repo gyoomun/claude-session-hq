@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { execFile, spawn } = require('child_process');
+const { execFile } = require('child_process');
 const pty = require('node-pty');
 
 const HOME = os.homedir();
@@ -274,7 +274,7 @@ let firstScan = true;
 function pushFeed(e) { feed.unshift(e); if (feed.length > 300) feed.length = 300; }
 function scan() {
   const now = Date.now();
-  const live = liveSessions().filter(s => !btwPids.has(s.pid));
+  const live = liveSessions();
   loadHandles(live.map(s => s.pid));
   loadOrcaTitles(now);
   loadWorktrees(now);
@@ -475,36 +475,47 @@ function upload(req, res) {
 }
 const isUpload = f => typeof f === 'string' && path.resolve(f).startsWith(UPLOAD_DIR + path.sep) && fs.existsSync(f);
 
-/* 곁가지 질문(btw): 세션의 대화를 복사(--fork-session)해 질문 하나에만 답하게 한다.
-   원래 대화에는 아무것도 남지 않고, 기본 권한 모드라 파일을 고치지 못한다. 답을 받으면 복사본 기록은 지운다 */
-let btwRunning = 0;
-// 곁가지 질문용으로 띄운 claude(복사본)의 pid. 세션 목록에 다른 세션처럼 나타나지 않게 뺀다(exec라 셸 pid = claude pid)
-const btwPids = new Set();
-function lastResult(out) {
-  // 로그인 셸이 앞뒤로 찍는 잡음 사이에서 type=result인 JSON 객체를 찾는다
-  for (let i = out.lastIndexOf('{'); i >= 0; i = out.lastIndexOf('{', i - 1)) {
-    try { const o = JSON.parse(out.slice(i).trim()); if (o && o.type === 'result') return o; } catch {}
-  }
-  return null;
+/* btw: Claude Code의 /btw를 그 세션(웹, tmux)에 쳐 넣는다. Claude가 일하는 중에도 끊지 않고 화면 위 상자에 답한다.
+   상자 바닥 줄에 'c to copy'가 뜨고 답이 더 바뀌지 않으면 c(복사)를 눌러 tmux 복사 칸에 든 답 전체를 읽고(화면은 길면 잘린다),
+   Esc로 닫는다. 질문·답은 db.btw에 남는다. 대화를 복사해 따로 묻던 예전 방식(claude -p --fork-session)은 무거워서 버렸다 */
+const btwBusy = new Set(); // tmux 이름: 상자가 떠 있는 동안. 이때 친 글자는 상자의 키(c·f·x)가 되므로 대화 보내기를 막는다
+async function btwBox(name) {
+  const lines = (await tmux(['capture-pane', '-p', '-t', name])).split('\n').map(l => l.trimEnd());
+  const foot = lines.findLastIndex(l => /Esc to close/.test(l));
+  if (foot < 0) return null;
+  const last = lines.findLastIndex((l, i) => i < foot && /^\s*\/btw /.test(l));
+  return { ready: /c to copy|Copied/.test(lines[foot]), q: last < 0 ? '' : lines[last].trim(), body: lines.slice(last + 1, foot).join('\n') };
 }
-function askBtw(sid, cwd, item) {
-  const prompt = '(곁가지 질문입니다. 하던 작업은 이어 하지 말고, 파일도 고치지 말고, 아래 질문에만 짧게 답하세요.)\n\n' + item.q;
-  const args = ['-p', '--resume', sid, '--fork-session', '--output-format', 'json', '--permission-mode', 'default', prompt];
-  const p = spawn(SHELL, ['-lic', 'exec claude ' + args.map(q).join(' ')], { cwd, env: TERM_ENV });
-  btwRunning++;
-  btwPids.add(p.pid);
-  let out = '';
-  p.stdout.on('data', d => { out += d; });
-  const timer = setTimeout(() => p.kill(), 10 * 60e3);
-  p.on('close', () => {
-    btwRunning--; clearTimeout(timer); btwPids.delete(p.pid);
-    const r = lastResult(out);
-    item.state = r && !r.is_error ? 'done' : 'error';
-    item.a = r ? String(r.result || '').slice(0, 20000) : '답을 받지 못했습니다(시간 초과 또는 실행 오류).';
-    item.doneAt = Date.now();
-    if (r && r.session_id) try { const f = findTranscript({ cwd, sessionId: r.session_id }); if (f) fs.unlinkSync(f); } catch {}
-    save(); scan();
-  });
+const topBuffer = async () => ((await tmux(['list-buffers', '-F', '#{buffer_name}']).catch(() => '')).split('\n')[0] || '');
+async function askBtw(name, item) {
+  btwBusy.add(name);
+  try {
+    const q = item.q.replace(/\s+/g, ' ').trim(); // /btw는 한 줄이다
+    const before = await topBuffer();
+    await tmux(['send-keys', '-t', name, '-l', '--', '/btw ' + q]);
+    await sleep(300);
+    await tmux(['send-keys', '-t', name, 'Enter']);
+    // 상자 맨 아래 질문이 이것이고, 답이 다 나와(c to copy) 두 번 연달아 같으면 끝난 것으로 본다
+    let prev = null, ready = false;
+    for (const t0 = Date.now(); Date.now() - t0 < 180e3; await sleep(500)) {
+      const box = await btwBox(name);
+      const mine = box && box.ready && box.q.startsWith(('/btw ' + q).slice(0, 30));
+      if (mine && prev === box.body) { ready = true; break; }
+      prev = mine ? box.body : null;
+    }
+    if (!ready) throw new Error('답을 받지 못했습니다(3분 안에 답이 끝나지 않음)');
+    await tmux(['send-keys', '-t', name, 'c']);
+    let text = '';
+    for (let i = 0; i < 20 && !text; i++) { await sleep(150); if (await topBuffer() !== before) text = await tmux(['show-buffer']); }
+    item.state = text ? 'done' : 'error';
+    item.a = text ? text.slice(0, 20000) : '답은 왔지만 읽지 못했습니다. 터미널 화면에서 확인하세요.';
+  } catch (e) {
+    item.state = 'error'; item.a = e.message;
+  } finally {
+    if (await btwBox(name).catch(() => null)) await tmux(['send-keys', '-t', name, 'Escape']).catch(() => {});
+    btwBusy.delete(name);
+    item.doneAt = Date.now(); save(); scan();
+  }
 }
 
 let migrating = false;
@@ -662,16 +673,19 @@ const routes = {
     focusReq = { name, at: Date.now() };
     return name;
   },
-  'btw/ask': b => {
+  'btw/ask': async b => {
     const question = str(b.question, 4000);
     if (!question) throw new Error('질문을 적어 주세요');
-    if (btwRunning >= 3) throw new Error('곁가지 질문은 동시에 3개까지 됩니다. 앞의 답을 기다려 주세요');
-    const live = liveSessions().find(x => x.sessionId === b.sid);
-    if (!live) throw new Error('열려 있는 세션에만 물을 수 있습니다');
+    const s = snapshot.sessions.find(x => x.sid === b.sid && x.host === 'web');
+    if (!s) throw new Error('btw는 웹에서 띄운 세션에서만 쓸 수 있습니다(Claude Code 화면을 읽어야 해서)');
+    if (btwBusy.has(s.tmux)) throw new Error('앞의 btw 답을 받는 중입니다');
+    if (s.state === 'approval') throw new Error('실행 허락을 기다리는 중에는 물을 수 없습니다');
+    if (await rewindScreen(s.tmux)) throw new Error('Claude 쪽에 되감기 창이 열려 있습니다');
+    if (await inputBox(s.tmux)) throw new Error('Claude 입력칸에 글이 남아 있어 물을 수 없습니다');
     const list = db.btw[b.sid] = (db.btw[b.sid] || []).slice(-19);
     const item = { id: crypto.randomBytes(4).toString('hex'), q: question, a: '', state: 'asking', at: Date.now() };
     list.push(item);
-    askBtw(b.sid, live.cwd, item);
+    askBtw(s.tmux, item);
   },
   'btw/clear': b => { delete db.btw[b.sid]; },
   // 세션 메모: 내가 적거나, 내가 시킬 때 Claude가 적는다(skills/hq-memo). 대화 ID에 붙어 있어 닫았다 다시 열어도 남는다
@@ -761,6 +775,8 @@ const routes = {
     const text = list.length === 1 && list[0].text;
     const where = handles.get(+b.pid) || {};
     if (!where.tmux && !where.orca) throw new Error('이 세션에는 입력을 넣을 수 없습니다');
+    // btw 답 상자가 떠 있으면 친 글자가 상자의 키(c·f·x)가 된다
+    if (where.tmux && btwBusy.has(where.tmux)) throw new Error('btw 답을 받는 중입니다. 잠깐 뒤에 보내세요');
     // 되감기 창이 떠 있으면 친 글과 Enter가 그 창의 항목을 고른다(되감기가 실행될 수 있다)
     if (where.tmux && await rewindScreen(where.tmux)) throw new Error('Claude 쪽에 되감기 창이 열려 있습니다. 되감기를 마치거나 취소한 뒤 보내세요');
     // 친 글은 친 것처럼 넣고(줄바꿈은 Ctrl-J), 이미지 경로와 붙여넣은 긴 글만 붙여넣기로 넣는다(터미널에서 붙여넣은 것과 똑같이).

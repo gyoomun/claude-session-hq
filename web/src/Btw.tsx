@@ -1,4 +1,4 @@
-// btw: 메인 작업을 시켜 둔 채 같은 맥락으로 궁금한 것을 묻는다. 원래 대화에는 남지 않는다
+// btw: Claude Code의 /btw로 묻는다(서버가 그 세션에 쳐 넣고 답 상자를 읽는다). 하던 일을 끊지 않고, 원래 대화에는 남지 않는다
 import { useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -22,7 +22,7 @@ export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
   }
   return <>
     <Group justify="space-between" p="6px 10px" gap={4} wrap="nowrap">
-      <Text size="xs" c="dimmed">이 세션의 맥락으로 답하고, 원래 대화에는 남지 않습니다</Text>
+      <Text size="xs" c="dimmed">{s.host === 'web' || !s.sid ? 'Claude Code의 /btw로 묻습니다. 하던 일을 끊지 않고, 원래 대화에는 남지 않습니다' : '웹에서 띄운 세션에서만 쓸 수 있습니다'}</Text>
       {list.length > 0 && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('btw/clear', { sid: s.sid })}>비우기</Button>}
     </Group>
     <ScrollArea viewportRef={view} style={{ flex: 1 }}>
