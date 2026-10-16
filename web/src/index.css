@@ -214,7 +214,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-side-grip { position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; cursor: col-resize; z-index: 200; touch-action: none; }
 .hq-side-grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background-color .12s ease; }
 .hq-side-grip:hover::after, .hq-shell.dragging .hq-side-grip::after { background: var(--mantine-color-indigo-5); }
-.hq-sidebar { height: 100dvh; overflow-y: auto; padding: var(--mantine-spacing-md) 8px; border-right: 1px solid var(--mantine-color-default-border); }
+.hq-sidebar { height: 100dvh; overflow-y: auto; overflow-x: hidden; padding: var(--mantine-spacing-md) 8px; border-right: 1px solid var(--mantine-color-default-border); }
 /* 본문 아래 줄: 일정(왼쪽)·메일. 메인 내용과 위의 줄로 나누고, 평소엔 테두리 없는 칸(눈에 덜 띄게). 카드가 없어도 높이는 둔다 */
 .hq-sub { height: 100%; padding: 6px var(--mantine-spacing-md) var(--mantine-spacing-md) var(--mantine-spacing-xl); }
 .hq-mail { height: 100%; display: flex; flex-direction: column; }
