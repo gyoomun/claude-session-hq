@@ -205,3 +205,5 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-rowcopy:hover { opacity: 1; background: var(--mantine-color-default-hover); color: var(--mantine-color-text); }
 .hq-rowcopy.done { opacity: 1; color: var(--mantine-color-teal-4); }
 [data-area]:focus { outline: none; }
+/* 일하던 중 Esc로 멈춘 자리(터미널의 'Interrupted'): 내 말풍선이 아니라 흐린 한 줄 */
+.hq-notice { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--mantine-color-dimmed); border-left: 2px solid var(--mantine-color-orange-7); padding-left: 8px; }

@@ -366,6 +366,9 @@ function toolInput(name, i = {}) {
 }
 // 붙여넣은 긴 글은 Claude Code가 <pasted_content id="…">로 감싼다. 시스템 문구(<로 시작)인지는 태그를 벗기고 본다. 태그는 남겨 화면이 붙여넣은 칸으로 그린다
 const unwrapPaste = t => t.replace(/<\/?pasted_content(?: id="[^"]*")?>/g, '').trim();
+// 일하던 중에 Esc로 멈추면 Claude Code가 내 말 자리에 남기는 표시. 내 말풍선이 아니라 흐린 안내 줄(notice)로 보인다(터미널의 'Interrupted')
+const INTERRUPT = /^\[Request interrupted by user( for tool use)?\]$/;
+const interruptNote = m => m[1] ? '도구 실행 중 중단함' : '여기서 중단함';
 function chatItems(entries) {
   const out = [];
   for (const d of entries) {
@@ -376,12 +379,15 @@ function chatItems(entries) {
       if (typeof c === 'string') {
         const u = unwrapPaste(c);
         const cmd = c.match(/<command-name>([^<]*)<\/command-name>(?:[\s\S]*<command-args>([^<]*)<\/command-args>)?/);
+        const stop = u.match(INTERRUPT);
         if (cmd) out.push({ id, at, t: 'user', text: (cmd[1] + ' ' + (cmd[2] || '')).trim() });
+        else if (stop) out.push({ id, at, t: 'notice', text: interruptNote(stop) });
         else if (u && !u.startsWith('<')) out.push({ id, at, t: 'user', text: c.trim() });
         continue;
       }
       // 한 메시지의 글과 이미지는 말풍선 하나로. 이미지는 글 속 [Image #N]이 자리를 표시하므로, 글이 없을 때만 따로 적는다
-      const texts = (c || []).filter(x => x.type === 'text' && (u => u && !u.startsWith('<'))(unwrapPaste(x.text))).map(x => x.text.trim());
+      for (const x of c || []) { const stop = x.type === 'text' && x.text.trim().match(INTERRUPT); if (stop) out.push({ id: id + ':stop', at, t: 'notice', text: interruptNote(stop) }); }
+      const texts = (c || []).filter(x => x.type === 'text' && !INTERRUPT.test(x.text.trim()) && (u => u && !u.startsWith('<'))(unwrapPaste(x.text))).map(x => x.text.trim());
       const imgs = (c || []).filter(x => x.type === 'image').length;
       if (texts.length || imgs) out.push({ id, at, t: 'user', text: texts.join('\n') || `[이미지 ${imgs}장]` });
       for (const [k, x] of (c || []).entries()) {
@@ -402,7 +408,7 @@ function chatItems(entries) {
 // 되감기(rewind)나 '답 전에 Esc → 고쳐서 다시 보내기'를 하면 버린 말도 파일에 남고, 새 말은 그 앞 지점(parentUuid)에 이어 붙는다.
 // 그래서 내가 친 말의 부모가 그보다 앞서 친 말보다 앞에 있으면, 그 사이(버린 갈래)는 보이지 않는다.
 // parentUuid 사슬 전체를 따라가면 안 된다: 병렬 도구 결과 등 사슬 밖에 있는 정상 항목이 많다
-const typed = d => d.type === 'user' && !d.isMeta && !d.isCompactSummary && !d.isSidechain &&
+const typed = d => d.type === 'user' && !d.isMeta && !d.isCompactSummary && !d.isSidechain && !INTERRUPT.test(textOf(d.message?.content).trim()) &&
   (typeof d.message?.content === 'string' || !(d.message?.content || []).some(x => x.type === 'tool_result'));
 function dropRewound(entries) {
   const at = new Map(entries.map((d, i) => [d.uuid, i]));

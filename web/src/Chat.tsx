@@ -9,9 +9,10 @@ import { pickNew } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
 import { RewindPanel } from './Rewind'
+import { IconPlayerStopFilled } from '@tabler/icons-react'
 import { KeyRec } from './Keys'
 
-interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'result'; text: string; name?: string; toolId?: string; error?: boolean }
+interface Item { id: string; at: number; t: 'user' | 'assistant' | 'tool' | 'result' | 'notice'; text: string; name?: string; toolId?: string; error?: boolean }
 
 // 링크는 새 탭에서 연다(이 화면을 떠나지 않게)
 const NewTab = (p: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...p} target="_blank" rel="noopener noreferrer" />
@@ -308,6 +309,7 @@ const Messages = memo(function Messages({ items, detail }: { items: Item[]; deta
     {list.map(it => Array.isArray(it) ? <ToolGroup key={it[0].id} tools={it} results={results} cls={cls(it)} />
       : it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><UserText text={it.text} /></Text></Box>
       : it.t === 'assistant' ? <Box key={it.id} className={'hq-say' + cls(it)}><Md text={it.text} /></Box>
+      : it.t === 'notice' ? <div key={it.id} className={'hq-notice' + cls(it)}><IconPlayerStopFilled size={11} /> {it.text}</div>
       : <Tool key={it.id} it={it} result={results.get(it.toolId)} cls={cls(it)} />)}
   </>
 })
