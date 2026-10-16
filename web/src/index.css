@@ -169,3 +169,12 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-rewind-list { max-height: 40vh; overflow-y: auto; }
 .hq-rewind-row { padding: 4px 8px; border-radius: 6px; cursor: pointer; }
 .hq-rewind-row.on { background: var(--mantine-color-indigo-light); }
+/* 알림을 양옆 가운데에 둘 때: 위쪽 자리를 세로 가운데로 내린다 */
+:root[data-toast="left-center"] .mantine-Notifications-root[data-position="top-left"],
+:root[data-toast="right-center"] .mantine-Notifications-root[data-position="top-right"] { top: 50% !important; transform: translateY(-50%); }
+/* 환경설정의 알림 자리 고르기: 화면 그림 위 여덟 점 */
+.hq-toastpick { position: relative; width: 168px; height: 104px; border: 1.5px solid var(--mantine-color-default-border); border-radius: 8px; background: var(--mantine-color-default); }
+.hq-toastpick::before { content: ''; position: absolute; left: 8px; right: 8px; top: 7px; height: 6px; border-radius: 3px; background: var(--mantine-color-default-border); opacity: .6; }
+.hq-toastpick button { position: absolute; width: 26px; height: 12px; margin: -6px 0 0 -13px; border-radius: 4px; border: 1px dashed var(--mantine-color-dimmed); background: transparent; cursor: pointer; transition: background-color .12s ease, border-color .12s ease; padding: 0; }
+.hq-toastpick button:hover { border-style: solid; border-color: var(--mantine-color-indigo-4); background: color-mix(in srgb, var(--mantine-color-indigo-6) 25%, transparent); }
+.hq-toastpick button.on { border: 0; background: var(--mantine-color-indigo-5); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mantine-color-indigo-5) 35%, transparent); }

@@ -6,20 +6,21 @@ import { createPortal } from 'react-dom'
 import { Box, Button, CloseButton, Group, SegmentedControl, Stack, Switch, Text, TextInput, UnstyledButton } from '@mantine/core'
 import { IconAccessPoint, IconLayoutColumns, IconLayoutList, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { api, toast } from './store'
-import { resetLayout, setDetail, setMotion, setUI, setView, useUI } from './ui'
+import { TOAST_POS, type ToastPos, resetLayout, setDetail, setMotion, setToast, setUI, setView, useUI } from './ui'
 import type { Snapshot } from './types'
 import { AccessPanel } from './Modals'
 
-interface Draft { view: 'chat' | 'term'; detail: boolean; motion: 'system' | 'on' }
+interface Draft { view: 'chat' | 'term'; detail: boolean; motion: 'system' | 'on'; toast: ToastPos }
 // 분류와 그 안의 항목 글(검색에 쓴다)
 const PAGES = [
-  { id: 'view', name: '화면', icon: IconPalette, words: '웹 세션 화면 대화 터미널 작업 과정 자세히 도구 움직임 애니메이션 동작 줄이기' },
+  { id: 'view', name: '화면', icon: IconPalette, words: '웹 세션 화면 대화 터미널 작업 과정 자세히 도구 움직임 애니메이션 동작 줄이기 알림 토스트 위치 자리' },
   { id: 'layout', name: '배치', icon: IconLayoutColumns, words: '칸 높이 너비 핀 메모 btw 세션 목록 즐겨찾기 대화 경계 되돌리기 기본값' },
   { id: 'session', name: '세션', icon: IconRefresh, words: '모두 재시작 웹 세션 CLAUDE.md zshrc' },
   { id: 'access', name: '접속', icon: IconAccessPoint, words: '사내망 접속 인증 메일 로그인 기기 끊기 로그아웃' },
 ] as const
 
 const Query = createContext('')
+const GAP = 24 // 목차로 옮겼을 때 분류 제목 위 여백(px)
 const hit = (q: string, text: string) => !q || text.toLowerCase().includes(q.toLowerCase())
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -35,6 +36,21 @@ function Row({ label, help, changed, children }: { label: string; help?: string;
     <Stack gap={0} style={{ minWidth: 0 }}><Text size="sm">{label}</Text>{help && <Text size="xs" c="dimmed">{help}</Text>}</Stack>
     <Box style={{ flex: 'none' }}>{children}</Box>
   </Box>
+}
+
+// 알림 자리: 화면을 그린 네모 위 여덟 점(네 꼭짓점, 네 변의 가운데) 중 하나를 누른다
+const SPOT: Record<ToastPos, [number, number, string]> = {
+  'top-left': [16, 22, '왼쪽 위'], 'top-center': [50, 22, '위 가운데'], 'top-right': [84, 22, '오른쪽 위'], 'right-center': [84, 56, '오른쪽 가운데'],
+  'bottom-right': [84, 88, '오른쪽 아래'], 'bottom-center': [50, 88, '아래 가운데'], 'bottom-left': [16, 88, '왼쪽 아래'], 'left-center': [16, 56, '왼쪽 가운데'],
+}
+function ToastPicker({ value, onChange }: { value: ToastPos; onChange: (v: ToastPos) => void }) {
+  return <Group gap="sm" wrap="nowrap">
+    <Text size="xs" c="dimmed" w={70} ta="right">{SPOT[value][2]}</Text>
+    <Box className="hq-toastpick" role="radiogroup" aria-label="알림 자리">
+      {TOAST_POS.map(p => <button key={p} type="button" role="radio" aria-checked={p === value} aria-label={SPOT[p][2]} title={SPOT[p][2]}
+        className={p === value ? 'on' : undefined} style={{ left: `${SPOT[p][0]}%`, top: `${SPOT[p][1]}%` }} onClick={() => onChange(p)} />)}
+    </Box>
+  </Group>
 }
 
 function RestartAll({ S }: { S: Snapshot }) {
@@ -56,6 +72,11 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
       </Row>
       <Row label="작업 과정 자세히" help="도구 사용을 한 줄로 접지 않고 하나하나 봅니다" changed={d.detail !== ui.detail}>
         <Switch checked={d.detail} onChange={e => set({ detail: e.currentTarget.checked })} aria-label="작업 과정 자세히" />
+      </Row>
+    </Section>
+    <Section title="알림">
+      <Row label="알림 자리" help="'세션을 다시 띄웁니다' 같은 알림이 뜨는 곳. 적용하면 고른 자리에 보기 알림이 뜹니다" changed={d.toast !== ui.toast}>
+        <ToastPicker value={d.toast} onChange={v => set({ toast: v })} />
       </Row>
     </Section>
     <Section title="움직임">
@@ -80,7 +101,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
 
 export function SettingsWindow({ S }: { S: Snapshot }) {
   const ui = useUI()
-  const cur: Draft = { view: ui.view, detail: ui.detail, motion: ui.motion }
+  const cur: Draft = { view: ui.view, detail: ui.detail, motion: ui.motion, toast: ui.toast }
   const [d, setD] = useState<Draft>(cur)
   const [q, setQ] = useState('')
   const [pos, setPos] = useState({ x: 0, y: 0 })
@@ -93,11 +114,12 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
     setPos({ x: Math.round((innerWidth - w) / 2), y: Math.round((innerHeight - h) / 2) })
   }, [ui.settings])
   const close = () => setUI({ settings: false, settingsPage: 'all' }) // 다음엔 '전체'(맨 위)에서 연다
-  const changed = d.view !== ui.view || d.detail !== ui.detail || d.motion !== ui.motion
+  const changed = d.view !== ui.view || d.detail !== ui.detail || d.motion !== ui.motion || d.toast !== ui.toast
   const apply = () => {
     if (d.view !== ui.view) setView(d.view)
     if (d.detail !== ui.detail) setDetail(d.detail)
     if (d.motion !== ui.motion) setMotion(d.motion)
+    if (d.toast !== ui.toast) { setToast(d.toast); setTimeout(() => toast('알림은 이제 여기에 뜹니다.'), 50) }
   }
   useEffect(() => {
     if (!ui.settings) return
@@ -116,22 +138,25 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
   // 목차: 누르면 그 분류로 스크롤, 스크롤하면 지금 보이는 분류에 불이 들어온다('전체'는 맨 위일 때)
   const scroller = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState('all')
+  const pinned = useRef(0) // 목차를 누른 직후(부드러운 스크롤 중)에는 누른 것에 불을 둔다. 첫 분류는 '전체'와 같은 자리라서
   const go = (id: string, smooth = true) => {
     const box = scroller.current, el = box?.querySelector<HTMLElement>(`[data-page="${id}"]`)
     if (!box) return
+    setActive(id); pinned.current = Date.now() + 700
     const crumb = box.querySelector<HTMLElement>('.hq-set-crumb')?.offsetHeight || 0 // 위에 붙은 경로 줄 밑으로
-    box.scrollTo({ top: id === 'all' || !el ? 0 : el.offsetTop - box.offsetTop - crumb, behavior: smooth ? 'smooth' : 'auto' })
+    // 제목 위에 여백을 둔다(GAP). 첫 분류는 그래서 맨 위(0)와 같아져 '전체'와 '화면'을 오가도 움찔하지 않는다
+    box.scrollTo({ top: id === 'all' || !el ? 0 : Math.max(0, el.offsetTop - box.offsetTop - crumb - GAP), behavior: smooth ? 'smooth' : 'auto' })
   }
   const spy = () => {
     const box = scroller.current
-    if (!box) return
+    if (!box || Date.now() < pinned.current) return
     if (box.scrollTop < 8) { setActive('all'); return }
-    const top = box.getBoundingClientRect().top + (box.querySelector<HTMLElement>('.hq-set-crumb')?.offsetHeight || 0) + 8
+    const top = box.getBoundingClientRect().top + (box.querySelector<HTMLElement>('.hq-set-crumb')?.offsetHeight || 0) + GAP + 8
     const el = [...box.querySelectorAll<HTMLElement>('[data-page]')].filter(x => x.getBoundingClientRect().top <= top).pop()
     setActive(el?.dataset.page || 'all')
   }
   // 열 때 고른 분류(예: 머리의 '사내망 접속 꺼짐' → 접속)가 있으면 그 자리에서 시작한다
-  useLayoutEffect(() => { if (ui.settings) { go(ui.settingsPage, false); spy() } }, [ui.settings])
+  useLayoutEffect(() => { if (ui.settings) go(ui.settingsPage, false) }, [ui.settings])
   if (!ui.settings) return null
   const pages = PAGES.filter(p => hit(q, p.name + ' ' + p.words))
   const nav = [{ id: 'all', name: '전체', icon: IconLayoutList }, ...pages]
