@@ -69,8 +69,8 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         {s.sid ? <Title s={s} /> : <Text component="div" fw={600} size="lg"><Skeleton h="0.9em" w="38%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>}
         {/* 한 줄로 고정: 실행 중인 명령(act)이 길어도 머리가 두꺼워지지 않게 끝을 줄이고, 마우스를 올리면 전체가 보인다 */}
         <Text size="xs" c="dimmed" truncate title={s.act || undefined}>{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
-          {/* 세션 이름: 상태줄에 보이고 다른 Claude가 이 세션을 부르는 이름. 제목과 다를 때만(이름을 안 바꾼 세션) 보이고 누르면 복사한다 */}
-          {s.sid && s.name && s.name !== s.title && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyText(s.name)) toast(`세션 이름 ${s.name}을 복사했습니다.`) }}> · @{s.name}</UnstyledButton>}
+          {/* 세션 이름: 상태줄에 보이고 다른 Claude가 이 세션을 부르는 이름. 제목과 같아도 늘 보이고 누르면 복사한다(같은 자리에서 늘 복사하게) */}
+          {s.sid && s.name && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyText(s.name)) toast(`세션 이름 ${s.name}을 복사했습니다.`) }}> · @{s.name}</UnstyledButton>}
           {s.act && <Text span ff="monospace" c="teal.5"> · {s.act}</Text>}</Text>
       </Stack>
       <Group gap={6}>
