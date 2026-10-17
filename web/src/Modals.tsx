@@ -12,7 +12,8 @@ export function NewSessionModal({ S }: { S: Snapshot }) {
   const [cwd, setCwd] = useState(lastCwd())
   const [task, setTask] = useState('')
   const [busy, setBusy] = useState(false)
-  useEffect(() => { if (ui.newFor !== null) setTask(ui.newFor) }, [ui.newFor])
+  // 폴더 기본값: 보고 있던 세션의 폴더, 없으면 마지막에 쓴 폴더
+  useEffect(() => { if (ui.newFor !== null) { setTask(ui.newFor); setCwd(S.sessions.find(x => x.sid === ui.sel)?.cwd || lastCwd()) } }, [ui.newFor])
   // 폴더 후보: 지금 세션들이 쓰는 폴더 + Orca 워크스페이스. 목록에 없는 폴더도 직접 적을 수 있다
   const dirs = [...new Set([...S.sessions.map(s => s.cwd), ...S.worktrees.map(w => w.path.replace(/^\/Users\/[^/]+/, '~'))])].sort()
   const close = () => setUI({ newFor: null })
