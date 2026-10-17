@@ -5,6 +5,7 @@ import { api, toast } from './store'
 import { lastCwd, pickNew, rememberCwd, setMode, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
 import { COLOR, Since, bySt, fmt, lastOf, overdue, stale, tname, waiting } from './util'
+import { favSids } from './Work'
 
 export function NewSessionModal({ S }: { S: Snapshot }) {
   const ui = useUI()
@@ -20,7 +21,8 @@ export function NewSessionModal({ S }: { S: Snapshot }) {
       e.preventDefault()
       if (!cwd.trim()) { toast('폴더를 적거나 골라 주세요.', 'red'); return }
       setBusy(true)
-      const r = await api<string>('session/new', { cwd: cwd.trim(), task })
+      // 즐겨찾기의 세션을 보다가 열면 새 세션도 즐겨찾기(그 세션 바로 밑)에 들어간다
+      const r = await api<string>('session/new', { cwd: cwd.trim(), task, favOf: favSids(S).includes(ui.sel) ? ui.sel : '' })
       setBusy(false)
       if (r) { rememberCwd(cwd.trim()); close(); pickNew(r.result, { task, cwd: cwd.trim().replace(/\/+$/, '').replace(/^\/Users\/[^/]+/, '~') }) }
     }}>

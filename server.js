@@ -301,6 +301,8 @@ function scan() {
       const w = db.web.find(x => x.name === where.tmux);
       if (w && w.sid !== s.sessionId) { w.sid = s.sessionId; dirty = true; }
       if (w?.forkOf && s.sessionId !== w.forkOf && !db.forks[s.sessionId]) { db.forks[s.sessionId] = w.forkOf; favBelow(s.sessionId, w.forkOf); dirty = true; }
+      // 즐겨찾기의 세션을 보다가 연 새 세션은 그 세션 바로 밑에 넣는다(한 번만. 사용자가 나중에 빼면 다시 넣지 않는다)
+      if (w?.favOf && w.sid) { favBelow(w.sid, w.favOf); delete w.favOf; dirty = true; }
     }
     if (!(s.sessionId in db.seen)) {
       const at = s.statusUpdatedAt || s.startedAt || now;
@@ -892,7 +894,8 @@ const routes = {
     const extra = [...(fork ? ['--resume', fork, '--fork-session'] : []), ...(label ? ['--name', label] : []), ...(prompt ? [prompt] : [])];
     const name = newName();
     await startTmux(name, cwd, [...db.claudeArgs, ...extra]);
-    db.web.push({ name, cwd, args: db.claudeArgs, sid: '', createdAt: Date.now(), ...(fork ? { forkOf: fork } : {}) });
+    const favOf = /^[0-9a-f-]{36}$/.test(String(b.favOf)) ? String(b.favOf) : '';
+    db.web.push({ name, cwd, args: db.claudeArgs, sid: '', createdAt: Date.now(), ...(fork ? { forkOf: fork } : {}), ...(favOf ? { favOf } : {}) });
     // 포크본은 원본과 같은 업무에 넣는다(목록에서 원본 바로 밑에 붙으려면 같은 묶음이어야 한다)
     const assignTo = b.task || (fork && db.assign[fork]);
     if (assignTo) pendingAssign.set(name, assignTo);

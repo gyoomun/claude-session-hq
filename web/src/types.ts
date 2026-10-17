@@ -68,7 +68,7 @@ export interface Snapshot {
   rooms: Record<string, Rect> // 가상 사무실의 방 자리·크기(칸 단위). 키는 업무 id 또는 'lobby'
   btw: Record<string, BtwItem[]> // 세션별 곁가지 질문
   memos: Record<string, { title: string; text: string; at: number }> // 세션(대화 ID)별 메모(글 하나)
-  closed: Closed[] // 최근 닫힌 세션(웹에서 다시 열 수 있음)
+  closed: Closed[] // 닫힌 세션(웹에서 다시 열 수 있음)
   migrating: boolean // Orca 세션을 웹으로 옮기는 중
   build: number // 서버가 내주는 화면의 빌드 시각
 }

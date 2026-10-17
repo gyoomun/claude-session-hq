@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Paper, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast, useNow } from './store'
 import { pick, setUI, setView, useUI } from './ui'
-import type { Session, Snapshot } from './types'
+import type { Closed, Session, Snapshot } from './types'
 import { COLOR, D, LABEL, Since, bySt, hhmm, cssColor, sessOf, withForks } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
@@ -131,29 +131,31 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
   </Paper>
 }
 
-// 닫힌 세션: 대화는 남아 있으니 웹에서 같은 옵션으로 다시 연다
-function ClosedList({ S }: { S: Snapshot }) {
-  const [open, setOpen] = useState(false)
-  if (!S.closed.length) return null
+// 닫힌 세션 탭: 대화는 남아 있으니 누르면 바로 웹에서 같은 옵션으로 다시 연다.
+// 다시 연 줄은 이 탭에 그대로 두고 표시만 바꾼다(여러 개를 이어서 열 때 줄이 사라지거나 탭이 바뀌면 번거로워서: 사용자 요청). 탭을 떠나면 held를 비워 빠진다
+function ClosedList({ S, held, onOpen }: { S: Snapshot; held: Closed[]; onOpen: (c: Closed) => void }) {
+  const live = new Set(S.sessions.map(x => x.sid))
+  const list = [...S.closed, ...held.filter(h => !S.closed.some(c => c.sid === h.sid))].sort((a, b) => b.closedAt - a.closedAt)
+  if (!list.length) return <Text size="xs" c="dimmed" px={8}>닫힌 세션 없음</Text>
   return <Stack gap={2}>
-    <UnstyledButton px={8} onClick={() => setOpen(o => !o)}>
-      <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{open ? '▾' : '▸'} 닫힌 세션</Text><Text size="xs" c="dimmed">{S.closed.length}</Text></Group>
-    </UnstyledButton>
-    {open && <>
-      {S.closed.map(c => <Group key={c.sid} gap={6} wrap="nowrap" px={8} py={4} align="flex-start">
-        <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
-          <Text size="sm" className="hq-wrap" lh={1.35} c="dimmed">{c.title}</Text>
+    {list.map(c => {
+      const isHeld = held.some(h => h.sid === c.sid), isLive = live.has(c.sid)
+      return <UnstyledButton key={c.sid} p="7px 8px" w="100%" className="hq-item" style={{ borderRadius: 8 }}
+        title={isHeld ? (isLive ? '눌러서 보기' : '여는 중') : '눌러서 다시 열기'}
+        onClick={() => isHeld ? isLive && pick(c.sid) : onOpen(c)}>
+        <Stack gap={0} style={{ minWidth: 0 }}>
+          <Text size="sm" fw={isHeld ? 600 : undefined} className="hq-wrap" lh={1.35} c={isHeld ? undefined : 'dimmed'}>{c.title}</Text>
           <Text size="xs" c="dimmed" truncate title={c.cwd}>{c.cwd}</Text>
           {/* 하루가 지나면 '며칠 전' 대신 닫은 날짜·시각 */}
-          <Text size="xs" c="dimmed">{Date.now() - c.closedAt < D ? <Since t={c.closedAt} suf=" 전" /> : `${new Date(c.closedAt).getMonth() + 1}. ${new Date(c.closedAt).getDate()}. ${hhmm(c.closedAt)}`}</Text>
+          <Text size="xs" c="dimmed">{isHeld ? <Text span c={isLive ? `${COLOR.myturn}.5` : 'dimmed'} fw={600}>{isLive ? '다시 열림 · 누르면 보기' : '여는 중…'}</Text>
+            : Date.now() - c.closedAt < D ? <Since t={c.closedAt} suf=" 전" /> : `${new Date(c.closedAt).getMonth() + 1}. ${new Date(c.closedAt).getDate()}. ${hhmm(c.closedAt)}`}</Text>
         </Stack>
-        <Button size="compact-xs" variant="light" onClick={async () => { if (await api('session/reopen', { sid: c.sid })) toast('웹에서 다시 열었습니다.') }}>다시 열기</Button>
-      </Group>)}
-      <Group gap={6} px={8}>
-        <Button size="compact-xs" variant="subtle" onClick={async () => { const r = await api<string[]>('session/reopen', { sids: S.closed.map(c => c.sid) }); if (r) toast(`${r.result.length}개를 다시 열었습니다.`) }}>모두 다시 열기</Button>
-        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('session/forget-closed', {})}>목록 비우기</Button>
-      </Group>
-    </>}
+      </UnstyledButton>
+    })}
+    {S.closed.length > 0 && <Group gap={6} px={8} mt={6}>
+      <Button size="compact-xs" variant="subtle" onClick={async () => { const r = await api<string[]>('session/reopen', { sids: S.closed.map(c => c.sid) }); if (r) toast(`${r.result.length}개를 다시 열었습니다.`) }}>모두 다시 열기</Button>
+      <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('session/forget-closed', {})}>목록 비우기</Button>
+    </Group>}
   </Stack>
 }
 
@@ -351,6 +353,7 @@ export function WorkView({ S }: { S: Snapshot }) {
     addEventListener('keydown', on, true)
     return () => removeEventListener('keydown', on, true)
   }, [])
+  const [listTab, setListTab] = useState<'open' | 'closed'>('open'), [held, setHeld] = useState<Closed[]>([])
   const [unfav, setUnfav] = useState(false) // 즐겨찾기를 목록 위로 끌고 왔을 때
   // 목록 | 즐겨찾기 | 나머지(머리·대화·핀) 사이 경계를 끌어 너비를 바꾼다. 바꾼 비율은 이 브라우저에 남는다(핀·메모·btw 높이와 같은 방식)
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-work' })
@@ -367,9 +370,14 @@ export function WorkView({ S }: { S: Snapshot }) {
         e.preventDefault()
         api('favs', { mode: S.favs.mode, items: S.favs.items.filter(x => x.sid !== sid) })
       }}>
-      <Group justify="space-between" px={4} gap={4} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">세션 목록</Text><KeyRec area="list" /></Group>
+      <Group justify="space-between" px={4} gap={4} wrap="nowrap">
+        <SegmentedControl size="xs" value={listTab} onChange={v => { setListTab(v as 'open' | 'closed'); setHeld([]) }}
+          data={[{ value: 'open', label: '세션 목록' }, { value: 'closed', label: `닫힌 세션 ${S.closed.length}` }]} />
+        <KeyRec area="list" />
+      </Group>
       <ScrollArea style={{ flex: 1 }}>
-        <Stack gap="md" p={4}>
+        {listTab === 'closed' ? <Box p={4}><ClosedList S={S} held={held} onOpen={async c => { setHeld(h => [...h, c]); if (!await api('session/reopen', { sid: c.sid })) setHeld(h => h.filter(x => x.sid !== c.sid)) }} /></Box>
+        : <Stack gap="md" p={4}>
           {groups.map(g => <Stack key={g.id || 'none'} gap={2}>
             <UnstyledButton px={8} onClick={g.id ? () => setUI({ openTask: g.id }) : undefined} style={{ cursor: g.id ? 'pointer' : 'default' }}>
               <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{g.name}</Text><Text size="xs" c="dimmed">{g.ss.length}</Text></Group>
@@ -379,8 +387,7 @@ export function WorkView({ S }: { S: Snapshot }) {
             {g.favs.map(x => <FavGhost key={x.pid} s={x} on={x.sid === ui.sel} />)}
             {!g.ss.length && !g.favs.length && !(ghost && ghost.task === g.id) && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
           </Stack>)}
-          <ClosedList S={S} />
-        </Stack>
+        </Stack>}
       </ScrollArea>
     </Paper>
     </Panel>
