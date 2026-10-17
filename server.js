@@ -36,6 +36,8 @@ const TERM_ENV = {
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
 let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, usageShare: {}, pins: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
+// 세션별 한도 추정은 한도 종류(5시간·주간)마다 따로 둔다. 예전 모양(대화 ID가 바로 키)은 창이 지나면 버려지는 값이라 옮기지 않는다
+db.usageShare = { five_hour: db.usageShare.five_hour || {}, seven_day: db.usageShare.seven_day || {} };
 // 서버가 꺼지면서 끊긴 곁가지 질문은 실패로 표시한다
 for (const list of Object.values(db.btw || {})) for (const it of list) if (it.state === 'asking') { it.state = 'error'; it.a = '서버가 다시 시작돼 답을 받지 못했습니다.'; }
 function save() {
@@ -362,7 +364,8 @@ function scan() {
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, flow, usage: readUsage(), account: readAccount(), usageShare: db.usageShare, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  checkLogin();
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, flow, usage: readUsage(), account: readAccount(), login: !!login, usageShare: db.usageShare, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -656,7 +659,7 @@ function readUsage() {
   return usage;
 }
 
-/* 세션별 5시간 한도 추정: 한도 창 안에서 세션이 쓴 가중 토큰 ÷ 이 맥 전체 가중 토큰 × 지금 한도 %. 무게는 API 가격 비율. 한도가 실제로 어떻게 세는지는 공개돼 있지 않아 추정이다.
+/* 세션별 한도 추정(5시간·주간): 한도 창 안에서 세션이 쓴 가중 토큰 ÷ 이 맥 전체 가중 토큰 × 지금 한도 %. 무게는 API 가격 비율. 한도가 실제로 어떻게 세는지는 공개돼 있지 않아 추정이다.
    하위 에이전트 기록(<대화ID>/subagents/)은 원래 세션 몫으로 합친다. 전체 합산은 파일을 다 읽어 몇 초 걸려서 1분 캐시한다 */
 const WEIGHT = { input_tokens: 1, cache_creation_input_tokens: 1.25, cache_read_input_tokens: 0.1, output_tokens: 5 };
 let windowCache = null; // { start, at, bySid: Map }
@@ -700,6 +703,35 @@ function readAccount() {
     }
   } catch {}
   return account;
+}
+
+/* 계정 바꾸기: 계정 줄을 누르면 tmux 'login'(HQ 목록에 넣지 않는다)에서 claude /login을 화면 없이 띄운다. 사용자는 저절로 열리는 브라우저에서 로그인만 한다.
+   ~/.claude/board/login 에서 띄우면 폴더 신뢰 확인이 나오지 않는다(확인함). 로그인 방식 메뉴(1번 구독이 기본)는 Enter를 대신 누르고,
+   'Login successful'이 보이거나 이메일이 바뀌면 끝: tmux를 끄고 기본 브라우저의 로그인 완료 탭을 닫는다. 10분이 지나면 그만둔다.
+   이미 떠 있던 세션도 새 계정 토큰을 쓴다(확인함) */
+const LOGIN_TMUX = 'login', LOGIN_DIR = path.join(BOARD_DIR, 'login');
+const LOGIN_TAB = 'https://platform.claude.com/oauth/code/success';
+let login = null; // { from: 시작할 때 이메일, at, entered: 방식 메뉴에서 Enter를 눌렀는지 }
+async function closeLoginTab() {
+  // 기본 브라우저(https를 여는 앱)의 번들 ID로 부른다. Safari·Chrome·Brave·Edge·Arc는 같은 문법이고, AppleScript가 없는 브라우저(Firefox)는 닫지 못한다
+  const ls = path.join(HOME, 'Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist');
+  const id = await run('/usr/bin/plutil', ['-convert', 'json', '-o', '-', ls])
+    .then(out => JSON.parse(out).LSHandlers.find(h => h.LSHandlerURLScheme === 'https')?.LSHandlerRoleAll).catch(() => '') || 'com.apple.safari';
+  await run('/usr/bin/osascript', ['-e', `tell application id ${JSON.stringify(id)} to close (every tab of every window whose URL starts with ${JSON.stringify(LOGIN_TAB)})`]).catch(() => {});
+}
+async function checkLogin() {
+  if (!login) return;
+  const screen = await tmux(['capture-pane', '-p', '-t', LOGIN_TMUX]).catch(() => null);
+  if (screen === null) { login = null; return; } // 끝났거나 누가 껐다
+  const done = screen.includes('Login successful') || (readAccount()?.email ?? '') !== login.from;
+  if (done || Date.now() - login.at > 10 * 60e3) {
+    login = null;
+    await tmux(['kill-session', '-t', LOGIN_TMUX]).catch(() => {});
+    if (done) await closeLoginTab();
+  } else if (!login.entered && screen.includes('Select login method')) {
+    login.entered = true;
+    await tmux(['send-keys', '-t', LOGIN_TMUX, 'Enter']).catch(() => {});
+  }
 }
 
 let migrating = false;
@@ -886,6 +918,13 @@ const routes = {
   'inbox/reload': async () => { await loadInbox(); return inbox.error || ''; },
   'flow/reload': async () => { await loadFlow(); return flow.error || ''; },
   'flow/open': () => run('/usr/bin/open', ['-a', 'flow']),
+  'account/login': async () => {
+    if (login) return; // 이미 로그인 중
+    fs.mkdirSync(LOGIN_DIR, { recursive: true });
+    await tmux(['kill-session', '-t', LOGIN_TMUX]).catch(() => {});
+    await tmux(['new-session', '-d', '-s', LOGIN_TMUX, '-c', LOGIN_DIR, '-x', '120', '-y', '40', SHELL, '-lic', 'exec claude /login']);
+    login = { from: readAccount()?.email ?? '', at: Date.now(), entered: false };
+  },
   // 달 보기: 그 달 칸(앞뒤 주 포함)의 일정. 받아 둔 캘린더를 펼치기만 한다
   'calendar/range': b => {
     const from = +b.from, to = +b.to;
@@ -945,15 +984,16 @@ const routes = {
   },
   // 사용량 칸의 동전: 떠 있는 세션 전체(sids, 하나면 sid)가 이번 5시간 창의 한도를 얼마나 썼는지 추정해서 hq.json에 남긴다
   'session/limit-share': async b => {
-    const five = readUsage()?.limits.find(l => l.kind === 'five_hour');
-    const end = five?.resetsAt && Date.parse(five.resetsAt);
-    if (!end || end < Date.now()) throw new Error('지금 5시간 한도 값을 모릅니다(아무 세션에서 한 번 더 답을 받은 뒤 다시 누르세요)');
-    const start = end - 5 * 3600e3, bySid = await windowTokens(start);
+    const kind = b.kind === 'seven_day' ? 'seven_day' : 'five_hour', name = kind === 'seven_day' ? '주간' : '5시간';
+    const lim = readUsage()?.limits.find(l => l.kind === kind);
+    const end = lim?.resetsAt && Date.parse(lim.resetsAt);
+    if (!end || end < Date.now()) throw new Error(`지금 ${name} 한도 값을 모릅니다(아무 세션에서 한 번 더 답을 받은 뒤 다시 누르세요)`);
+    const start = end - (kind === 'seven_day' ? 7 * 24 : 5) * 3600e3, bySid = await windowTokens(start);
     const total = [...bySid.values()].reduce((a, v) => a + v, 0);
     const out = {};
     for (const sid of b.sids || [b.sid]) {
-      const share = total ? Math.round((bySid.get(sid) || 0) / total * five.percentUsed * 10) / 10 : 0;
-      out[sid] = db.usageShare[sid] = { share, windowEnd: end, at: Date.now() };
+      const share = total ? Math.round((bySid.get(sid) || 0) / total * lim.percentUsed * 10) / 10 : 0;
+      out[sid] = db.usageShare[kind][sid] = { share, windowEnd: end, at: Date.now() };
     }
     save(); scanSoon();
     return out;

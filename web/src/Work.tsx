@@ -1,8 +1,8 @@
 // 작업 보기: 왼쪽 세션 목록(업무별로 묶음) | 즐겨찾기 | 고른 세션(머리 + 대화) | 핀·메모·btw
 import { useEffect, useRef, useState } from 'react'
-import { ActionIcon, Badge, Box, Button, HoverCard, Group, Paper, Progress, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
+import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Paper, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast, useNow } from './store'
-import { pick, pickNew, setUI, setView, useUI } from './ui'
+import { pick, setUI, setView, useUI } from './ui'
 import type { Session, Snapshot } from './types'
 import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
 import { AssignSelect } from './parts'
@@ -35,25 +35,25 @@ function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; 
     </Group>
   </UnstyledButton>
 }
-const fiveEnd = (S: Snapshot) => Date.parse(S.usage?.limits.find(l => l.kind === 'five_hour')?.resetsAt || '') || 0
-// 사용량 칸의 동전: 누르면 떠 있는 세션 전체의 5시간 한도 사용량을 한꺼번에 조회한다. 올리면 요약 카드가 뜨고 '더보기'를 누르면 카드가 커져 순위(이번 창 기준)를 보여 준다
-function AllCoin({ S, sids }: { S: Snapshot; sids: string[] }) {
+const limitEnd = (S: Snapshot, kind: string) => Date.parse(S.usage?.limits.find(l => l.kind === kind)?.resetsAt || '') || 0
+// 사용량 칸 세션·주간 줄 끝의 동전: 누르면 떠 있는 세션 전체가 그 한도(5시간·주간)를 얼마나 썼는지 한꺼번에 조회한다. 올리면 요약 카드가 뜨고 '더보기'를 누르면 카드가 커져 순위(이번 창 기준)를 보여 준다
+function AllCoin({ S, sids, kind }: { S: Snapshot; sids: string[]; kind: string }) {
   const [busy, setBusy] = useState(false)
   const [more, setMore] = useState(false)
-  const end = fiveEnd(S)
-  const got = sids.filter(x => S.usageShare?.[x]?.windowEnd === end)
-    .map(x => ({ s: S.sessions.find(y => y.sid === x), share: S.usageShare[x].share })).sort((a, b) => b.share - a.share)
+  const end = limitEnd(S, kind), share = S.usageShare?.[kind] || {}, name = kind === 'seven_day' ? '주간' : '5시간'
+  const got = sids.filter(x => share[x]?.windowEnd === end)
+    .map(x => ({ s: S.sessions.find(y => y.sid === x), share: share[x].share })).sort((a, b) => b.share - a.share)
   const sum = Math.round(got.reduce((a, x) => a + x.share, 0) * 10) / 10
   const done = sids.length > 0 && got.length === sids.length
   return <HoverCard openDelay={0} closeDelay={100} position="bottom-start" withArrow shadow="md" onClose={() => setMore(false)}>
     <HoverCard.Target>
-      <ActionIcon size="sm" variant="subtle" color={done ? 'yellow' : 'gray'} aria-label="세션 한도 사용량 전체 조회" disabled={!sids.length}
-        onClick={async () => { if (busy) return; setBusy(true); await api('session/limit-share', { sids }); setBusy(false) }}>
+      <ActionIcon size="xs" variant="subtle" color={done ? 'yellow' : 'gray'} aria-label={`세션별 ${name} 한도 사용량 전체 조회`} disabled={!sids.length}
+        onClick={async () => { if (busy) return; setBusy(true); await api('session/limit-share', { sids, kind }); setBusy(false) }}>
         <IconCoin size={16} stroke={1.6} />
       </ActionIcon>
     </HoverCard.Target>
     <HoverCard.Dropdown p={8} style={{ width: more ? 340 : 'auto' }}>
-      <Text size="xs">{busy ? '계산 중…' : got.length ? `이번 5시간 창 · ${got.length}/${sids.length}개 조회 · 합계 ${sum}%` : `누르면 세션 ${sids.length}개의 5시간 한도 사용량을 한꺼번에 조회`}</Text>
+      <Text size="xs">{busy ? '계산 중…' : got.length ? `이번 ${name} 창 · ${got.length}/${sids.length}개 조회 · 합계 ${sum}% 사용` : `누르면 세션 ${sids.length}개가 ${name} 한도를 얼마나 썼는지 한꺼번에 조회`}</Text>
       {!!got.length && !more && <Button size="compact-xs" variant="subtle" mt={4} onClick={() => setMore(true)}>더보기</Button>}
       {more && <Stack gap={2} mt={6}>
         {got.map((x, i) => <UnstyledButton key={x.s?.sid ?? i} onClick={() => x.s && pick(x.s.sid)} className="hq-item" p="3px 4px" style={{ borderRadius: 6 }}>
@@ -195,7 +195,7 @@ function FavColumn({ S, sel }: { S: Snapshot; sel: string }) {
   return <Split orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
     <Panel id="favlist" minSize={160}><Favs S={S} sel={sel} /></Panel>
     <Separator className="hq-split" />
-    <Panel id="usage" defaultSize={128} minSize={84}><UsagePanel S={S} /></Panel>
+    <Panel id="usage" defaultSize={110} minSize={84}><UsagePanel S={S} /></Panel>
   </Split>
 }
 
@@ -209,25 +209,26 @@ function UsagePanel({ S }: { S: Snapshot }) {
   useNow()
   const u = S.usage
   const old = u && Date.now() - u.at > 3 * 3600e3 // 오래 응답이 없어 낡은 값
-  return <Paper withBorder p="8px 10px" h="100%" style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
-    <Group justify="space-between" gap={4} wrap="nowrap"><Group gap={4} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">계정</Text><AllCoin S={S} sids={S.sessions.map(x => x.sid)} /></Group>
+  const sids = S.sessions.map(x => x.sid)
+  return <Paper withBorder p="8px 10px" h="100%" style={{ display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
+    <Group justify="space-between" gap={4} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">계정</Text>
       {old && <Text size="xs" c="dimmed" title={new Date(u.at).toLocaleString('ko-KR')}><Since t={u.at} suf=" 전 값" /></Text>}</Group>
-    {S.account && <UnstyledButton className="hq-item" p="2px 4px" m="-2px -4px" style={{ borderRadius: 6 }} title="누르면 새 세션을 열어 /login 합니다. 로그인하면 새로 뜨는 세션부터 그 계정을 씁니다"
-      onClick={async () => { const cwd = '~/01dev/80ai/claude-session-hq', r = await api<string>('session/new', { cwd, prompt: '/login' }); if (r) pickNew(r.result, { cwd, task: '', working: true }) }}>
-      <Group gap={6} wrap="nowrap"><Text size="xs" fw={600} w={30} style={{ flex: 'none' }}>계정</Text><Text size="xs" c="dimmed" lineClamp={1} style={{ flex: 1 }}>{S.account.email}{S.account.plan && <Text span c="dimmed" opacity={.7}> · {S.account.plan}</Text>}</Text></Group>
+    {S.account && <UnstyledButton className="hq-item" p="2px 4px" m="-2px -4px" style={{ borderRadius: 6 }} title="누르면 브라우저가 열립니다. 거기서 로그인하면 끝나고, 이미 떠 있는 세션도 새 계정을 씁니다"
+      onClick={() => api('account/login')}>
+      <Group gap={6} wrap="nowrap"><Text size="xs" fw={600} w={40} style={{ flex: 'none' }}>이메일</Text><Text size="xs" c="dimmed" lineClamp={1} style={{ flex: 1 }}>{S.account.email}</Text>{S.login && <Loader size={12} style={{ flex: 'none' }} />}</Group>
     </UnstyledButton>}
+    {S.account?.plan && <Group gap={6} wrap="nowrap"><Text size="xs" fw={600} w={40} style={{ flex: 'none' }}>요금제</Text><Text size="xs" c="dimmed">{S.account.plan}</Text></Group>}
     {!u?.limits?.length ? <Text size="xs" c="dimmed">세션에서 답을 한 번 받으면 보입니다(hq-usage 플러그인)</Text>
       : u.limits.map(l => {
-        const color = l.percentUsed >= 90 ? 'red' : l.percentUsed >= 70 ? 'yellow' : 'teal'
+        const rest = Math.max(0, 100 - Math.round(l.percentUsed)) // 남은 양
+        const color = rest <= 10 ? 'red' : rest <= 30 ? 'yellow' : 'teal'
         const reset = l.resetsAt ? Date.parse(l.resetsAt) : 0
-        return <Stack key={l.kind} gap={3} style={{ opacity: old ? .55 : 1 }}>
-          <Group gap={6} wrap="nowrap">
-            <Text size="xs" fw={600} w={30} style={{ flex: 'none' }}>{LIMIT[l.kind] || l.kind}</Text>
-            <Progress value={Math.min(100, l.percentUsed)} color={color} size="sm" radius="xl" style={{ flex: 1 }} />
-            <Text size="xs" ff="monospace" c={`${color}.4`} w={36} ta="right" style={{ flex: 'none' }}>{Math.round(l.percentUsed)}%</Text>
-          </Group>
-          {reset > 0 && <Text size="xs" c="dimmed" pl={36} title={new Date(reset).toLocaleString('ko-KR')}>{left(reset - Date.now())} 뒤 초기화</Text>}
-        </Stack>
+        return <Group key={l.kind} gap={6} wrap="nowrap" style={{ opacity: old ? .55 : 1 }}>
+          <Text size="xs" fw={600} w={40} style={{ flex: 'none' }}>{LIMIT[l.kind] || l.kind}</Text>
+          <Text size="xs" ff="monospace" c={`${color}.4`} style={{ flex: 'none' }} title="남은 양">{rest}%</Text>
+          {reset > 0 && <Text size="xs" c="dimmed" lineClamp={1} title={`${new Date(reset).toLocaleString('ko-KR')} 초기화`}>· {left(reset - Date.now())}</Text>}
+          {(l.kind === 'five_hour' || l.kind === 'seven_day') && <AllCoin S={S} sids={sids} kind={l.kind} />}
+        </Group>
       })}
   </Paper>
 }
