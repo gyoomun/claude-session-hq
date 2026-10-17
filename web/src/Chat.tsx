@@ -273,7 +273,7 @@ function Composer({ s, d, history, onSent }: {
   return <Paper p="sm">
     <Stack gap={8}>
       {s.state === 'approval' && question && <Group gap={6} wrap="wrap">
-        <Text size="sm" c="red.4" fw={600}>{question.header ? question.header + ' · ' : ''}{question.question}</Text>
+        <Text size="sm" c="red.4" fw={600}>1. {question.header ? question.header + ' ' : ''}{question.question}</Text>
         {hardQuestion(s)
           ? <Button size="xs" variant="default" onClick={() => setView(s.sid, 'term')}>터미널에서 답하기</Button>
           : question.options.map((o, n) => <Button key={n} size="xs" variant="default" title={o.description} onClick={() => key(String(n + 1))}>{n + 1} · {o.label}</Button>)}
