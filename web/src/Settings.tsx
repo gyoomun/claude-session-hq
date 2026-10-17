@@ -71,8 +71,7 @@ function RestartAll({ S }: { S: Snapshot }) {
           <Button variant="default" data-autofocus onClick={() => setAsk(false)}>취소</Button>
           <Button color="red" onClick={async () => {
             setAsk(false)
-            const r = await api<number>('session/restart')
-            if (r) toast(`웹 세션 ${r.result}개를 다시 띄웁니다. 대화는 그대로 이어집니다.`)
+            api('session/restart') // 진행은 오른쪽 아래 부팅 패널(App.tsx RebootPanel)이 보인다
           }}>재시작</Button>
         </Group>
       </Stack>

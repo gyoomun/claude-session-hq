@@ -17,14 +17,16 @@ const DRAG = 'application/x-hq-sid'
 const dragging = (e: React.DragEvent) => e.dataTransfer.types.includes(DRAG)
 let dragSid = '' // 끄는 중에는 dataTransfer 값을 읽을 수 없어서(놓을 때만 된다) 따로 둔다. 제 자리는 빈 칸으로 본다
 // 한 줄: 상태는 점 색으로만 보인다(글자 없음, 사용자 요청). 끝의 지난 시간은 올리면 이름 복사 버튼으로 바뀐다
-function Item({ s, on, memo }: { s: Session; on: boolean; memo: boolean }) {
+function Item({ s, on, memo, boot }: { s: Session; on: boolean; memo: boolean; boot?: string }) {
   // 고른 세션은 목록에서 보이게 스크롤한다(새로고침·Ctrl+Tab·다른 데서 열기). 고른 순간에만 해서, 손으로 스크롤한 목록을 되돌리지 않는다
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (on) ref.current?.scrollIntoView({ block: 'nearest' }) }, [on])
   return <UnstyledButton ref={ref} data-on={on} data-name={s.name} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="5px 4px" w="100%" className="hq-item"
     style={{ borderRadius: 8, background: on ? 'var(--mantine-color-indigo-light)' : undefined, boxShadow: on ? 'inset 0 0 0 1px var(--mantine-color-indigo-5)' : undefined }}>
     <Group gap={6} wrap="nowrap">
-      <Box w={8} h={8} className={'hq-dot' + (s.state === 'working' || s.state === 'compact' ? ' busy' : '')} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} title={LABEL[s.state]} />
+      {/* 모두 재시작 중: 끄고 띄우는 동안은 점 대신 도는 표시, 차례를 기다리면 흐린 점 */}
+      {boot === 'kill' || boot === 'start' ? <span className="hq-spin hq-spin-dot" title="다시 띄우는 중" />
+        : <Box w={8} h={8} className={'hq-dot' + (s.state === 'working' || s.state === 'compact' ? ' busy' : '')} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state), opacity: boot === 'wait' ? .35 : undefined }} title={LABEL[s.state]} />}
       <Text size="sm" lh={1.35} truncate title={s.title} style={{ minWidth: 0 }}>{s.title}</Text>
       {memo && <IconPinFilled size={12} style={{ flex: 'none', color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}
       <Box style={{ flex: 1 }} />
@@ -34,6 +36,7 @@ function Item({ s, on, memo }: { s: Session; on: boolean; memo: boolean }) {
     </Group>
   </UnstyledButton>
 }
+const bootOf = (S: Snapshot, sid: string) => S.reboot?.items.find(x => x.sid === sid)?.phase
 const limitEnd = (S: Snapshot, kind: string) => Date.parse(S.usage?.limits.find(l => l.kind === kind)?.resetsAt || '') || 0
 // 사용량 칸 세션·주간 줄 끝의 동전: 누르면 떠 있는 세션 전체가 그 한도(5시간·주간)를 얼마나 썼는지 한꺼번에 조회한다. 올리면 요약 카드가 뜨고 '더보기'를 누르면 카드가 커져 순위(이번 창 기준)를 보여 준다
 function AllCoin({ S, sids, kind }: { S: Snapshot; sids: string[]; kind: string }) {
@@ -329,7 +332,7 @@ function Favs({ S, sel, ghost }: { S: Snapshot; sel: string; ghost: Session | nu
           ? <>
               {hover !== null && <Box className="hq-fav-ghost" style={{ top: hover * SLOT, height: SLOT }} />}
               {live.map(x => <Box key={x.sid} data-fav={x.sid} pos="absolute" left={0} right={0} className="hq-slide" style={{ top: x.slot * SLOT, height: SLOT }}>
-                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} />
+                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} boot={bootOf(S, x.sid)} />
               </Box>)}
               {favGhost && (() => {
                 // 서버 favBelow와 같은 칸: 그 세션 바로 아래부터 비어 있는 칸
@@ -341,7 +344,7 @@ function Favs({ S, sel, ghost }: { S: Snapshot; sel: string; ghost: Session | nu
           : <Stack gap={2}>
               {live.filter(x => x.sid !== dragSid || hover === null).map((x, i) => <Box key={x.sid} data-fav={x.sid}>
                 {hover === i && <Box className="hq-fav-line" />}
-                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} />
+                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} boot={bootOf(S, x.sid)} />
                 {favGhost && x.sid === pendingFav && <ItemSkeleton state={favGhost.state} since={favGhost.since} />}
               </Box>)}
               {hover !== null && hover >= live.length && <Box className="hq-fav-line" />}
@@ -422,7 +425,7 @@ export function WorkView({ S }: { S: Snapshot }) {
               <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{g.name}</Text><Text size="xs" c="dimmed">{g.ss.length}</Text></Group>
             </UnstyledButton>
             {ghost && !ui.pendingFav && ghost.task === g.id && <ItemSkeleton state={ghost.state} since={ghost.since} />}
-            {g.ss.map(x => <Item key={x.pid} s={x} on={x.sid === ui.sel} memo={hasMemo(S, x.sid)} />)}
+            {g.ss.map(x => <Item key={x.pid} s={x} on={x.sid === ui.sel} memo={hasMemo(S, x.sid)} boot={bootOf(S, x.sid)} />)}
             {g.favs.map(x => <FavGhost key={x.pid} s={x} on={x.sid === ui.sel} />)}
             {!g.ss.length && !g.favs.length && !(ghost && !ui.pendingFav && ghost.task === g.id) && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
           </Stack>)}

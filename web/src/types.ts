@@ -64,7 +64,8 @@ export interface Snapshot {
   calendar: { at: number; error: string; sources: number; events: CalEvent[] } // 회사 일정(구글 캘린더, 오늘부터 7일)
   inbox: { at: number; error: string; accounts: string[]; mails: Mail[] } // 받은편지함(계정들을 합쳐 최근 순)
   flow: { at: number; error: string; chats: FlowChat[]; alarms: FlowAlarm[] } // 플로우 안 읽은 채팅방·알림(최근 순)
-  notice: { text: string; color: string; at: number } | null // 서버가 한 번 띄우는 알림(모두 재시작이 끝났을 때 등)
+  notice: { text: string; color: string; at: number } | null // 서버가 한 번 띄우는 알림(세션 하나 재시작이 끝났을 때 등)
+  reboot: { at: number; end: number; items: { sid: string; title: string; phase: 'wait' | 'kill' | 'start' | 'ok' | 'fail'; ms: number }[] } | null // 모두 재시작 진행(오른쪽 아래 부팅 패널)
   favs: { mode: 'auto' | 'free'; items: { sid: string; slot: number }[] } // 즐겨찾기: 순서(자동 정렬)와 칸 번호(자유 배치)
   rooms: Record<string, Rect> // 가상 사무실의 방 자리·크기(칸 단위). 키는 업무 id 또는 'lobby'
   btw: Record<string, BtwItem[]> // 세션별 곁가지 질문

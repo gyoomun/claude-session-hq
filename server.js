@@ -376,7 +376,10 @@ function scan() {
   if (dirty) save();
   firstScan = false;
   checkLogin();
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, flow, usage: readUsage(), account: readAccount(), usageStale: !!(usage && account && usageOwner !== account.email), login: !!login, usageShare: db.usageShare, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  // 모두 재시작 중 잠깐 꺼진 세션은 끄기 전 모습으로 목록에 남긴다(사라졌다 나타나지 않게)
+  const rebootGhosts = reboot ? reboot.items.filter(x => (x.phase === 'kill' || x.phase === 'start') && !ids.has(x.sid)).map(x => x.s) : [];
+  snapshot = { now, sessions: [...sessions, ...rebootGhosts], tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, flow, usage: readUsage(), account: readAccount(), usageStale: !!(usage && account && usageOwner !== account.email), login: !!login, usageShare: db.usageShare, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+    reboot: reboot && { at: reboot.at, end: reboot.end, items: reboot.items.map(({ sid, title, phase, ms }) => ({ sid, title, phase, ms })) },
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -863,7 +866,10 @@ const userClosed = new Set(); // 사용자가 '세션 종료'로 닫은 대화: 
 // HQ 밖(Orca·iTerm 등)에서 돈 세션도 경고하지 않는다: 사용자가 일부러 끈 것이다. 경고는 HQ tmux 세션이 한꺼번에 꺼지는 사고만 알린다
 const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '닫힌 세션'에 넣지 않는다
 const keepSince = new Map(); // 다시 띄운 세션의 sid -> 끄기 전 { state, since }
-let notice = null; // 화면에 한 번 띄울 알림 { text, color, at } (모두 재시작이 끝났을 때 등)
+let notice = null; // 화면에 한 번 띄울 알림 { text, color, at } (세션 하나 재시작이 끝났을 때 등)
+// 모두 재시작의 진행: { at, end, items: [{ sid, title, phase, ms, s }] }. phase: wait→kill→start→ok(돌아옴)|fail(30초 안에 안 돌아옴).
+// 화면 오른쪽 아래 부팅 패널과 목록의 도는 표시가 이것을 본다(모든 기기). 끝나고 15초 뒤 지운다
+let reboot = null;
 async function migrateOne(pid) {
   // Orca 세션을 웹으로: Orca 쪽 claude를 /exit로 끝내고, 원래 옵션 그대로 --resume으로 이어 띄운다
   const s = snapshot.sessions.find(x => x.pid === pid);
@@ -1116,8 +1122,18 @@ const routes = {
     const list = db.web.filter(w => !Array.isArray(b.names) || b.names.includes(w.name))
       .map(w => ({ w, s: snapshot.sessions.find(x => x.tmux === w.name) })).filter(x => x.s);
     if (!list.length) throw new Error('다시 띄울 웹 세션이 없습니다');
+    // 이름을 안 주면 모두 재시작: 부팅 패널로 진행을 보인다. 세션 하나 재시작은 끝나고 알림만
+    const all = !Array.isArray(b.names);
+    const r = all ? { at: Date.now(), end: 0, items: list.map(({ s }) => ({ sid: s.sid, title: s.title, phase: 'wait', ms: 0, t0: 0, s })) } : null;
+    if (r) reboot = r;
+    const item = sid => r?.items.find(x => x.sid === sid);
+    const old = new Set(list.map(({ s }) => s.pid));
+    const isBack = sid => snapshot.sessions.some(x => x.sid === sid && x.host === 'web' && !old.has(x.pid));
+    // 띄운 세션이 새 프로세스로 목록에 돌아오면 ok
+    const tick = r && setInterval(() => { for (const x of r.items) if (x.phase === 'start' && isBack(x.sid)) { x.phase = 'ok'; x.ms = Date.now() - x.t0; } }, 300);
     (async () => {
       for (const { w, s } of list) {
+        const x = item(s.sid); if (x) { x.phase = 'kill'; x.t0 = Date.now(); }
         restarting.add(s.sid);
         keepSince.set(s.sid, { state: s.state, since: s.since });
         w.sid = s.sid; w.createdAt = Date.now(); // 끈 사이에 목록에서 빠지지 않게
@@ -1125,16 +1141,21 @@ const routes = {
         try {
           await tmux(['kill-session', '-t', w.name]).catch(() => {});
           for (let i = 0; i < 20 && alive(s.pid); i++) await sleep(250);
+          if (x) x.phase = 'start';
           await startTmux(w.name, w.cwd, [...w.args, ...resumeArgs(w.cwd, s.sid)]);
-        } catch (e) { console.error('다시 띄우기 실패:', w.name, e.message); }
+        } catch (e) { console.error('다시 띄우기 실패:', w.name, e.message); if (x) x.phase = 'fail'; }
       }
       save();
       setTimeout(() => list.forEach(({ s }) => restarting.delete(s.sid)), 30e3);
       // 다 뜨면(새 프로세스로 목록에 돌아오면, 길어도 30초) 알린다
-      const old = new Set(list.map(({ s }) => s.pid));
-      const back = () => list.every(({ s }) => snapshot.sessions.some(x => x.sid === s.sid && x.host === 'web' && !old.has(x.pid)));
+      const back = () => list.every(({ s }) => isBack(s.sid));
       for (let i = 0; i < 60 && !back(); i++) await sleep(500);
-      notice = { text: `웹 세션 ${list.length}개를 다시 띄웠습니다.`, color: 'teal', at: Date.now() };
+      if (r) {
+        clearInterval(tick);
+        for (const x of r.items) if (x.phase === 'start' && isBack(x.sid)) { x.phase = 'ok'; x.ms = Date.now() - x.t0; } else if (x.phase !== 'ok') x.phase = 'fail';
+        r.end = Date.now();
+        setTimeout(() => { if (reboot === r) { reboot = null; scan(); } }, 15e3);
+      } else notice = { text: `웹 세션 ${list.length}개를 다시 띄웠습니다.`, color: 'teal', at: Date.now() };
       scan();
     })();
     return list.length;

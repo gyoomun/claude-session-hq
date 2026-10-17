@@ -134,6 +134,35 @@ function Sidebar({ S }: { S: Snapshot }) {
   </div>
 }
 
+// 모두 재시작 진행(서버 S.reboot, 이 HQ를 연 모든 기기에): 오른쪽 아래 부팅 패널. 세션마다 [ -- ] 끄는 중 → [ .. ] 띄우는 중 → [ OK ] 걸린 시간,
+// 30초 안에 안 돌아오면 [FAIL]. 다 끝나면 ALL SYSTEMS ONLINE을 4초 보이고 접는다. ×로 먼저 접을 수 있다
+const BOOT_TAG = { wait: '    ', kill: ' -- ', start: ' .. ', ok: ' OK ', fail: 'FAIL' }
+const BOOT_ST = { wait: '대기', kill: '끄는 중', start: '띄우는 중', ok: '', fail: '응답 없음' }
+function RebootPanel({ S }: { S: Snapshot }) {
+  const r = S.reboot
+  useNow()
+  const now = serverNow()
+  const [closed, setClosed] = useState(0) // 접은 재시작의 시작 시각
+  const log = useRef<HTMLDivElement>(null)
+  const cur = r?.items.findIndex(x => x.phase === 'kill' || x.phase === 'start') ?? -1
+  useEffect(() => { log.current?.querySelector('.on')?.scrollIntoView({ block: 'nearest' }) }, [cur])
+  if (!r || closed === r.at || (r.end && now - r.end > 4000)) return null
+  const sec = (ms: number) => (Math.max(0, ms) / 1000).toFixed(1) + 's'
+  const ok = r.items.filter(x => x.phase === 'ok').length, fail = r.items.filter(x => x.phase === 'fail').length, n = r.items.length
+  const W = 28, fill = Math.round((ok + fail) / n * W)
+  return <div className="hq-boot" role="status">
+    <div className="hq-boot-head"><span>CLAUDE SESSION HQ ── REBOOT SEQUENCE</span><span className="t">T+{sec((r.end || now) - r.at)}</span>
+      <button onClick={() => setClosed(r.at)} aria-label="접기">×</button></div>
+    <div ref={log} className="hq-boot-log">
+      {r.items.map(x => <div key={x.sid} className={'hq-boot-line ' + x.phase + (x.phase === 'kill' || x.phase === 'start' ? ' on' : '')}>
+        <span className="tag">[{BOOT_TAG[x.phase]}]</span><span className="name">{x.title}</span><span className="st">{x.phase === 'ok' ? sec(x.ms) : BOOT_ST[x.phase]}</span>
+      </div>)}
+    </div>
+    <div className="hq-boot-bar"><span>{'█'.repeat(fill)}<span className="rest">{'░'.repeat(W - fill)}</span></span><span>{ok + fail} / {n}</span></div>
+    {r.end > 0 && <div className={'hq-boot-done' + (fail ? ' fail' : '')}>{fail ? `${fail} FAILED · ${ok} ONLINE` : 'ALL SYSTEMS ONLINE'}</div>}
+  </div>
+}
+
 // 오른쪽: 메인(알림·보기의 내용) | 서브(일정·메일 같은 카드들). 서브는 사이드바 바로 옆부터 왼쪽으로 붙여 놓고, 카드마다 너비를 끌어 바꾼다
 // (비율은 localStorage react-resizable-panels:hq-sub. 앞으로 서브에 들이는 카드도 같은 규칙). 마지막 빈 칸이 남는 폭을 받는다
 function MainSplit({ S, offline }: { S: Snapshot; offline: boolean }) {
@@ -232,5 +261,6 @@ export function App() {
     <CloseSessionModal S={S} />
     <BriefModal S={S} />
     <SettingsWindow S={S} />
+    <RebootPanel S={S} />
   </Box>
 }
