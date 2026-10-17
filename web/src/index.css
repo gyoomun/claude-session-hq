@@ -79,7 +79,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 /* 대화 화면 (Chat.tsx) */
 .hq-say { max-width: 100%; }
 .hq-say.me { align-self: flex-end; max-width: 85%; background: var(--mantine-color-indigo-light); border: 1px solid var(--mantine-color-indigo-8); border-radius: 12px 12px 2px 12px; padding: 8px 12px; }
-.hq-say.peer { align-self: flex-start; max-width: 85%; border: 1px solid var(--mantine-color-gray-6); border-radius: 12px 12px 12px 2px; padding: 8px 12px; }
+.hq-say.peer { align-self: flex-end; max-width: 85%; background: var(--mantine-color-violet-light); border: 1px solid var(--mantine-color-violet-8); border-radius: 12px 12px 2px 12px; padding: 8px 12px; }
 .hq-md { font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
 .hq-md > :first-child { margin-top: 0; } .hq-md > :last-child { margin-bottom: 0; }
 .hq-md p, .hq-md ul, .hq-md ol { margin: .4em 0; }
