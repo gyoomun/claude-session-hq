@@ -228,7 +228,7 @@ export const stopSession = (s: Session) => stopper.pid === s.pid ? stopper.fn() 
 // 서버가 키를 넣다 어긋나면 멈추고 터미널 보기로 바꾼다. 키: ↑↓ 고르기 · Tab 다음 질문 · 숫자 바로 · Enter·Space 정하기 · 직접 입력 줄에서는 바로 글을 친다
 type Question = NonNullable<NonNullable<Session['ask']>['questions']>[number]
 type Row = { q: number; n: number } // q: 질문 번호(-1 보내기, -2 Chat about this), n: 선택지 번호(선택지 수 + 1이면 직접 입력)
-function QuestionPanel({ s, questions }: { s: Session; questions: Question[] }) {
+function QuestionPanel({ s, questions, onDone }: { s: Session; questions: Question[]; onDone: () => void }) {
   const [picks, setPicks] = useState<number[][]>(() => questions.map(() => []))
   const [texts, setTexts] = useState<string[]>(() => questions.map(() => ''))
   const [busy, setBusy] = useState(false)
@@ -246,8 +246,9 @@ function QuestionPanel({ s, questions }: { s: Session; questions: Question[] }) 
     if (r && r.q >= 0 && r.n === typing(r.q)) inputs.current[r.q]?.focus()
     else root.current?.focus()
   }, [at])
+  // 보내면 상태가 바뀌기를(2초마다 받는다) 기다리지 않고 바로 입력칸으로 돌아간다. 실패하면 서버가 알리고 터미널 보기로 바꾼다
   const send = async (all: number[][], body: object = {}) => {
-    setBusy(true)
+    setBusy(true); onDone()
     const r = await api('term/answer', { pid: s.pid, ...body, questions: questions.map((q, i) => ({ question: q.question, multi: !!q.multiSelect, count: q.options.length, picks: all[i], text: texts[i].trim() })) })
     if (!r) setView(s.sid, 'term')
     setBusy(false)
@@ -272,7 +273,7 @@ function QuestionPanel({ s, questions }: { s: Session; questions: Question[] }) 
   const key = (e: React.KeyboardEvent) => {
     if (e.nativeEvent.isComposing || busy) return
     const k = e.key, q = rows[at]?.q ?? 0, inInput = e.target instanceof HTMLInputElement
-    if (k === 'Escape') api('term/key', { pid: s.pid, key: 'esc' })
+    if (k === 'Escape') { onDone(); api('term/key', { pid: s.pid, key: 'esc' }) }
     else if (k === 'ArrowUp' || k === 'ArrowDown') setAt(i => Math.max(0, Math.min(rows.length - 1, i + (k === 'ArrowUp' ? -1 : 1))))
     else if (k === 'Tab') setAt(first(Math.max(0, (q < 0 ? questions.length : q) + (e.shiftKey ? -1 : 1))))
     else if (k === 'Enter') choose(at)
@@ -530,6 +531,9 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   useEffect(() => () => { if (stopper.pid === s.pid) stopper.pid = 0 }, [s.pid])
   // 되감기: 고른 말부터 아래를 가린다
   const [rewind, setRewind] = useState(false)
+  const [answered, setAnswered] = useState('') // 답을 보낸 질문(같은 질문이 상태에 남아 있는 동안 질문 창을 다시 띄우지 않는다)
+  const asked = s.state === 'approval' && s.ask?.questions ? JSON.stringify(s.ask.questions) : ''
+  useEffect(() => { if (!asked) setAnswered('') }, [asked]) // 질문이 끝나면 잊는다(같은 질문을 다시 물으면 다시 띄우게)
   const rewound = (r: { restored: string; picked: string; label: string }) => {
     const flat = (t: string) => t.replace(/<\/?pasted_content[^>]*>/g, '').replace(/\s+/g, '')
     const head = flat(r.picked.replace(/…$/, '')).slice(0, 40)
@@ -588,7 +592,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
     {/* 되감기는 터미널처럼 입력칸 자리에서 고른다(입력칸에 쓰던 글은 그대로 남는다) */}
     {/* next-steps-multi 플러그인의 제안을 참고로만 보인다(누르기 없음: 사용자 요청) */}
     {s.host && !rewind && s.state !== 'working' && s.state !== 'compact' && !!s.next?.length && <Text size="xs" c="dimmed" px="md" pt={6}>{s.next!.join(' / ')}</Text>}
-    {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : s.state === 'approval' && s.ask?.questions ? <QuestionPanel key={JSON.stringify(s.ask.questions)} s={s} questions={s.ask.questions} /> : <Composer s={s} d={draft} history={history} onSent={(x, req) => {
+    {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : asked && asked !== answered ? <QuestionPanel key={asked} s={s} questions={s.ask!.questions!} onDone={() => setAnswered(asked)} /> : <Composer s={s} d={draft} history={history} onSent={(x, req) => {
       sent.current = x; sending.current = req; setSentAt(x.at); setPending(x); stick.current = true
       req.then(ok => { if (ok) poke.current(); else { sent.current = null; setPending(null) } })
     }} />}
