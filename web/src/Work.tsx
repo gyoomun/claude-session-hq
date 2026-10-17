@@ -321,7 +321,7 @@ function Favs({ S, sel, ghost }: { S: Snapshot; sel: string; ghost: Session | nu
       <Group gap={6} wrap="nowrap"><Text size="xs" fw={600} c="dimmed">즐겨찾기</Text><KeyRec area="favs" /></Group>
       <SegmentedControl size="xs" value={f.mode} onChange={mode} data={[{ label: '자동 정렬', value: 'auto' }, { label: '자유 배치', value: 'free' }]} />
     </Group>
-    <ScrollArea style={{ flex: 1 }}>
+    <ScrollArea scrollbarSize={4} style={{ flex: 1 }}>
       <Box ref={box} pos="relative" style={{ minHeight: f.mode === 'free' ? (rows + 1) * SLOT : undefined }}>
         {!live.length && hover === null && <Text size="xs" c="dimmed" p={8}>목록에서 대화를 끌어다 놓으세요. 빼려면 목록으로 다시 끌어다 놓습니다.</Text>}
         {f.mode === 'free'
@@ -413,7 +413,7 @@ export function WorkView({ S }: { S: Snapshot }) {
           data={[{ value: 'open', label: '세션 목록' }, { value: 'closed', label: '닫힌 세션' }]} />
         <KeyRec area="list" />
       </Group>
-      <ScrollArea style={{ flex: 1 }}>
+      <ScrollArea scrollbarSize={4} style={{ flex: 1 }}>
         {listTab === 'closed' ? <Box p={4}><ClosedList S={S} held={held} onOpen={async c => { setHeld(h => [...h, c]); if (!await api('session/reopen', { sid: c.sid })) setHeld(h => h.filter(x => x.sid !== c.sid)) }} /></Box>
         : <Stack gap="md" p={4}>
           {groups.map(g => <Stack key={g.id || 'none'} gap={2}>
