@@ -12,6 +12,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 로그인 화면 `public/login.html`은 빌드 없이 그대로 내주는 단독 페이지다
 - 의존성: `npm install`(launchd와 같은 Node로 깔아야 node-pty가 맞는다). 설치·제거: `node scripts/install.js` / `--uninstall`. 로그: `~/.claude/board/server.log`
 - 실험은 `PORT=7499 node server.js`로 따로 띄운다. 데이터 파일과 tmux 소켓은 같이 쓰므로 시험 세션·업무는 지운다
+- 창 앱 `desktop/`(Electron): 크롬 없이 HQ를 창 하나로 띄워 ⌘T·⌘W·Ctrl+Tab을 화면이 받게 한다. 서버는 그대로이고 주소만 연다. 맥은 `http://127.0.0.1:7420/#work`, 윈도우는 처음 켤 때 맥 주소(사내망 접속, 메일 로그인)를 받아 `userData/config.json`에 둔다. 연결에 실패하면 주소 입력 화면으로 돌아온다. 메뉴는 맥의 편집(복사·붙여넣기)·종료만 둔다(⌘W·⌘R 같은 메뉴 단축키가 화면 단축키를 가로채지 않게). 저장소(localStorage·쿠키)는 크롬과 따로라 앱에서 처음 쓰면 단축키·칸 너비 등이 처음 값이다. 실행 `cd desktop && npm start`, 빌드 `npm run dist:mac`(arm64 dmg)·`npm run dist:win`(x64 zip, 풀어서 exe 실행) → `desktop/release/`. 윈도우 설치 파일(nsis)은 makensis가 인텔용이라 Rosetta 없는 이 맥에서 못 만들어 zip으로 둔다. 서명은 맥 개발 인증서뿐(공증 없음), 윈도우는 서명 없음(SmartScreen 경고). `build.publish: []`를 지우면 맥 빌드가 'reading provider' 오류로 끝난다
 
 ## 구조
 - `server.js`: 2초마다 세션 파일·대화 기록·훅 파일·tmux를 읽어 상태를 만들고, 페이지·`/api/*`·터미널 스트림을 제공

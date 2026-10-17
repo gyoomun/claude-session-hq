@@ -1,0 +1,31 @@
+{
+  "name": "claude-session-hq-desktop",
+  "productName": "Claude Session HQ",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HQ 화면을 크롬 없이 띄우는 창 앱 (맥·윈도우)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac dmg --arm64 --publish never",
+    "dist:win": "electron-builder --win zip --x64 --publish never"
+  },
+  "build": {
+    "appId": "dev.gyoomun.claude-session-hq.desktop",
+    "icon": "../web/public/icon-512.png",
+    "files": [
+      "main.js"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools"
+    },
+    "publish": []
+  },
+  "devDependencies": {
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3"
+  }
+}
