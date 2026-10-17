@@ -1321,6 +1321,34 @@ const routes = {
     } finally { typing.delete(where.tmux); }
   },
   // 대화 화면의 단축 키: 중단(Esc), 승인 창의 번호 고르기
+  // Claude가 낸 질문(AskUserQuestion)의 답을 키로 넣는다. 질문 여러 개·여러 개 고르기도 된다.
+  // Claude Code 동작(확인함): 여러 개 고르기는 숫자 키가 체크를 켜고 끄고 커서는 그대로, →가 다음 질문. 하나만 고르기는 숫자 키가 고르고 다음 칸으로 간다.
+  // 질문이 여러 개면 마지막 칸 'Ready to submit your answers?'에서 1이 제출이다. ←는 첫 칸에서 돌지 않는다.
+  // 키마다 화면을 읽어 확인하고, 어긋나면 제출하지 않고 멈춘다(잘못된 답이 들어가지 않게)
+  'term/answer': async b => {
+    const where = handles.get(+b.pid) || {};
+    if (!where.tmux) throw new Error('웹에서 띄운 세션만 화면에서 답할 수 있습니다');
+    const t = where.tmux, questions = b.questions || [];
+    const send = k => tmux(['send-keys', '-t', t, k]);
+    const screen = async () => { await sleep(300); return (await tmux(['capture-pane', '-p', '-t', t])).split('\n').map(l => l.trimEnd()); };
+    const fail = why => new Error(`답을 넣다 멈췄습니다(${why}). 터미널 보기에서 이어서 답해 주세요`);
+    const showing = (lines, q) => lines.some(l => l.trim() === q.question.trim());
+    const checks = lines => new Map(lines.map(l => l.match(/^\s*(?:❯\s*)?(\d)\.\s\[(✔| )\]/)).filter(Boolean).map(m => [+m[1], m[2] === '✔']));
+    if (questions.length > 1) for (let i = 0; i < questions.length; i++) await send('Left');
+    for (const [i, q] of questions.entries()) {
+      if (!showing(await screen(), q)) throw fail(`${i + 1}번 질문이 화면에 없음`);
+      if (q.multi) {
+        const now = checks(await screen());
+        for (let n = 1; n <= q.count; n++) if (!!now.get(n) !== q.picks.includes(n)) await send(String(n));
+        const after = checks(await screen());
+        for (let n = 1; n <= q.count; n++) if (!!after.get(n) !== q.picks.includes(n)) throw fail(`${i + 1}번 체크가 맞지 않음`);
+        await send('Right');
+      } else await send(String(q.picks[0]));
+    }
+    if (questions.length === 1 && !questions[0].multi) return;
+    if (!(await screen()).some(l => l.includes('Ready to submit your answers?'))) throw fail('제출 칸이 나오지 않음');
+    await send('1');
+  },
   'term/key': async b => {
     const keys = { esc: ['Escape', '\x1b'], 1: ['1', '1'], 2: ['2', '2'], 3: ['3', '3'], enter: ['Enter', '\r'] };
     const k = keys[b.key];

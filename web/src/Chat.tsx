@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm'
 import remarkCjkFriendly from 'remark-cjk-friendly'
 import { Box, Button, UnstyledButton, CloseButton, Code, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
-import { hardQuestion, openMenuView, pickNew, setView, useUI } from './ui'
+import { openMenuView, pickNew, setView, useUI } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
 import { RewindPanel } from './Rewind'
@@ -222,6 +222,33 @@ export function SessionInfo({ s }: { s: Session }) {
 // 머리의 '중단' 버튼이 대화 칸의 중단(보낸 말 되살리기 포함)을 부른다. 대화 칸이 없으면(터미널 보기) Esc만 보낸다
 const stopper = { pid: 0, fn: () => {} }
 export const stopSession = (s: Session) => stopper.pid === s.pid ? stopper.fn() : api('term/key', { pid: s.pid, key: 'esc' })
+// 질문마다 한 줄: 번호·머리·질문, 그 옆에 선택지. 질문 하나에 하나만 고르기는 누르면 바로 답한다.
+// 그 밖(질문 여러 개, 여러 개 고르기)은 골라 두고 [보내기]로 한꺼번에 넣는다. 서버가 키를 넣다 어긋나면 멈추고 터미널 보기로 바꾼다
+type Question = NonNullable<NonNullable<Session['ask']>['questions']>[number]
+function Questions({ s, questions }: { s: Session; questions: Question[] }) {
+  const [picks, setPicks] = useState<number[][]>(() => questions.map(() => []))
+  const [busy, setBusy] = useState(false)
+  const instant = questions.length === 1 && !questions[0].multiSelect
+  const send = async (all: number[][]) => {
+    setBusy(true)
+    const r = await api('term/answer', { pid: s.pid, questions: questions.map((q, i) => ({ question: q.question, multi: !!q.multiSelect, count: q.options.length, picks: all[i] })) })
+    if (!r) setView(s.sid, 'term')
+    setBusy(false)
+  }
+  const pick = (i: number, n: number) => {
+    const next = picks.map((p, j) => j !== i ? p : questions[i].multiSelect ? (p.includes(n) ? p.filter(x => x !== n) : [...p, n]) : [n])
+    setPicks(next)
+    if (instant) send(next)
+  }
+  return <Stack gap={6}>
+    {questions.map((q, i) => <Group key={i} gap={6} wrap="wrap">
+      <Text size="sm" c="red.4" fw={600}>{i + 1}. {q.header ? q.header + ' ' : ''}{q.question}</Text>
+      {q.options.map((o, j) => <Button key={j} size="xs" disabled={busy} variant={picks[i].includes(j + 1) ? 'filled' : 'default'} title={o.description} onClick={() => pick(i, j + 1)}>{j + 1} · {o.label}</Button>)}
+    </Group>)}
+    {!instant && <Group><Button size="xs" color="teal" loading={busy} disabled={picks.some(p => !p.length)} onClick={() => send(picks)}>보내기</Button></Group>}
+  </Stack>
+}
+
 function Composer({ s, d, history, onSent }: {
   s: Session; d: Draft; history: string[]; onSent: (x: Sent, done: Promise<unknown>) => void
 }) {
@@ -268,23 +295,18 @@ function Composer({ s, d, history, onSent }: {
   }
   const key = (k: string) => api('term/key', { pid: s.pid, key: k })
   const place = (len: number, at: number) => requestAnimationFrame(() => box.current?.setSelectionRange(at + len, at + len))
-  // Claude가 고르라고 낸 질문(AskUserQuestion)도 허락 요청으로 온다. 허용/거부가 아니라 질문과 선택지를 보이고, 숫자 키로 고른다
-  const question = s.ask?.questions?.[0]
+  // Claude가 고르라고 낸 질문(AskUserQuestion)도 허락 요청으로 온다. 허용/거부가 아니라 질문과 선택지를 보인다
+  const questions = s.ask?.questions
   return <Paper p="sm">
     <Stack gap={8}>
-      {s.state === 'approval' && question && <Group gap={6} wrap="wrap">
-        <Text size="sm" c="red.4" fw={600}>1. {question.header ? question.header + ' ' : ''}{question.question}</Text>
-        {hardQuestion(s)
-          ? <Button size="xs" variant="default" onClick={() => setView(s.sid, 'term')}>터미널에서 답하기</Button>
-          : question.options.map((o, n) => <Button key={n} size="xs" variant="default" title={o.description} onClick={() => key(String(n + 1))}>{n + 1} · {o.label}</Button>)}
-      </Group>}
-      {s.state === 'approval' && !question && <Group gap={6} wrap="wrap">
+      {s.state === 'approval' && questions && <Questions key={JSON.stringify(questions)} s={s} questions={questions} />}
+      {s.state === 'approval' && !questions && <Group gap={6} wrap="wrap">
         <Text size="sm" c="red.4" fw={600}>실행 허락을 기다립니다</Text>
         <Button size="xs" color="teal" onClick={() => key('1')}>1 · 허용</Button>
         <Button size="xs" variant="default" onClick={() => key('2')}>2 · 이번 세션 동안 허용</Button>
         <Button size="xs" variant="outline" color="red" onClick={() => key('3')}>3 · 거부</Button>
       </Group>}
-      {s.state === 'approval' && s.ask && !question && <Stack gap={4}>
+      {s.state === 'approval' && s.ask && !questions && <Stack gap={4}>
         <Text size="xs" c="dimmed">{s.ask.tool}{s.ask.why && ' · ' + s.ask.why}</Text>
         <Code block mah={200} style={{ overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{s.ask.what}</Code>
       </Stack>}

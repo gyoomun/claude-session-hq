@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Modal, Paper, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast, useNow } from './store'
-import { followQuestions, pick, setUI, setView, useUI, viewOf } from './ui'
+import { pick, setUI, setView, useUI, viewOf } from './ui'
 import type { Closed, Session, Snapshot } from './types'
 import { COLOR, D, H, LABEL, M, Since, bySt, hhmm, cssColor, sessOf, withForks } from './util'
 import { TerminalView } from './Terminal'
@@ -367,7 +367,6 @@ function Favs({ S, sel, ghost }: { S: Snapshot; sel: string; ghost: Session | nu
 // 세 덩어리: 세션 목록 | 즐겨찾기 | 나머지(위: 세션 머리 / 아래: 대화 | 핀·메모·btw). 덩어리 사이 너비는 끌어서 바꾼다
 export function WorkView({ S }: { S: Snapshot }) {
   const ui = useUI()
-  useEffect(() => followQuestions(S.sessions), [S.sessions])
   const favs = favSids(S), inFav = new Set(favs)
   // 즐겨찾기에 넣은 세션은 목록에서 빠지고, 빼면 원래 업무 묶음의 원래 순서 자리로 돌아간다
   // 즐겨찾기로 간 세션은 원래 업무 자리에 흐린 줄(FavGhost)로 남는다(어느 업무 것인지, 어디로 갔는지 보이게). 순회·끌기에는 넣지 않는다
