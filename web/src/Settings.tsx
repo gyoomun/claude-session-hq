@@ -70,7 +70,7 @@ function RestartAll({ S }: { S: Snapshot }) {
         <Group justify="flex-end">
           <Button variant="default" data-autofocus onClick={() => setAsk(false)}>취소</Button>
           <Button color="red" onClick={async () => {
-            setAsk(false)
+            setAsk(false); setUI({ settings: false, settingsPage: '' }) // 환경설정 창도 닫아 부팅 패널이 보이게(사용자 요청)
             api('session/restart') // 진행은 오른쪽 아래 부팅 패널(App.tsx RebootPanel)이 보인다
           }}>재시작</Button>
         </Group>

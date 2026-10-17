@@ -869,7 +869,7 @@ const userClosed = new Set(); // 사용자가 '세션 종료'로 닫은 대화: 
 // HQ 밖(Orca·iTerm 등)에서 돈 세션도 경고하지 않는다: 사용자가 일부러 끈 것이다. 경고는 HQ tmux 세션이 한꺼번에 꺼지는 사고만 알린다
 const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '닫힌 세션'에 넣지 않는다
 let notice = null; // 화면에 한 번 띄울 알림 { text, color, at } (세션 하나 재시작이 끝났을 때 등)
-// 모두 재시작의 진행: { at, end, items: [{ sid, title, phase, ms, s }] }. phase: wait→kill→start→ok(돌아옴)|fail(30초 안에 안 돌아옴).
+// 모두 재시작의 진행: { at, end, items: [{ sid, title, phase, ms, s }] }. phase: wait→kill→start→ok(돌아옴)|fail(다 띄운 뒤 90초 안에 안 돌아옴. 30초는 실제로 뜬 세션을 실패로 쳤다).
 // 화면 오른쪽 아래 부팅 패널과 목록의 도는 표시가 이것을 본다(모든 기기). 끝나고 15초 뒤 지운다
 let reboot = null;
 async function migrateOne(pid) {
@@ -1148,10 +1148,10 @@ const routes = {
         } catch (e) { console.error('다시 띄우기 실패:', w.name, e.message); if (x) x.phase = 'fail'; }
       }
       save();
-      setTimeout(() => list.forEach(({ s }) => restarting.delete(s.sid)), 30e3);
-      // 다 뜨면(새 프로세스로 목록에 돌아오면, 길어도 30초) 알린다
+      setTimeout(() => list.forEach(({ s }) => restarting.delete(s.sid)), 90e3);
+      // 다 뜨면(새 프로세스로 목록에 돌아오면, 길어도 90초) 알린다
       const back = () => list.every(({ s }) => isBack(s.sid));
-      for (let i = 0; i < 60 && !back(); i++) await sleep(500);
+      for (let i = 0; i < 180 && !back(); i++) await sleep(500);
       if (r) {
         clearInterval(tick);
         for (const x of r.items) if (x.phase === 'start' && isBack(x.sid)) { x.phase = 'ok'; x.ms = Date.now() - x.t0; } else if (x.phase !== 'ok') x.phase = 'fail';

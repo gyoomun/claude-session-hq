@@ -135,31 +135,71 @@ function Sidebar({ S }: { S: Snapshot }) {
 }
 
 // 모두 재시작 진행(서버 S.reboot, 이 HQ를 연 모든 기기에): 오른쪽 아래 부팅 패널. 세션마다 [ -- ] 끄는 중 → [ .. ] 띄우는 중 → [ OK ] 걸린 시간,
-// 30초 안에 안 돌아오면 [FAIL]. 다 끝나면 ALL SYSTEMS ONLINE을 4초 보이고 접는다. ×로 먼저 접을 수 있다
-const BOOT_TAG = { wait: '    ', kill: ' -- ', start: ' .. ', ok: ' OK ', fail: 'FAIL' }
-const BOOT_ST = { wait: '대기', kill: '끄는 중', start: '띄우는 중', ok: '', fail: '응답 없음' }
+// 30초 안에 안 돌아오면 [FAIL]. 다 끝나면 큰 ALL SYSTEMS ONLINE 화면을 사용자가 닫을 때까지 둔다(사용자 요청). 서버가 15초 뒤 reboot를 지워도
+// 마지막 값을 들고 있다가 보인다. ×(진행 중엔 접기)·Esc로 닫는다
+const BOOT_TAG = { wait: '    ', kill: ' >> ', start: ' :: ', ok: ' OK ', fail: 'FAIL' }
+const BOOT_ST = { wait: 'QUEUED', kill: 'TERMINATING PROCESS', start: 'JACKING IN', ok: 'CONNECTED', fail: 'SIGNAL LOST' }
+// 패널 뒤에 떨어지는 글자 비(가타카나·숫자). 18fps로만 그린다
+function MatrixRain() {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const c = ref.current!, g = c.getContext('2d')!, F = 14, CH = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789'
+    let drops: number[] = []
+    const fit = () => { c.width = c.offsetWidth; c.height = c.offsetHeight; drops = Array.from({ length: Math.ceil(c.width / F) }, () => Math.random() * -c.height / F) }
+    fit()
+    const id = setInterval(() => {
+      g.fillStyle = 'rgba(0, 6, 1, .12)'; g.fillRect(0, 0, c.width, c.height)
+      g.font = F + 'px monospace'
+      drops.forEach((y, i) => {
+        g.fillStyle = Math.random() < .04 ? '#d8ffe0' : '#00ff41'
+        g.fillText(CH[Math.floor(Math.random() * CH.length)], i * F, y * F)
+        drops[i] = y * F > c.height && Math.random() > .97 ? 0 : y + 1
+      })
+    }, 55)
+    addEventListener('resize', fit)
+    return () => { clearInterval(id); removeEventListener('resize', fit) }
+  }, [])
+  return <canvas ref={ref} />
+}
 function RebootPanel({ S }: { S: Snapshot }) {
-  const r = S.reboot
+  const [last, setLast] = useState(S.reboot)
+  useEffect(() => { if (S.reboot) setLast(S.reboot) }, [S.reboot])
+  const r = S.reboot || last
   useNow()
   const now = serverNow()
-  const [closed, setClosed] = useState(0) // 접은 재시작의 시작 시각
+  const [closed, setClosed] = useState(0) // 닫은 재시작의 시작 시각
   const log = useRef<HTMLDivElement>(null)
-  const cur = r?.items.findIndex(x => x.phase === 'kill' || x.phase === 'start') ?? -1
-  useEffect(() => { log.current?.querySelector('.on')?.scrollIntoView({ block: 'nearest' }) }, [cur])
-  if (!r || closed === r.at || (r.end && now - r.end > 4000)) return null
+  // 자동 스크롤: 맨 앞에서 처리 중인 줄이 칸의 70% 아래로 내려가면 그 줄을 위쪽 20% 자리로 한 번에 올린다(한 줄씩 밀지 않고 확확, 사용자 요청)
+  const front = r ? r.items.reduce((a, x, i) => x.phase !== 'wait' ? i : a, -1) : -1
+  useEffect(() => {
+    const box = log.current, el = box?.children[front] as HTMLElement | undefined
+    if (!box || !el) return
+    if (el.offsetTop - box.offsetTop - box.scrollTop > box.clientHeight * .7) box.scrollTo({ top: el.offsetTop - box.offsetTop - box.clientHeight * .2, behavior: 'smooth' })
+  }, [front])
+  const open = !!r && closed !== r.at
+  useEffect(() => {
+    if (!open || !r?.end) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setClosed(r.at) }
+    addEventListener('keydown', onKey); return () => removeEventListener('keydown', onKey)
+  }, [open, r?.end])
+  if (!r || !open) return null
   const sec = (ms: number) => (Math.max(0, ms) / 1000).toFixed(1) + 's'
   const ok = r.items.filter(x => x.phase === 'ok').length, fail = r.items.filter(x => x.phase === 'fail').length, n = r.items.length
-  const W = 28, fill = Math.round((ok + fail) / n * W)
   return <div className="hq-boot" role="status">
+    <MatrixRain />
     <div className="hq-boot-head"><span>CLAUDE SESSION HQ ── REBOOT SEQUENCE</span><span className="t">T+{sec((r.end || now) - r.at)}</span>
       <button onClick={() => setClosed(r.at)} aria-label="접기">×</button></div>
     <div ref={log} className="hq-boot-log">
       {r.items.map(x => <div key={x.sid} className={'hq-boot-line ' + x.phase + (x.phase === 'kill' || x.phase === 'start' ? ' on' : '')}>
-        <span className="tag">[{BOOT_TAG[x.phase]}]</span><span className="name">{x.title}</span><span className="st">{x.phase === 'ok' ? sec(x.ms) : BOOT_ST[x.phase]}</span>
+        <span className="tag">[{BOOT_TAG[x.phase]}]</span><span className="name">{x.title}</span><span className="st">{BOOT_ST[x.phase]}{x.phase === 'ok' && ' ' + sec(x.ms).padStart(6)}</span>
       </div>)}
     </div>
-    <div className="hq-boot-bar"><span>{'█'.repeat(fill)}<span className="rest">{'░'.repeat(W - fill)}</span></span><span>{ok + fail} / {n}</span></div>
-    {r.end > 0 && <div className={'hq-boot-done' + (fail ? ' fail' : '')}>{fail ? `${fail} FAILED · ${ok} ONLINE` : 'ALL SYSTEMS ONLINE'}</div>}
+    <div className="hq-boot-bar"><span>{ok + fail} / {n}</span><div className="track"><div className="fill" style={{ width: (ok + fail) / n * 100 + '%' }} /></div></div>
+    {r.end > 0 && <div className={'hq-boot-done' + (fail ? ' fail' : '')}>
+      <div className="big">{fail ? 'REBOOT INCOMPLETE' : 'ALL SYSTEMS ONLINE'}</div>
+      <div className="sub">{fail ? `${ok} ONLINE · ${fail} FAILED` : `${n} / ${n} SESSIONS RESTORED`} · {sec(r.end - r.at)}</div>
+      <button onClick={() => setClosed(r.at)}>CLOSE</button>
+    </div>}
   </div>
 }
 
