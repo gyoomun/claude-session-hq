@@ -222,43 +222,64 @@ export function SessionInfo({ s }: { s: Session }) {
 // 머리의 '중단' 버튼이 대화 칸의 중단(보낸 말 되살리기 포함)을 부른다. 대화 칸이 없으면(터미널 보기) Esc만 보낸다
 const stopper = { pid: 0, fn: () => {} }
 export const stopSession = (s: Session) => stopper.pid === s.pid ? stopper.fn() : api('term/key', { pid: s.pid, key: 'esc' })
-// Claude가 고르라고 낸 질문(AskUserQuestion). 되감기 창과 같은 모양으로 입력칸 자리에 뜬다: 질문마다 머리 줄, 그 아래 선택지 줄.
-// 질문 하나에 하나만 고르기는 고르면 바로 답한다. 그 밖(질문 여러 개, 여러 개 고르기)은 골라 두고 맨 아래 '보내기'로 한꺼번에 넣는다.
-// 서버가 키를 넣다 어긋나면 멈추고 터미널 보기로 바꾼다. 키: ↑↓ 고르기 · Tab 다음 질문 · 숫자 바로 · Enter·Space 정하기
+// Claude가 고르라고 낸 질문(AskUserQuestion). 되감기 창과 같은 모양으로 입력칸 자리에 뜬다: 질문마다 머리 줄, 그 아래 선택지 줄과 '직접 입력' 줄.
+// 터미널과 같게(사용자 요청): 질문 하나에 하나만 고르기는 고르면 바로 답한다. 그 밖(질문 여러 개, 여러 개 고르기)은 골라 두고 '보내기'로 한꺼번에 넣는다.
+// 맨 아래 'Chat about this'는 질문을 거절하고 대화로 돌아간다. Esc는 터미널처럼 취소한다.
+// 서버가 키를 넣다 어긋나면 멈추고 터미널 보기로 바꾼다. 키: ↑↓ 고르기 · Tab 다음 질문 · 숫자 바로 · Enter·Space 정하기 · 직접 입력 줄에서는 바로 글을 친다
 type Question = NonNullable<NonNullable<Session['ask']>['questions']>[number]
+type Row = { q: number; n: number } // q: 질문 번호(-1 보내기, -2 Chat about this), n: 선택지 번호(선택지 수 + 1이면 직접 입력)
 function QuestionPanel({ s, questions }: { s: Session; questions: Question[] }) {
   const [picks, setPicks] = useState<number[][]>(() => questions.map(() => []))
+  const [texts, setTexts] = useState<string[]>(() => questions.map(() => ''))
   const [busy, setBusy] = useState(false)
   const [at, setAt] = useState(0)
   const root = useRef<HTMLDivElement>(null)
-  useEffect(() => { root.current?.focus() }, [])
+  const inputs = useRef<(HTMLInputElement | null)[]>([])
   const instant = questions.length === 1 && !questions[0].multiSelect
-  const ready = !picks.some(p => !p.length)
-  // 줄: 질문별 선택지들, 그리고 (한꺼번에 보낼 때) 보내기
-  const rows = [...questions.flatMap((q, i) => q.options.map((_, j) => ({ q: i, n: j + 1 }))), ...(instant ? [] : [{ q: -1, n: 0 }])]
-  const first = (i: number) => i >= questions.length ? rows.length - 1 : rows.findIndex(r => r.q === i)
-  const send = async (all: number[][]) => {
+  const typing = (i: number) => questions[i].options.length + 1
+  const rows: Row[] = [...questions.flatMap((q, i) => [...q.options.map((_, j) => ({ q: i, n: j + 1 })), { q: i, n: typing(i) }]), ...(instant ? [] : [{ q: -1, n: 0 }]), { q: -2, n: 0 }]
+  const first = (i: number) => i >= questions.length ? rows.findIndex(r => r.q < 0) : rows.findIndex(r => r.q === i)
+  const ready = picks.every((p, i) => p.length && (!p.includes(typing(i)) || texts[i].trim()))
+  // 직접 입력 줄에 오면 그 칸에 글을 치게 포커스를 옮기고, 떠나면 창으로 돌려 키를 받는다
+  useEffect(() => {
+    const r = rows[at]
+    if (r && r.q >= 0 && r.n === typing(r.q)) inputs.current[r.q]?.focus()
+    else root.current?.focus()
+  }, [at])
+  const send = async (all: number[][], body: object = {}) => {
     setBusy(true)
-    const r = await api('term/answer', { pid: s.pid, questions: questions.map((q, i) => ({ question: q.question, multi: !!q.multiSelect, count: q.options.length, picks: all[i] })) })
+    const r = await api('term/answer', { pid: s.pid, ...body, questions: questions.map((q, i) => ({ question: q.question, multi: !!q.multiSelect, count: q.options.length, picks: all[i], text: texts[i].trim() })) })
     if (!r) setView(s.sid, 'term')
     setBusy(false)
   }
   const pick = (i: number, n: number) => {
+    const isText = n === typing(i)
+    if (isText && !texts[i].trim()) { setAt(first(i) + n - 1); return } // 글을 먼저 친다
+    if (isText && questions[i].multiSelect) { setAt(first(i + 1)); return } // 여러 개 고르기의 직접 입력은 글이 있으면 체크된다(onChange). Enter는 다음 질문으로
     const next = picks.map((p, j) => j !== i ? p : questions[i].multiSelect ? (p.includes(n) ? p.filter(x => x !== n) : [...p, n]) : [n])
     setPicks(next)
     if (instant) send(next)
     else if (!questions[i].multiSelect) setAt(first(i + 1))
     else setAt(first(i) + n - 1)
   }
-  const choose = (k: number) => { const r = rows[k]; if (!r) return; if (r.q < 0) { if (ready) send(picks) } else pick(r.q, r.n) }
+  const choose = (k: number) => {
+    const r = rows[k]
+    if (!r) return
+    if (r.q === -1) { if (ready) send(picks) }
+    else if (r.q === -2) send(picks, { chat: true })
+    else pick(r.q, r.n)
+  }
   const key = (e: React.KeyboardEvent) => {
     if (e.nativeEvent.isComposing || busy) return
-    const k = e.key, q = rows[at]?.q ?? 0
-    if (k === 'ArrowUp' || k === 'ArrowDown') setAt(i => Math.max(0, Math.min(rows.length - 1, i + (k === 'ArrowUp' ? -1 : 1))))
+    const k = e.key, q = rows[at]?.q ?? 0, inInput = e.target instanceof HTMLInputElement
+    if (k === 'Escape') api('term/key', { pid: s.pid, key: 'esc' })
+    else if (k === 'ArrowUp' || k === 'ArrowDown') setAt(i => Math.max(0, Math.min(rows.length - 1, i + (k === 'ArrowUp' ? -1 : 1))))
     else if (k === 'Tab') setAt(first(Math.max(0, (q < 0 ? questions.length : q) + (e.shiftKey ? -1 : 1))))
+    else if (k === 'Enter') choose(at)
+    else if (inInput) return // 직접 입력 칸에서는 나머지 키가 글자다
     else if (k === 'Home' || k === 'End') setAt(k === 'Home' ? 0 : rows.length - 1)
-    else if (/^[1-9]$/.test(k) && q >= 0 && +k <= questions[q].options.length) pick(q, +k)
-    else if (k === 'Enter' || k === ' ') choose(at)
+    else if (/^[1-9]$/.test(k) && q >= 0 && +k <= typing(q)) pick(q, +k)
+    else if (k === ' ') choose(at)
     else return
     e.preventDefault(); e.stopPropagation()
   }
@@ -269,7 +290,7 @@ function QuestionPanel({ s, questions }: { s: Session; questions: Question[] }) 
   return <Paper p="sm" className="hq-rewind hq-in" ref={root} tabIndex={-1} onKeyDown={key} style={{ outline: 'none' }}>
     <Group justify="space-between" mb={8} wrap="nowrap">
       <Text size="sm" fw={600}>질문</Text>
-      <Group gap="md" wrap="nowrap">{hint(['↑', '↓'], '고르기')}{questions.length > 1 && hint(['Tab'], '다음 질문')}{hint(['1~' + Math.max(...questions.map(q => q.options.length))], '바로')}{hint(['Enter'], busy ? '보내는 중…' : '정하기')}</Group>
+      <Group gap="md" wrap="nowrap">{hint(['↑', '↓'], '고르기')}{questions.length > 1 && hint(['Tab'], '다음 질문')}{hint(['Enter'], busy ? '보내는 중…' : '정하기')}{hint(['Esc'], '취소')}</Group>
     </Group>
     <Box className="hq-rewind-list">
       {questions.map((q, i) => <Box key={i} mb={6}>
@@ -281,8 +302,18 @@ function QuestionPanel({ s, questions }: { s: Session; questions: Question[] }) 
             {o.description && <Text size="xs" c="dimmed" truncate style={{ minWidth: 0 }}>{o.description}</Text>}
           </>)
         })}
+        {(() => {
+          const n = typing(i), on = picks[i].includes(n)
+          return row(first(i) + n - 1, <>
+            <Text size="sm" c={on ? 'teal.4' : undefined} style={{ flex: 'none' }}>{n}. {q.multiSelect ? (on ? '[✔] ' : '[ ] ') : ''}</Text>
+            <input ref={el => { inputs.current[i] = el }} className="hq-q-input" value={texts[i]} placeholder="직접 입력" disabled={busy}
+              onChange={e => { const v = e.currentTarget.value; setTexts(t => t.map((x, j) => j === i ? v : x)); if (q.multiSelect) setPicks(p => p.map((x, j) => j !== i ? x : v.trim() ? (x.includes(n) ? x : [...x, n]) : x.filter(y => y !== n))) }} />
+            {!q.multiSelect && on && <Text size="sm" c="teal.4">✔</Text>}
+          </>)
+        })()}
       </Box>)}
-      {!instant && row(rows.length - 1, <Text size="sm" fw={600} c={ready ? 'teal.4' : 'dimmed'}>보내기</Text>)}
+      {!instant && row(first(questions.length), <Text size="sm" fw={600} c={ready ? 'teal.4' : 'dimmed'}>보내기</Text>)}
+      {row(rows.length - 1, <Text size="sm" c="dimmed">Chat about this</Text>)}
     </Box>
   </Paper>
 }
