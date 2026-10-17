@@ -236,23 +236,26 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
   // 목차: 누르면 그 분류로 스크롤, 스크롤하면 지금 보이는 분류에 불이 들어온다(맨 위면 첫 분류)
   const scroller = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState('')
-  const pinned = useRef(0) // 목차를 누른 직후(부드러운 스크롤 중)에는 누른 것에 불을 둔다
+  // 목차를 누른 뒤 부드러운 스크롤이 끝날 때(scrollend)까지는 누른 것에 불을 둔다. 시간(0.7초)으로 풀면 긴 스크롤 끝에 지나가는 분류에 잠깐 불이 옮겨 갔다
+  const pinned = useRef(false)
   const go = (id: string, smooth = true) => {
     const box = scroller.current, el = box?.querySelector<HTMLElement>(`[data-page="${id}"]`)
     if (!box) return
-    setActive(id); pinned.current = Date.now() + 700
+    setActive(id); pinned.current = smooth
     const crumb = box.querySelector<HTMLElement>('.hq-set-crumb')?.offsetHeight || 0 // 위에 붙은 경로 줄 밑으로
-    box.scrollTo({ top: !el ? 0 : Math.max(0, el.offsetTop - box.offsetTop - crumb - GAP), behavior: smooth ? 'smooth' : 'auto' })
+    const top = !el ? 0 : Math.max(0, el.offsetTop - box.offsetTop - crumb - GAP)
+    if (Math.abs(box.scrollTop - top) < 1) pinned.current = false // 움직일 일이 없으면 scrollend도 오지 않는다
+    box.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' })
   }
   const spy = () => {
     const box = scroller.current
-    if (!box || Date.now() < pinned.current) return
+    if (!box || pinned.current) return
     const top = box.getBoundingClientRect().top + (box.querySelector<HTMLElement>('.hq-set-crumb')?.offsetHeight || 0) + GAP + 8
     const el = [...box.querySelectorAll<HTMLElement>('[data-page]')].filter(x => x.getBoundingClientRect().top <= top).pop()
     setActive(el?.dataset.page || box.querySelector<HTMLElement>('[data-page]')?.dataset.page || '')
   }
   // 열 때 고른 분류(예: 사이드바의 '사내망 접속 꺼짐' → 접속)가 있으면 그 자리에서 시작한다
-  useLayoutEffect(() => { if (ui.settings) { go(ui.settingsPage, false); if (!PAGES.some(p => p.id === ui.settingsPage)) { pinned.current = 0; spy() } } }, [ui.settings])
+  useLayoutEffect(() => { if (ui.settings) { go(ui.settingsPage, false); if (!PAGES.some(p => p.id === ui.settingsPage)) { pinned.current = false; spy() } } }, [ui.settings])
   if (!ui.settings) return null
   const pages = PAGES.filter(p => hit(q, p.name + ' ' + p.words))
   const nav = pages
@@ -271,7 +274,7 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
           </UnstyledButton>)}
           {!pages.length && <Text size="xs" c="dimmed" px={8}>찾는 설정이 없습니다</Text>}
         </Stack>
-        <Box className="hq-set-page" ref={scroller} onScroll={spy}>
+        <Box className="hq-set-page" ref={scroller} onScroll={spy} onScrollEnd={() => { pinned.current = false }}>
           <Text size="sm" c="dimmed" className="hq-set-crumb">환경설정 › <Text span c="var(--mantine-color-text)" fw={600}>{name}</Text></Text>
           <Query.Provider value={q}>
             {pages.map(p => <Box key={p.id} data-page={p.id} mb="xl">

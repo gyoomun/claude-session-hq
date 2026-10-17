@@ -151,7 +151,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-set-nav { padding: 12px 10px; border-right: 1px solid var(--mantine-color-default-border); overflow-y: auto; }
 .hq-set-cat { padding: 6px 8px; border-radius: 6px; transition: background-color .12s ease; }
 .hq-set-cat:hover { background: var(--mantine-color-default-hover); }
-.hq-set-cat.on { background: var(--mantine-color-indigo-light); box-shadow: inset 2px 0 0 var(--mantine-color-indigo-5); }
+.hq-set-cat.on { background: var(--mantine-color-indigo-light); }
 .hq-set-page { padding: 14px 20px; overflow-y: auto; }
 .hq-set-rule { flex: 1; height: 1px; background: var(--mantine-color-default-border); }
 .hq-set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 8px 10px; border-radius: 6px; border-left: 2px solid transparent; transition: opacity .12s ease; }
