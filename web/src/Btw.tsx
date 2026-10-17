@@ -38,7 +38,7 @@ export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
         </Stack>)}
       </Stack>
     </ScrollArea>
-    <Box p="sm" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
+    <Box p="sm">
       <Textarea autosize minRows={2} maxRows={6} value={q} onChange={e => setQ(e.currentTarget.value)} placeholder="Enter 묻기 · Shift+Enter 줄바꿈" aria-label="btw 질문"
         onKeyDown={e => {
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask() }
