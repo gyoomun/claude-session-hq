@@ -123,8 +123,11 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         <SessionInfo s={s} />
       </Stack>
       <Group gap={6}>
-        {/* 지구본: 이 세션이 크롬 탭을 열어 둔 동안만 보이고(조종 중이면 파랗게 숨 쉬고, 열어만 두면 회색), 누르면 그 탭을 화면 앞에 띄운다. 맨 앞에 둬서 나타나고 사라져도 다른 버튼 자리가 그대로다(사용자 결정) */}
-        {s.browser && <ActionIcon size="md" variant="subtle" color={s.browser.busy ? 'blue' : 'gray'} className={s.browser.busy ? 'hq-globe busy' : 'hq-globe'} aria-label="크롬 탭 보기" title={`${s.browser.busy ? '크롬 조종 중' : '크롬 탭 열려 있음'}\n${s.browser.title}\n${s.browser.url}`} onClick={() => api('browser/show', { sid: s.sid })}><IconWorld size={18} /></ActionIcon>}
+        {/* 지구본: 늘 같은 자리에 두고 상태로만 구별한다(나타났다 사라지지 않게: 사용자 요청). 크롬 탭이 없으면 흐리게, 열어만 두면 회색, 조종 중이면 파랗게 숨 쉰다.
+            누르면 그 탭을 화면 앞에 띄운다. disabled를 쓰지 않는 건 Mantine이 회색 바탕을 깔고 마우스를 올려도 설명이 안 떠서다 */}
+        <ActionIcon size="md" variant="subtle" color={s.browser?.busy ? 'blue' : 'gray'} className={s.browser?.busy ? 'hq-globe busy' : 'hq-globe'} style={s.browser ? undefined : { opacity: .35, cursor: 'default' }} aria-label="크롬 탭 보기"
+          title={!s.browser ? '크롬 탭 없음' : `${s.browser.busy ? '크롬 조종 중' : '크롬 탭 열려 있음'}\n${s.browser.title}\n${s.browser.url}`}
+          onClick={() => s.browser && api('browser/show', { sid: s.sid })}><IconWorld size={18} /></ActionIcon>
                 <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
         {s.host === 'web' && <ViewToggle s={s} />}
         {/* 중단: 늘 같은 자리에 두고 일하는 중에만 켠다(사용자 요청). Esc와 같다 */}
