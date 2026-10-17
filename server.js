@@ -396,6 +396,9 @@ function chatItems(entries) {
   for (const d of entries) {
     // 자동 압축 요약(isCompactSummary)은 Claude Code가 내 말처럼 넣은 긴 글이라 보이지 않는다(터미널에서도 접혀 있다)
     // Claude가 일하는 중에 보낸 말은 user 항목이 아니라 첨부(queued_command)로 남는다. 이것도 내 말풍선으로
+    // 다른 세션이 SendMessage로 보낸 말: 쉬던 중이면 isMeta user 항목, 일하던 중이면 queued_command 첨부로 남는다. 보낸 세션 이름을 붙여 따로 보인다(내 말로 세지 않는다)
+    const peer = !d.isSidechain && (d.type === 'user' ? d.origin : d.type === 'attachment' && d.attachment?.type === 'queued_command' ? d.attachment.origin : null);
+    if (peer?.kind === 'peer') { if (peer.body?.trim()) out.push({ id: d.uuid || String(out.length), at: Date.parse(d.timestamp) || 0, t: 'peer', name: peer.name || '', text: peer.body.trim() }); continue; }
     const q = d.type === 'attachment' && d.attachment?.type === 'queued_command' && d.attachment.commandMode === 'prompt' && !d.isSidechain ? d.attachment : null;
     if (q) { const t = typeof q.prompt === 'string' ? q.prompt : textOf(q.prompt); if (t.trim()) out.push({ id: d.uuid || String(out.length), at: Date.parse(q.timestamp || d.timestamp) || 0, t: 'user', text: t.trim() }); continue; }
     if (d.isSidechain || d.isMeta || d.isCompactSummary || (d.type !== 'user' && d.type !== 'assistant')) continue;
