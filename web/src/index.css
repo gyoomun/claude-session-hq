@@ -132,12 +132,13 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-item:hover { background-color: var(--mantine-color-default-hover); }
 .hq-dot { transition: background-color .3s ease; }              /* 상태 점: 색이 서서히 바뀌고 작업중이면 숨 쉰다 */
 .hq-dot.busy { animation: hq-breathe 1.6s ease-in-out infinite; }
+.hq-globe.busy { animation: hq-breathe 1.6s ease-in-out infinite; }   /* 세션 제목 줄 지구본: 크롬을 조종하는 중 */
 @keyframes hq-breathe { 50% { opacity: .35; } }
 .hq-slide { transition: top .22s ease; }                        /* 즐겨찾기 자유 배치에서 칸을 옮길 때 */
 .hq-room:not(.editing) { transition: left .22s ease, top .22s ease, width .22s ease, height .22s ease; }  /* 사무실 방(끄는 중에는 바로 따라온다) */
 .hq-rewind-item { transition: background-color .15s ease, border-color .15s ease; }
 @media (prefers-reduced-motion: reduce) {
-  :root:not([data-motion="on"]) .hq-in, :root:not([data-motion="on"]) .hq-fade, :root:not([data-motion="on"]) .hq-pop, :root:not([data-motion="on"]) .hq-dot.busy { animation: none; }
+  :root:not([data-motion="on"]) .hq-in, :root:not([data-motion="on"]) .hq-fade, :root:not([data-motion="on"]) .hq-pop, :root:not([data-motion="on"]) .hq-dot.busy, :root:not([data-motion="on"]) .hq-globe.busy { animation: none; }
   :root:not([data-motion="on"]) .hq-item, :root:not([data-motion="on"]) .hq-dot, :root:not([data-motion="on"]) .hq-slide, :root:not([data-motion="on"]) .hq-room, :root:not([data-motion="on"]) .hq-rewind-item { transition: none; }
 }
 

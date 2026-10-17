@@ -380,7 +380,8 @@ function scan() {
       mode: (where.tmux && footers.get(where.tmux)?.mode) || t.mode || '', bg: (where.tmux && footers.get(where.tmux)?.bg) || { shells: 0, agents: [] }, next: (where.tmux && footers.get(where.tmux)?.next) || [], task: db.assign[s.sessionId] || '',
       pin: db.pins[s.sessionId] ? pinItems(db.pins[s.sessionId].text) : [],
       host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '', forkOf: db.forks[s.sessionId] || '',
-      browser: browserTabs[s.sessionId] || null,
+      // 지구본: 일하는 중이고 1분 안에 탭을 조종했으면 쓰는 중으로 보고 반짝인다
+      browser: browserTabs[s.sessionId] ? { ...browserTabs[s.sessionId], busy: state === 'working' && now - browserTabs[s.sessionId].usedAt < 60e3 } : null,
     };
   });
   // 웹 세션이 스스로 끝났으면(/exit 등) 목록에서 뺀다. 다시 띄우지 않는다

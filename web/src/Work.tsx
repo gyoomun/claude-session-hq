@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Modal, Paper, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast, useNow } from './store'
-import { pick, setUI, setView, useUI, viewOf } from './ui'
+import { followQuestions, pick, setUI, setView, useUI, viewOf } from './ui'
 import type { Closed, Session, Snapshot } from './types'
 import { COLOR, D, H, LABEL, M, Since, bySt, hhmm, cssColor, sessOf, withForks } from './util'
 import { TerminalView } from './Terminal'
@@ -123,8 +123,8 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         <SessionInfo s={s} />
       </Stack>
       <Group gap={6}>
-        {/* 지구본: 이 세션이 크롬 탭을 쓰는 동안만 보이고, 누르면 그 탭을 화면 앞에 띄운다. 맨 앞에 둬서 나타나고 사라져도 다른 버튼 자리가 그대로다(사용자 결정) */}
-        {s.browser && <ActionIcon size="md" variant="subtle" color="blue" aria-label="크롬 탭 보기" title={`${s.browser.title}\n${s.browser.url}`} onClick={() => api('browser/show', { sid: s.sid })}><IconWorld size={18} /></ActionIcon>}
+        {/* 지구본: 이 세션이 크롬 탭을 열어 둔 동안만 보이고(조종 중이면 파랗게 숨 쉬고, 열어만 두면 회색), 누르면 그 탭을 화면 앞에 띄운다. 맨 앞에 둬서 나타나고 사라져도 다른 버튼 자리가 그대로다(사용자 결정) */}
+        {s.browser && <ActionIcon size="md" variant="subtle" color={s.browser.busy ? 'blue' : 'gray'} className={s.browser.busy ? 'hq-globe busy' : 'hq-globe'} aria-label="크롬 탭 보기" title={`${s.browser.busy ? '크롬 조종 중' : '크롬 탭 열려 있음'}\n${s.browser.title}\n${s.browser.url}`} onClick={() => api('browser/show', { sid: s.sid })}><IconWorld size={18} /></ActionIcon>}
                 <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
         {s.host === 'web' && <ViewToggle s={s} />}
         {/* 중단: 늘 같은 자리에 두고 일하는 중에만 켠다(사용자 요청). Esc와 같다 */}
@@ -364,6 +364,7 @@ function Favs({ S, sel, ghost }: { S: Snapshot; sel: string; ghost: Session | nu
 // 세 덩어리: 세션 목록 | 즐겨찾기 | 나머지(위: 세션 머리 / 아래: 대화 | 핀·메모·btw). 덩어리 사이 너비는 끌어서 바꾼다
 export function WorkView({ S }: { S: Snapshot }) {
   const ui = useUI()
+  useEffect(() => followQuestions(S.sessions), [S.sessions])
   const favs = favSids(S), inFav = new Set(favs)
   // 즐겨찾기에 넣은 세션은 목록에서 빠지고, 빼면 원래 업무 묶음의 원래 순서 자리로 돌아간다
   // 즐겨찾기로 간 세션은 원래 업무 자리에 흐린 줄(FavGhost)로 남는다(어느 업무 것인지, 어디로 갔는지 보이게). 순회·끌기에는 넣지 않는다

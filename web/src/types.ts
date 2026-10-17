@@ -19,7 +19,7 @@ export interface Session {
   host: 'web' | 'orca' | ''
   tmux: string
   forkOf?: string // 포크본이면 원본 대화 ID(서버 db.forks)
-  browser?: { title: string; url: string } | null // hq-browser로 연 크롬 탭(가장 최근 것). 없으면 null
+  browser?: { title: string; url: string; busy: boolean } | null // hq-browser로 연 크롬 탭(가장 최근 것). busy면 지금 조종 중. 없으면 null
   pin: PinItem[] // Claude 핀보드(대화 기록의 마지막 상태)
   model: string // 마지막 답을 만든 모델 ID(claude-opus-5-5 등). 아직 답이 없으면 ''
   effort: string // 그 답의 effort(low·medium·high·xhigh·max)
