@@ -53,10 +53,11 @@ function Pre(p: React.HTMLAttributes<HTMLPreElement>) {
     <button type="button" className="hq-copy" onClick={async () => { if (await copyText(ref.current?.innerText.replace(/\n$/, '') || '')) flash() }}>{done ? '✓ 복사됨' : '복사'}</button>
   </div>
 }
-// `chrome://…`는 웹 페이지에서 링크로 열 수 없다(크롬이 막는다). 누르면 서버가 이 맥의 크롬에서 연다
+// 백틱 안이 주소 하나뿐이면 링크로. `chrome://…`는 웹 페이지에서 링크로 열 수 없다(크롬이 막는다). 누르면 서버가 이 맥의 크롬에서 연다
 const CHROME = /^chrome:\/\/[\w-]+\/?[\w\-./#?=&]*$/
 function Code({ node: _, ...p }: React.HTMLAttributes<HTMLElement> & { node?: unknown }) {
   const url = String(p.children)
+  if (/^https?:\/\/\S+$/.test(url)) return <NewTab href={url}><code {...p} /></NewTab>
   if (!CHROME.test(url)) return <code {...p} />
   return <code {...p} className="hq-link hq-chrome" title="누르면 이 맥의 크롬에서 엽니다" onClick={() => api('chrome/open', { url })} />
 }
