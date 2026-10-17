@@ -7,7 +7,7 @@ import type { Closed, Session, Snapshot } from './types'
 import { COLOR, D, LABEL, Since, bySt, hhmm, cssColor, sessOf, withForks } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
-import { ChatView, bgCount, bgText, copyName, useFlash } from './Chat'
+import { ChatView, SessionInfo, bgCount, bgText, copyName, stopSession, useFlash } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
 import { IconCheck, IconCoin, IconCopy, IconPinFilled } from '@tabler/icons-react'
 import { KeyRec, areaKeys } from './Keys'
@@ -107,26 +107,33 @@ function Title({ s }: { s: Session }) {
 
 function Head({ S, s }: { S: Snapshot; s: Session }) {
   const [named, flashName] = useFlash()
+  const busy = s.state === 'working' || s.state === 'compact' || s.state === 'approval'
   return <Box p="10px 12px">
     <Group gap="sm" wrap="wrap">
       <Stack gap={0} style={{ minWidth: 0, flex: '1 1 260px' }}>
         {/* 제목은 Claude가 정해서 아직 모른다. 같은 글줄 안에 반짝이를 넣어 높이를 똑같이 맞춘다 */}
         {s.sid ? <Title s={s} /> : <Text component="div" fw={600} size="lg"><Skeleton h="0.9em" w="38%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>}
-        {/* 한 줄로 고정: 실행 중인 명령(act)이 길어도 머리가 두꺼워지지 않게 끝을 줄이고, 마우스를 올리면 전체가 보인다 */}
-        <Text size="xs" c="dimmed" truncate title={s.act || undefined}>{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
-          {/* 세션 이름: 상태줄에 보이고 다른 Claude가 이 세션을 부르는 이름. 제목과 같아도 늘 보이고 누르면 복사한다(같은 자리에서 늘 복사하게) */}
-          {s.sid && s.name && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyName(s.name)) flashName() }}> · @{s.name}{named && <Text span c="teal.4" ff="inherit"> ✓ 복사됨</Text>}</UnstyledButton>}
-          {s.act && <Text span ff="monospace" c={`${COLOR.working}.5`}> · {s.act}</Text>}</Text>
       </Stack>
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
                 <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
+        {/* 중단: 늘 같은 자리에 두고 일하는 중에만 켠다(사용자 요청). Esc와 같다 */}
+        {s.host === 'web' && <Button size="xs" variant={busy ? 'filled' : 'outline'} color={busy ? COLOR.working : 'gray'} disabled={!busy || !s.sid} onClick={() => stopSession(s)}>중단 (Esc)</Button>}
         {s.state === 'myturn' && <Button size="xs" variant="outline" color="sage" onClick={() => api('seen', { sid: s.sid })}>알겠어, 쉬어</Button>}
         {s.host === 'web' && <Button size="xs" variant="outline" color="orange" title="전역 CLAUDE.md·.zshrc 등을 바꾼 뒤. 같은 대화로 다시 띄워 이어집니다(일하는 중이어도 끊습니다)" onClick={async () => {
           if (await api('session/restart', { names: [s.tmux] })) toast('세션을 다시 띄웁니다. 대화는 그대로 이어집니다.')
         }}>세션 재시작</Button>}
         {s.host === 'web' && <Button size="xs" variant="outline" color="red" onClick={() => setUI({ closeFor: s.sid })}>세션 종료</Button>}
       </Group>
+    </Group>
+    {/* 둘째 줄은 머리 전체 폭: 왼쪽 폴더·상태·이름(넘치면 줄임), 오른쪽 대화 단축키·권한 모드·모델·effort */}
+    <Group gap={14} wrap="nowrap" justify="space-between">
+      {/* 한 줄로 고정: 실행 중인 명령(act)이 길어도 머리가 두꺼워지지 않게 끝을 줄이고, 마우스를 올리면 전체가 보인다 */}
+      <Text size="xs" c="dimmed" truncate title={s.act || undefined} style={{ minWidth: 0 }}>{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
+        {/* 세션 이름: 상태줄에 보이고 다른 Claude가 이 세션을 부르는 이름. 제목과 같아도 늘 보이고 누르면 복사한다(같은 자리에서 늘 복사하게) */}
+        {s.sid && s.name && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyName(s.name)) flashName() }}> · @{s.name}{named && <Text span c="teal.4" ff="inherit"> ✓ 복사됨</Text>}</UnstyledButton>}
+        {s.act && <Text span ff="monospace" c={`${COLOR.working}.5`}> · {s.act}</Text>}</Text>
+      <SessionInfo s={s} />
     </Group>
   </Box>
 }

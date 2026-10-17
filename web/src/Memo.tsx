@@ -5,7 +5,7 @@ import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, SimpleG
 import { api } from './store'
 import { pick, setSideTab, useUI } from './ui'
 import type { Session, Snapshot } from './types'
-import { BtwTab } from './Btw'
+import { BtwTab, RECAP, askRecap } from './Btw'
 import { KeyRec, areaKeys } from './Keys'
 import type { Area } from './ui'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
@@ -70,7 +70,10 @@ export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
         <Group p="6px 12px 0" gap={6} wrap="nowrap">
           <SegmentedControl size="xs" value={tab} onChange={v => setSideTab(v as 'memo' | 'btw')}
             data={[{ value: 'memo', label: hasMemo(S, s.sid) ? '메모 •' : '메모' }, { value: 'btw', label: 'btw' }]} />
-          <Box ml="auto"><KeyRec area={tab} /></Box>
+          <Group ml="auto" gap={6} wrap="nowrap">
+            {tab === 'btw' && s.host === 'web' && <Button size="compact-xs" variant="subtle" color="gray" disabled={!s.sid || (S.btw?.[s.sid] || []).some(x => x.state === 'asking')} title={RECAP} onClick={() => askRecap(s.sid)}>한 일</Button>}
+            <KeyRec area={tab} />
+          </Group>
         </Group>
         {tab === 'memo'
           ? <Box p="8px 12px 12px" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{s.sid ? <MemoBox key={s.sid} S={S} sid={s.sid} fill /> : <Skeleton h={11} w="60%" />}</Box>

@@ -8,8 +8,10 @@ import type { Session, Snapshot } from './types'
 import { Since } from './util'
 
 // '한 일' 버튼: 이 세션을 닫아도 되는지 보려고 사용자가 가장 자주 묻는 말(사용자 요청). /btw는 도구를 못 써서 커밋 여부 등은 그 세션의 기억으로 답한다
-const RECAP = '이 대화에서 나와 한 일을 시간 순으로 짧게 정리해 줘. 일마다 끝났는지 / 남은 게 있는지(커밋·푸시 안 함, 확인 못 함, 내 답 기다림 등) 표시하고, 마지막 줄에 "이 세션 닫아도 됨" 또는 "닫으면 안 됨: 이유" 한 줄로.'
+export const RECAP = '이 대화에서 나와 한 일을 시간 순으로 짧게 정리해 줘. 일마다 끝났는지 / 남은 게 있는지(커밋·푸시 안 함, 확인 못 함, 내 답 기다림 등) 표시하고, 마지막 줄에 "이 세션 닫아도 됨" 또는 "닫으면 안 됨: 이유" 한 줄로.'
 
+// 탭 줄 오른쪽의 '한 일' 버튼(Memo.tsx SidePanel)
+export const askRecap = (sid: string) => api('btw/ask', { sid, question: RECAP })
 // 대화 오른쪽 아래 칸의 btw 탭(Memo.tsx의 SidePanel)
 export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
   const list = S.btw?.[s.sid] || []
@@ -40,15 +42,11 @@ export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
       </Stack>
     </ScrollArea>
     <Box p="sm" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
-      <Textarea autosize minRows={2} maxRows={6} value={q} onChange={e => setQ(e.currentTarget.value)} placeholder="btw로 물어보기" aria-label="btw 질문"
+      <Textarea autosize minRows={2} maxRows={6} value={q} onChange={e => setQ(e.currentTarget.value)} placeholder="btw로 물어보기 · Enter 묻기 · Shift+Enter 줄바꿈" aria-label="btw 질문"
         onKeyDown={e => {
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask() }
           else if (e.key === 'ArrowUp' && !q) { e.preventDefault(); view.current?.focus() } // 비었으면 위의 지난 답으로 올라가 ↑↓로 스크롤
         }} />
-      <Group justify="space-between" mt={6}>
-        <Button size="xs" variant="subtle" color="gray" disabled={busy} title={RECAP} onClick={() => ask(RECAP)}>한 일</Button>
-        <Button size="xs" variant="light" loading={busy} onClick={() => ask()}>묻기</Button>
-      </Group>
     </Box>
   </>
 }
