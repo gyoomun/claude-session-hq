@@ -270,8 +270,9 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .mantine-Modal-content .mantine-Button-root:focus { outline: 2px solid var(--mantine-color-yellow-4); outline-offset: 3px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--mantine-color-yellow-4) 25%, transparent); }
 /* 세션 카드 안의 칸 나눔: 가로줄(머리|대화, 대화|입력칸)과 대화|오른쪽 칸 사이 세로 경계(끌어서 너비를 바꾼다. 핀|메모 사이는 .hq-split-line) */
 .hq-rule { flex: none; height: 1px; background: var(--mantine-color-default-border); }
-.hq-split-vline { width: 9px; position: relative; display: grid; place-items: center; outline: none; }
-.hq-split-vline::before { content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--mantine-color-default-border); }
-.hq-split-vline::after { content: ''; position: relative; width: 3px; height: 44px; border-radius: 2px; background: var(--mantine-color-default-border); }
-.hq-split-vline[data-separator="hover"]::before, .hq-split-vline[data-separator="active"]::before, .hq-split-vline[data-separator="focus"]::before,
+.hq-split-vline { width: 1px; position: relative; z-index: 2; display: grid; place-items: center; outline: none; background: var(--mantine-color-default-border); }
+/* 줄 자체는 1px이라 양옆 가로줄(머리|대화·대화|입력칸·핀|메모)이 빈틈 없이 닿는다. 잡는 자리는 투명한 ::before로 양옆 4px씩 넓힌다 */
+.hq-split-vline::before { content: ''; position: absolute; top: 0; bottom: 0; left: -4px; right: -4px; }
+.hq-split-vline::after { content: ''; width: 3px; height: 44px; border-radius: 2px; background: var(--mantine-color-default-border); }
+.hq-split-vline[data-separator="hover"], .hq-split-vline[data-separator="active"], .hq-split-vline[data-separator="focus"],
 .hq-split-vline[data-separator="hover"]::after, .hq-split-vline[data-separator="active"]::after, .hq-split-vline[data-separator="focus"]::after { background: var(--mantine-color-indigo-5); }
