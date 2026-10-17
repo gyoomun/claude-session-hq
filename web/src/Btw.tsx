@@ -2,7 +2,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Box, Button, Group, Loader, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
+import { Box, Group, Loader, ScrollArea, Stack, Text, Textarea } from '@mantine/core'
 import { api } from './store'
 import type { Session, Snapshot } from './types'
 import { Since } from './util'
@@ -26,10 +26,7 @@ export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
     setBusy(false)
   }
   return <>
-    {(list.length > 0 || (s.host !== 'web' && s.sid)) && <Group justify="space-between" p="6px 10px" gap={4} wrap="nowrap">
-      <Text size="xs" c="dimmed">{s.host !== 'web' && s.sid ? '웹에서 띄운 세션에서만 쓸 수 있습니다' : ''}</Text>
-      {list.length > 0 && <Button size="compact-xs" variant="subtle" color="gray" style={{ flex: 'none' }} onClick={() => api('btw/clear', { sid: s.sid })}>비우기</Button>}
-    </Group>}
+    {s.host !== 'web' && s.sid && <Text size="xs" c="dimmed" p="6px 10px">웹에서 띄운 세션에서만 쓸 수 있습니다</Text>}
     <ScrollArea viewportRef={view} style={{ flex: 1 }} viewportProps={{ tabIndex: 0, className: 'hq-scrollfocus' }}>
       <Stack gap="sm" p="sm">
         {!list.length && <Text size="sm" c="dimmed">메인 작업을 시켜 둔 동안 궁금한 것을 물어보세요. 예: "지금 어디까지 했어?", "아까 그 설정 파일 위치가 어디였지?"</Text>}

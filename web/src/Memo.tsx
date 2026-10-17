@@ -1,7 +1,7 @@
 // 대화 오른쪽 칸(핀·메모·btw)과 메모 보기(F4).
 // 핀: Claude 핀보드 모드가 올린 할 일·결정할 것(읽기만). 메모: Claude가 알 수 없는 사정을 내가 적거나, 내가 시킬 때 Claude가 덧붙인다(skills/hq-memo)
 import { useEffect, useRef, useState } from 'react'
-import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, SimpleGrid, Skeleton, Stack, Text, Textarea } from '@mantine/core'
+import { Badge, Box, Button, Group, Modal, Paper, ScrollArea, SegmentedControl, SimpleGrid, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api } from './store'
 import { pick, setSideTab, useUI } from './ui'
 import type { Session, Snapshot } from './types'
@@ -62,6 +62,7 @@ function Section({ area, title, sub, children }: { area: Area; title: string; su
 export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-side2' })
   const { layoutKey, sideTab: tab } = useUI()
+  const [askClear, setAskClear] = useState(false) // btw 비우기는 되돌릴 수 없어 한 번 묻는다. 기본 포커스는 비우기(사용자 요청)
   return <Split key={layoutKey} orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
     <Panel id="pin" defaultSize="30" minSize={70}><Section area="pin" title="핀" sub="Claude 핀보드"><PinList s={s} /></Section></Panel>
     <Separator className="hq-split-line" />
@@ -71,6 +72,7 @@ export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
           <SegmentedControl size="xs" value={tab} onChange={v => setSideTab(v as 'memo' | 'btw')}
             data={[{ value: 'memo', label: hasMemo(S, s.sid) ? '메모 •' : '메모' }, { value: 'btw', label: 'btw' }]} />
           <Group ml="auto" gap={6} wrap="nowrap">
+            {tab === 'btw' && (S.btw?.[s.sid] || []).length > 0 && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setAskClear(true)}>비우기</Button>}
             {tab === 'btw' && s.host === 'web' && <Button size="compact-xs" variant="subtle" color="gray" disabled={!s.sid || (S.btw?.[s.sid] || []).some(x => x.state === 'asking')} title={RECAP} onClick={() => askRecap(s.sid)}>한 일</Button>}
             <KeyRec area={tab} />
           </Group>
@@ -78,6 +80,15 @@ export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
         {tab === 'memo'
           ? <Box p="8px 12px 12px" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{s.sid ? <MemoBox key={s.sid} S={S} sid={s.sid} fill /> : <Skeleton h={11} w="60%" />}</Box>
           : <BtwTab S={S} s={s} />}
+        <Modal opened={askClear} onClose={() => setAskClear(false)} title="btw 비우기" size="sm">
+          <Stack gap="sm">
+            <Text size="sm">이 세션의 btw 질문과 답을 모두 지울까요?</Text>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setAskClear(false)}>취소</Button>
+              <Button color="red" data-autofocus onClick={() => { setAskClear(false); api('btw/clear', { sid: s.sid }) }}>비우기</Button>
+            </Group>
+          </Stack>
+        </Modal>
       </Paper>
     </Panel>
   </Split>
