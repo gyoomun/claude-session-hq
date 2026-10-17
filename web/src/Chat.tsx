@@ -275,7 +275,6 @@ function Composer({ s, d, history, onSent }: {
       {s.state === 'approval' && question && <Stack gap={6}>
         <Text size="sm" c="red.4" fw={600}>{question.header ? question.header + ' · ' : ''}{question.question}</Text>
         {hardQuestion(s) ? <Group gap={6}>
-          <Text size="xs" c="dimmed">{s.ask!.questions!.length > 1 ? `질문이 ${s.ask!.questions!.length}개라` : '여러 개 고르는 질문이라'} 대화 화면에서는 답할 수 없습니다</Text>
           <Button size="xs" variant="default" onClick={() => setView(s.sid, 'term')}>터미널에서 답하기</Button>
         </Group> : <Group gap={6} wrap="wrap">
           {question.options.map((o, n) => <Button key={n} size="xs" variant="default" title={o.description} onClick={() => key(String(n + 1))}>{n + 1} · {o.label}</Button>)}
