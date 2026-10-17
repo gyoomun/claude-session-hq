@@ -25,8 +25,8 @@ function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; 
     <Group gap={8} wrap="nowrap" align="flex-start">
       <Box w={8} h={8} mt={6} className={'hq-dot' + (s.state === 'working' || s.state === 'compact' ? ' busy' : '')} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} />
       <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
-        <Text size="sm" fw={600} className="hq-wrap" lh={1.35} lineClamp={clamp ? 2 : undefined} title={clamp ? s.title : undefined}>{s.title}{memo && <IconPinFilled size={12} style={{ marginLeft: 4, verticalAlign: -1, color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}</Text>
-        <Text size="xs" c="dimmed"><Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
+        <Text size="sm" className="hq-wrap" lh={1.35} lineClamp={clamp ? 2 : undefined} title={clamp ? s.title : undefined}>{s.title}{memo && <IconPinFilled size={12} style={{ marginLeft: 4, verticalAlign: -1, color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}</Text>
+        <Text size="xs" c="dimmed"><Text span c={`${COLOR[s.state]}.5`}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
           {bgCount(s) > 0 && <Text span c="teal.4" title={bgText(s)}> · 뒤 작업 {bgCount(s)}</Text>}
           {s.host !== 'web' && <Badge size="xs" variant="outline" color="gray" ml={6}>{s.host === 'orca' ? 'Orca' : '외부'}</Badge>}</Text>
       </Stack>
@@ -163,10 +163,10 @@ function ClosedList({ S, held, onOpen }: { S: Snapshot; held: Closed[]; onOpen: 
         title={isHeld ? (isLive ? '눌러서 보기' : '여는 중') : '눌러서 다시 열기'}
         onClick={() => isHeld ? isLive && pick(c.sid) : onOpen(c)}>
         <Stack gap={0} style={{ minWidth: 0 }}>
-          <Text size="sm" fw={isHeld ? 600 : undefined} className="hq-wrap" lh={1.35} c={isHeld ? undefined : 'dimmed'}>{c.title}</Text>
+          <Text size="sm" className="hq-wrap" lh={1.35} c={isHeld ? undefined : 'dimmed'}>{c.title}</Text>
           <Text size="xs" c="dimmed" truncate title={c.cwd}>{c.cwd}</Text>
           {/* 하루가 지나면 '며칠 전' 대신 닫은 날짜·시각 */}
-          <Text size="xs" c="dimmed">{isHeld ? <Text span c={isLive ? `${COLOR.myturn}.5` : 'dimmed'} fw={600}>{isLive ? '다시 열림 · 누르면 보기' : '여는 중…'}</Text>
+          <Text size="xs" c="dimmed">{isHeld ? <Text span c={isLive ? `${COLOR.myturn}.5` : 'dimmed'}>{isLive ? '다시 열림 · 누르면 보기' : '여는 중…'}</Text>
             : Date.now() - c.closedAt < D ? <Since t={c.closedAt} suf=" 전" /> : `${new Date(c.closedAt).getMonth() + 1}. ${new Date(c.closedAt).getDate()}. ${hhmm(c.closedAt)}`}</Text>
         </Stack>
       </UnstyledButton>
@@ -178,8 +178,8 @@ function ClosedList({ S, held, onOpen }: { S: Snapshot; held: Closed[]; onOpen: 
 function ItemSkeleton({ state, since }: { state: Session['state']; since: number }) {
   return <Group gap={8} wrap="nowrap" align="flex-start" p="7px 8px">
     <Box w={8} h={8} mt={6} className="hq-dot" style={{ borderRadius: 2, flex: 'none', background: cssColor(state) }} />
-    <Stack gap={0} style={{ flex: 1, minWidth: 0 }}><Text component="div" size="sm" fw={600} lh={1.35}><Skeleton h="0.9em" w="80%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>
-      <Text size="xs" c="dimmed"><Text span c={`${COLOR[state]}.5`} fw={600}>{LABEL[state]}</Text> <Since t={since} suf="째" /></Text></Stack>
+    <Stack gap={0} style={{ flex: 1, minWidth: 0 }}><Text component="div" size="sm" lh={1.35}><Skeleton h="0.9em" w="80%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>
+      <Text size="xs" c="dimmed"><Text span c={`${COLOR[state]}.5`}>{LABEL[state]}</Text> <Since t={since} suf="째" /></Text></Stack>
   </Group>
 }
 // 새 세션을 여는 동안: 진짜 세션 화면을 빈 세션(ghost)으로 그리고 손만 못 대게 막는다(inert. disabled로 막으면 버튼 모양·크기가 바뀌어 뜰 때 움찔한다).
