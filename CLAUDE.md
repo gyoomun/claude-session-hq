@@ -74,6 +74,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 이미지: 대화 입력칸에 붙여넣거나(Ctrl+V) 끌어다 놓으면 `/api/upload`로 `~/.claude/board/uploads/`에 저장하고, 보낼 때 그 파일 경로를 붙여넣기로 넣는다. Claude Code는 붙여넣은 이미지 경로를 `[Image #N]`으로 받는다(웹·Orca 세션 모두 확인). 올린 파일은 지우지 않고 쌓인다
 - 다른 터미널에서 직접 띄운 세션은 입력할 길이 없어 읽기만 된다. '웹에서도 열기'는 경고를 보여 준 뒤 같은 대화를 하나 더 띄운다(`session/resume`의 `force`)
 - 웹 세션은 대화/터미널 화면을 바꿔 볼 수 있다. Orca → 웹 옮기기(`session/migrate`)는 API만 남기고 화면 버튼은 뺐다
+- 커밋 조율 장부(`GET /api/edits?cwd=<절대 경로>`): 그 저장소의 커밋 안 한 파일(`git status`)마다 Edit·Write·MultiEdit·NotebookEdit로 고친 세션(`sessions`, 둘 이상이면 `shared`)을 준다. 여러 Claude가 한 작업 폴더를 같이 쓰면서 남의 변경을 쓸어 담아 커밋하거나, 남의 것인지 몰라 기다리던 일을 없애려는 것이다. 떠 있는 세션의 대화 기록과 하위 에이전트 기록(`<sid>/subagents/*.jsonl`)을 늘어난 만큼만 읽고, 그 파일의 마지막 커밋(`git log -1 -- 파일`) 뒤에 고친 것만 센다. 모르는 것: Bash로 고친 파일(sed·빌드 결과물)과 닫힌 세션이 고친 파일은 `sessions`가 비고, 같은 파일에서 남이 자기 부분만 먼저 커밋하면 그 전에 고친 내 변경도 빈다
 - 세션 제목 순서: custom-title → 탭 제목(tmux pane_title 또는 Orca) → ai-title → `name`
 
 ## 함정

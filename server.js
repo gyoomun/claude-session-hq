@@ -453,6 +453,64 @@ const sinceTyped = (entries, set = new Set()) => { for (const d of entries) { if
 const turns = new Map(); // `${sid}:${next}` -> sinceTyped
 const parseLines = text => text.split('\n').flatMap(l => { if (!l) return []; try { return [JSON.parse(l)]; } catch { return []; } });
 
+/* 커밋 조율 장부(`/api/edits`): 저장소의 커밋 안 한 파일마다 어느 세션이 Edit·Write로 고쳤는지.
+   떠 있는 세션(하위 에이전트 포함)만 보고, 그 파일의 마지막 커밋 뒤에 고친 것만 센다. Bash로 고친 파일은 모른다(sessions가 빈다) */
+const editCache = new Map(); // 기록 파일 → { size, edits: [{ file, at }] }, 늘어난 만큼만 읽는다
+const realOf = f => { try { return fs.realpathSync(f); } catch { return f; } };
+function editsIn(file) {
+  let size; try { size = fs.statSync(file).size; } catch { return []; }
+  let c = editCache.get(file);
+  if (!c || size < c.size) { c = { size: 0, edits: [] }; editCache.set(file, c); }
+  if (size > c.size) {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(size - c.size);
+      fs.readSync(fd, buf, 0, buf.length, c.size);
+      const end = buf.lastIndexOf(10) + 1; // 덜 써진 끝 줄은 다음에 읽는다
+      for (const d of parseLines(buf.subarray(0, end).toString('utf8'))) {
+        if (d.type !== 'assistant' || !Array.isArray(d.message?.content)) continue;
+        for (const x of d.message.content) {
+          const f = x.type === 'tool_use' && /^(Edit|MultiEdit|Write|NotebookEdit)$/.test(x.name) && (x.input?.file_path || x.input?.notebook_path);
+          if (f) c.edits.push({ file: realOf(path.resolve(d.cwd || '/', f)), at: Date.parse(d.timestamp) || 0 });
+        }
+      }
+      c.size += end;
+    } finally { fs.closeSync(fd); }
+  }
+  return c.edits;
+}
+const git = (cwd, args) => new Promise((ok, no) => execFile('git', ['-C', cwd, ...args], { timeout: 8000, maxBuffer: 16e6 }, (e, out) => e ? no(new Error(String(e.message).split('\n')[0])) : ok(out)));
+async function edits(params) {
+  const cwd = params.get('cwd') || '';
+  if (!path.isAbsolute(cwd)) throw new Error('cwd는 절대 경로여야 합니다');
+  const root = realOf((await git(cwd, ['rev-parse', '--show-toplevel'])).trim());
+  const parts = (await git(root, ['status', '--porcelain', '-z', '--untracked-files=all'])).split('\0');
+  const dirty = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (!parts[i]) continue;
+    dirty.push({ path: parts[i].slice(3), status: parts[i].slice(0, 2).trim() });
+    if (/[RC]/.test(parts[i][0])) i++; // 이름 바꾸기는 다음 칸이 옛 이름
+  }
+  // 세션마다 고친 파일(저장소 기준 경로) → 마지막으로 고친 시각
+  const bySession = snapshot.sessions.map(s => {
+    const file = findTranscript({ cwd: s.dir, sessionId: s.sid });
+    const subDir = file && path.join(path.dirname(file), s.sid, 'subagents');
+    let subs = []; try { subs = fs.readdirSync(subDir).filter(f => f.endsWith('.jsonl')).map(f => path.join(subDir, f)); } catch {}
+    const last = new Map();
+    for (const f of file ? [file, ...subs] : []) for (const e of editsIn(f)) {
+      const rel = path.relative(root, e.file);
+      if (!rel.startsWith('..') && !path.isAbsolute(rel) && e.at > (last.get(rel) || 0)) last.set(rel, e.at);
+    }
+    return { sid: s.sid, name: s.name, title: s.title, last };
+  }).filter(s => s.last.size);
+  const files = await Promise.all(dirty.map(async d => {
+    const since = (Number((await git(root, ['log', '-1', '--format=%ct', '--', d.path]).catch(() => '')).trim()) || 0) * 1000;
+    const sessions = bySession.filter(s => (s.last.get(d.path) || 0) > since).map(({ sid, name, title }) => ({ sid, name, title }));
+    return { ...d, sessions, shared: sessions.length > 1 };
+  }));
+  return { root, files };
+}
+
 function transcript(params) {
   const sid = params.get('sid') || '';
   if (!/^[0-9a-f-]{36}$/.test(sid)) throw new Error('대화 ID 형식이 아닙니다');
@@ -1433,6 +1491,7 @@ http.createServer((req, res) => {
   if (req.method === 'GET' && url === '/api/state') return json(res, 200, { ...snapshot, access: auth.status(who) });
   if (req.method === 'GET' && url === '/api/term/stream') return stream(req, res, new URLSearchParams(qs || ''), who);
   if (req.method === 'GET' && url === '/api/transcript') { try { return json(res, 200, transcript(new URLSearchParams(qs || ''))); } catch (e) { return json(res, 400, { error: e.message }); } }
+  if (req.method === 'GET' && url === '/api/edits') return edits(new URLSearchParams(qs || '')).then(r => json(res, 200, r), e => json(res, 400, { error: e.message }));
   if (req.method !== 'POST') return json(res, 404, { error: 'not found' });
   // 다른 사이트가 이 주소로 몰래 요청을 보내지 못하게 전용 헤더를 요구한다(브라우저는 다른 사이트에서 이 헤더를 못 붙인다)
   if (req.headers['x-hq'] !== '1') return json(res, 403, { error: 'forbidden' });
