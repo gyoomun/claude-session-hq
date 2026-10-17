@@ -1,6 +1,6 @@
 // 작업 보기: 왼쪽 세션 목록(업무별로 묶음) | 즐겨찾기 | 고른 세션(머리 + 대화) | 핀·메모·btw
 import { useEffect, useRef, useState } from 'react'
-import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Paper, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
+import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Modal, Paper, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast, useNow } from './store'
 import { pick, setUI, setView, useUI } from './ui'
 import type { Closed, Session, Snapshot } from './types'
@@ -134,14 +134,29 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
 // 닫힌 세션 탭: 대화는 남아 있으니 누르면 바로 웹에서 같은 옵션으로 다시 연다.
 // 다시 연 줄은 이 탭에 그대로 두고 표시만 바꾼다(여러 개를 이어서 열 때 줄이 사라지거나 탭이 바뀌면 번거로워서: 사용자 요청). 탭을 떠나면 held를 비워 빠진다
 function ClosedList({ S, held, onOpen }: { S: Snapshot; held: Closed[]; onOpen: (c: Closed) => void }) {
+  const [ask, setAsk] = useState<'reopen' | 'forget' | null>(null)
   const live = new Set(S.sessions.map(x => x.sid))
   const list = [...S.closed, ...held.filter(h => !S.closed.some(c => c.sid === h.sid))].sort((a, b) => b.closedAt - a.closedAt)
   if (!list.length) return <Text size="xs" c="dimmed" px={8}>닫힌 세션 없음</Text>
   return <Stack gap={2}>
     {S.closed.length > 0 && <Group gap={6} px={8} mb={6}>
-      <Button size="compact-xs" variant="subtle" onClick={async () => { const r = await api<string[]>('session/reopen', { sids: S.closed.map(c => c.sid) }); if (r) toast(`${r.result.length}개를 다시 열었습니다.`) }}>모두 다시 열기</Button>
-      <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('session/forget-closed', {})}>목록 비우기</Button>
+      <Button size="compact-xs" variant="subtle" onClick={() => setAsk('reopen')}>모두 다시 열기</Button>
+      <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setAsk('forget')}>목록 비우기</Button>
     </Group>}
+    {/* 두 버튼은 잘못 누르면 Claude가 한꺼번에 뜨거나 목록이 사라져서 묻는다. 기본 포커스는 취소(사용자 요청) */}
+    <Modal opened={!!ask} onClose={() => setAsk(null)} title={ask === 'reopen' ? '모두 다시 열기' : '목록 비우기'} size="sm">
+      <Stack gap="sm">
+        <Text size="sm">{ask === 'reopen' ? `닫힌 세션 ${S.closed.length}개를 모두 웹에서 다시 열까요?` : `닫힌 세션 ${S.closed.length}개를 목록에서 지울까요? 대화 기록은 남지만 여기서 다시 열 수 없게 됩니다.`}</Text>
+        <Group justify="flex-end">
+          <Button variant="default" data-autofocus onClick={() => setAsk(null)}>취소</Button>
+          <Button color={ask === 'reopen' ? undefined : 'red'} onClick={async () => {
+            const what = ask; setAsk(null)
+            if (what === 'forget') { api('session/forget-closed', {}); return }
+            const r = await api<string[]>('session/reopen', { sids: S.closed.map(c => c.sid) }); if (r) toast(`${r.result.length}개를 다시 열었습니다.`)
+          }}>{ask === 'reopen' ? '다시 열기' : '비우기'}</Button>
+        </Group>
+      </Stack>
+    </Modal>
     {list.map(c => {
       const isHeld = held.some(h => h.sid === c.sid), isLive = live.has(c.sid)
       return <UnstyledButton key={c.sid} p="7px 8px" w="100%" className="hq-item" style={{ borderRadius: 8 }}
