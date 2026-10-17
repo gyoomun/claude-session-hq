@@ -7,10 +7,10 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 ## 실행·반영
 - 서버는 launchd(`dev.gyoomun.claude-session-hq`)가 Homebrew Node로 띄운다. 주소는 http://127.0.0.1:7420
 - `server.js`를 고친 뒤: `launchctl kickstart -k gui/$(id -u)/dev.gyoomun.claude-session-hq`. 웹 세션은 tmux에서 돌므로 서버를 재시작해도 끊기지 않는다
-- 화면은 `web/`(Vite + React + Mantine, TypeScript)이고 서버는 빌드 결과 `dist/`를 내준다. 화면을 고친 뒤: `PATH=/opt/homebrew/bin:$PATH npm run typecheck && npm run build` 후 브라우저 새로고침(서버 재시작 불필요). 바로바로 보면서 고치려면 `npm run dev`(5173, API는 7420으로 넘김)
+- 화면은 `web/`(Vite + React + Mantine, TypeScript)이고 서버는 빌드 결과 `dist/`를 내준다. 화면을 고친 뒤: `npm run typecheck && npm run build` 후 브라우저 새로고침(서버 재시작 불필요). 바로바로 보면서 고치려면 `npm run dev`(5173, API는 7420으로 넘김)
 - 열려 있는 화면은 데이터만 2초마다 받고 화면 코드는 새로고침해야 바뀐다. 그래서 상태에 `build`(dist/index.html 시각)를 실어 보내고, 화면이 자기보다 새 빌드를 보면 위에 '새 버전이 나왔습니다 [새로고침]'을 띄운다
 - 로그인 화면 `public/login.html`은 빌드 없이 그대로 내주는 단독 페이지다
-- 의존성: `PATH=/opt/homebrew/bin:$PATH npm install`(launchd와 같은 Node로 깔아야 node-pty가 맞는다). 설치·제거: `node scripts/install.js` / `--uninstall`. 로그: `~/.claude/board/server.log`
+- 의존성: `npm install`(launchd와 같은 Node로 깔아야 node-pty가 맞는다). 설치·제거: `node scripts/install.js` / `--uninstall`. 로그: `~/.claude/board/server.log`
 - 실험은 `PORT=7499 node server.js`로 따로 띄운다. 데이터 파일과 tmux 소켓은 같이 쓰므로 시험 세션·업무는 지운다
 
 ## 구조
@@ -83,7 +83,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - launchd plist의 `AbandonProcessGroup`을 빼면 서버 재시작 때 tmux와 세션까지 같이 죽을 수 있다
 - node-pty 미리 빌드된 `spawn-helper`는 실행 권한 없이 깔린다. `postinstall`이 권한을 준다
 - 훅 명령은 `CLAUDE_PID=$PPID '<hook.sh>'` 형태여야 한다. `$PPID`가 claude 프로세스여야 세션 파일과 짝이 맞는다. 훅은 stdout에 아무것도 쓰면 안 된다
-- launchd는 nvm 경로를 모른다. Node 경로를 `/opt/homebrew/bin/node`로 고정했다
+- launchd는 nvm 경로를 모른다. 그래서 `install.js`가 자기를 실행한 Node(nvm 기본값)의 절대 경로를 plist에 박는다. Node를 바꾸면 그 Node로 `npm rebuild` 후 `node scripts/install.js`를 다시 실행한다(경로에 버전이 들어 있고 node-pty가 Node에 맞춰 빌드된다)
 - 접근 판정(`auth.identify`): 이 맥(루프백 주소 + Host가 localhost)이면 로그인 없이 통과, 아니면 로그인 쿠키가 있어야 한다. 사내망 접속(`db.settings.lan`)이 꺼져 있으면 맥 밖 요청은 모두 403. 맥에서 터널(cloudflared 등)로 들어온 요청은 Host가 달라 로그인을 요구받는다
 - 모든 쓰기 요청은 `x-hq: 1` 헤더가 있어야 받는다. 다른 사이트가 이 주소로 몰래 요청을 보내는 것을 막는 장치라 빼지 않는다. 쿠키는 HttpOnly·SameSite=Strict
 - 기기 이름: 주인이 붙인 이름(`db.deviceNames`, IP별) → `~/.claude/board/ip-names.json`(회사 IP 목록 `04note/work/engsoft/handover/trilium/network/office-lan/attachments/engsoft-ip-list.xlsx`의 '내부' 시트에서 사용 중인 IP·이름·부서를 뽑아 만든 것. 동료 이름이 들어 있어 저장소에 넣지 않는다) → NetBIOS PC 이름 → 기기 종류. 엑셀이 바뀌면 파일을 다시 뽑는다

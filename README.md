@@ -31,7 +31,7 @@ npm run build
 node scripts/install.js
 ```
 
-`npm install`과 `install.js`는 같은 Node로 실행하세요. 서버를 자동 실행하는 launchd는 Homebrew Node(`/opt/homebrew/bin/node`)가 있으면 그것을 씁니다.
+`npm install`과 `install.js`는 같은 Node로 실행하세요. 서버를 자동 실행하는 launchd는 `install.js`를 실행한 Node의 경로를 그대로 씁니다. Node를 바꾸면 그 Node로 `npm rebuild` 후 `install.js`를 다시 실행하세요.
 
 설치하면 세 가지가 바뀝니다.
 

@@ -16,8 +16,8 @@ const EVENTS = { UserPromptSubmit: null, PreToolUse: '*', PostToolUse: '*', Perm
 const LABEL = 'dev.gyoomun.claude-session-hq';
 const PLIST = path.join(HOME, 'Library', 'LaunchAgents', LABEL + '.plist');
 const BOARD = path.join(HOME, '.claude', 'board');
-// launchd는 nvm 경로를 모르므로 Homebrew Node를 먼저 쓴다
-const NODE = fs.existsSync('/opt/homebrew/bin/node') ? '/opt/homebrew/bin/node' : process.execPath;
+// launchd는 nvm 경로를 모르므로 이 스크립트를 실행한 Node의 절대 경로를 박는다. Node를 바꾸면 그 Node로 npm rebuild 후 다시 실행한다
+const NODE = process.execPath;
 const PORT = process.env.PORT || '7420';
 const uninstall = process.argv.includes('--uninstall');
 const ours = h => String(h.command || '').includes('claude-session-hq/hooks/hook.sh');
