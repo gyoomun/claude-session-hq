@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Box, Button, UnstyledButton, CloseButton, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
-import { openMenuView, pickNew } from './ui'
+import { openMenuView, pickNew, useUI } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
 import { RewindPanel } from './Rewind'
@@ -250,6 +250,13 @@ function Composer({ s, d, history, onSent }: {
     onSent(x, req) // 보내는 중에도(글을 넣는 데 시간이 걸린다) 바로 '일하는 중'으로 본다
     if (!await req) { setText(p => p ? x.text + '\n' + p : x.text); setImgs(p => [...x.imgs, ...p]); setPastes(p => [...x.pastes, ...p]) }
   }
+  // 빠른 대답(⌘Enter): 환경설정에서 정해 둔 말을 보낸다. 입력칸에 쓰던 글은 그대로 둔다
+  const quick = useUI().quick
+  const sendQuick = async () => {
+    if (!quick.trim()) return
+    const req = api('term/send', { pid: s.pid, parts: [{ text: quick }] })
+    onSent({ text: quick, imgs: [], pastes: [], at: serverNow() }, req)
+  }
   const key = (k: string) => api('term/key', { pid: s.pid, key: k })
   const place = (len: number, at: number) => requestAnimationFrame(() => box.current?.setSelectionRange(at + len, at + len))
   return <Paper p="sm">
@@ -279,9 +286,10 @@ function Composer({ s, d, history, onSent }: {
           const t = e.clipboardData.getData('text/plain')
           if (bigPaste(t)) { e.preventDefault(); place(addPaste(t, sel), at) }
         }}
-        placeholder="Enter 보내기 · Shift+Enter 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기 · Esc 두 번 되감기" aria-label="보낼 말"
+        placeholder={'⌘Enter 빠른 대답\nEnter 보내기 · Shift+Enter 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기 · Esc 두 번 되감기'} aria-label="보낼 말"
         onKeyDown={e => {
           // 한글 입력 중(조합 중)의 Enter는 글자 확정이라 보내지 않는다
+          if (e.key === 'Enter' && e.metaKey && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); sendQuick(); return }
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
           // ↑는 커서가 첫 줄에 있을 때, ↓는 마지막 줄에 있을 때만 지난 말로 넘긴다(그 밖에는 줄 사이 이동)
           const el = e.currentTarget, v = el.value

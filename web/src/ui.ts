@@ -40,6 +40,7 @@ interface UI {
   detail: boolean // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
   motion: 'system' | 'on' // 움직임: 컴퓨터의 '동작 줄이기'를 따를지, 항상 켤지
   toast: ToastPos // 알림(토스트)이 뜨는 자리: 네 꼭짓점과 네 변의 가운데
+  quick: string // 빠른 대답: 대화 입력칸에서 ⌘Enter로 보내는 정해 둔 말(환경설정에서 바꾼다. 이 브라우저에 남는다)
   keys: Record<KeyId, Combo | null>
   sideW: number // 펼친 사이드바 폭(px). 오른쪽 경계를 끌어 바꾼다(이 브라우저에 남는다)
   slimW: number // 접은 사이드바 폭(px). 펼친 폭과 따로 끌어 바꾼다
@@ -47,13 +48,14 @@ interface UI {
   sideTab: 'memo' | 'btw' // 대화 오른쪽 아래 칸에서 보고 있는 탭(메모·btw를 한 칸에 탭으로 둔다. 이 브라우저에 남는다)
   layoutKey: number // 칸 경계를 기본값으로 되돌릴 때 올린다(경계 묶음은 처음 그릴 때만 저장값을 읽어서, 다시 그리게 한다)
 }
+export const QUICK = '커밋푸시 하고 다음거 진행해. 다음에 할 일이 없으면 다른 일을 찾거나 새로 벌이지 말고 "더 진행할 게 없습니다"라고만 답해.' // 빠른 대답 처음 값
 export const SIDE_W = 164, SLIM_W = 68 // 사이드바 처음 폭(펼침·접힘)
 const clampSide = (v: number) => Math.round(Math.min(360, Math.max(120, v)))
 const clampSlim = (v: number) => Math.round(Math.min(110, Math.max(52, v)))
 let ui: UI = {
   mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', closeFor: '', pendingSel: '', pendingTask: '', pendingCwd: '', pendingFav: '', pendingWorking: false,
   openTask: null, openSess: null, newFor: null, addTask: false, brief: false,
-  settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', sideTab: get('hq-sidetab') === 'btw' ? 'btw' : 'memo', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system', slim: get('hq-slim') === '1', sideW: clampSide(Number(get('hq-sidew')) || SIDE_W), slimW: clampSlim(Number(get('hq-slimw')) || SLIM_W),
+  settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', sideTab: get('hq-sidetab') === 'btw' ? 'btw' : 'memo', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system', quick: get('hq-quick') || QUICK, slim: get('hq-slim') === '1', sideW: clampSide(Number(get('hq-sidew')) || SIDE_W), slimW: clampSlim(Number(get('hq-slimw')) || SLIM_W),
 }
 history.replaceState(null, '', '#' + ui.mode)
 const subs = new Set<() => void>()
@@ -113,6 +115,7 @@ document.documentElement.dataset.motion = ui.motion
 document.documentElement.dataset.toast = ui.toast
 export function setKeys(k: Record<KeyId, Combo | null>) { set('hq-keys', JSON.stringify(k)); setUI({ keys: k }) }
 export function setToast(v: ToastPos) { set('hq-toast', v); document.documentElement.dataset.toast = v; setUI({ toast: v }) }
+export function setQuick(v: string) { set('hq-quick', v); setUI({ quick: v }) }
 export function setDetail(v: boolean) { set('hq-detail', v ? '1' : '0'); setUI({ detail: v }) }
 // 칸 경계(react-resizable-panels가 localStorage에 저장한 비율)를 지우고 기본값으로 다시 그린다. id: 'hq-side'(핀·메모·btw 높이), 'hq-work'(목록·즐겨찾기·대화 너비)
 export function resetLayout(id: string) {

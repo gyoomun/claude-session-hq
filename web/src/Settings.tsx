@@ -3,19 +3,19 @@
 // 되돌리기·모두 재시작 같은 동작 버튼과 접속 관리는 누르면 바로 실행된다
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Box, Button, CloseButton, Code, Group, Modal, SegmentedControl, Stack, Switch, Text, TextInput, UnstyledButton } from '@mantine/core'
+import { Box, Button, CloseButton, Code, Group, Modal, SegmentedControl, Stack, Switch, Text, TextInput, Textarea, UnstyledButton } from '@mantine/core'
 import { IconAccessPoint, IconCalendar, IconKeyboard, IconLayoutColumns, IconMail, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { api, toast } from './store'
-import { ACTIONS, AREAS, DEFAULT_KEYS, TOAST_POS, type ToastPos, resetLayout, setKeys, setDetail, setMotion, setToast, setUI, useUI } from './ui'
+import { ACTIONS, AREAS, DEFAULT_KEYS, TOAST_POS, type ToastPos, QUICK, resetLayout, setKeys, setDetail, setMotion, setQuick, setToast, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
 import { COLOR, hhmm } from './util'
 import { AccessPanel } from './Modals'
 import { KeyRec, isRecording } from './Keys'
 
-interface Draft { detail: boolean; motion: 'system' | 'on'; toast: ToastPos }
+interface Draft { detail: boolean; motion: 'system' | 'on'; toast: ToastPos; quick: string }
 // 분류와 그 안의 항목 글(검색에 쓴다)
 const PAGES = [
-  { id: 'view', name: '화면', icon: IconPalette, words: '웹 세션 화면 대화 터미널 작업 과정 자세히 도구 움직임 애니메이션 동작 줄이기 알림 토스트 위치 자리' },
+  { id: 'view', name: '화면', icon: IconPalette, words: '웹 세션 화면 대화 터미널 작업 과정 자세히 빠른 대답 ⌘Enter 커밋 푸시 정해 둔 말 도구 움직임 애니메이션 동작 줄이기 알림 토스트 위치 자리' },
   { id: 'layout', name: '배치', icon: IconLayoutColumns, words: '칸 높이 너비 핀 메모 btw 세션 목록 즐겨찾기 대화 경계 되돌리기 기본값 아래 칸 일정 메일 카드' },
   { id: 'keys', name: '단축키', icon: IconKeyboard, words: '단축키 키보드 영역 세션 목록 즐겨찾기 대화 핀 메모 btw 녹화 F1 F2 F3 F4 Ctrl Tab Cmd T Esc 되감기 터미널 UI 전환 화면' },
   { id: 'calendar', name: '일정', icon: IconCalendar, words: '일정 캘린더 구글 연차 반차 휴가 회사 iCal 다시 읽기' },
@@ -119,6 +119,12 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
       <Row label="작업 과정 자세히" help="도구 사용을 한 줄로 접지 않고 하나하나 봅니다" changed={d.detail !== ui.detail}>
         <Switch checked={d.detail} onChange={e => set({ detail: e.currentTarget.checked })} aria-label="작업 과정 자세히" />
       </Row>
+      <Row label="빠른 대답 (⌘Enter)" help="대화 입력칸에서 ⌘Enter를 누르면 이 말을 보냅니다. 입력칸에 쓰던 글은 그대로 남습니다" changed={d.quick !== ui.quick}>
+        <Stack gap={4} align="flex-end">
+          <Textarea size="xs" w={340} autosize minRows={2} maxRows={6} value={d.quick} onChange={e => set({ quick: e.currentTarget.value })} aria-label="빠른 대답" />
+          <Button size="compact-xs" variant="subtle" disabled={d.quick === QUICK} onClick={() => set({ quick: QUICK })}>처음 말로</Button>
+        </Stack>
+      </Row>
     </Section>
     <Section title="알림">
       <Row label="알림 자리" help="'세션을 다시 띄웁니다' 같은 알림이 뜨는 곳. 적용하면 고른 자리에 보기 알림이 뜹니다" changed={d.toast !== ui.toast}>
@@ -144,7 +150,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
   </Section>
   if (id === 'keys') {
     const fixed: [string, string][] = [['F1 · F2 · F3 · F4', '작업 · 업무별 · 세션 전체 · 메모 보기'], ['Ctrl+Tab · Ctrl+Shift+Tab (⌘↓ · ⌘↑)', '같은 목록(즐겨찾기 또는 세션 목록) 안에서 다음·이전 세션'],
-      ['⌘T (Ctrl+T)', '새 세션'], ['Esc', '대화에서: Claude 중단 · 다른 영역에서: 대화 입력칸으로'], ['Esc Esc', '대화에서 Claude가 쉴 때: 되감기'],
+      ['⌘T (Ctrl+T)', '새 세션'], ['⌘Enter', '대화 입력칸에서: 빠른 대답 보내기(말은 화면 > 빠른 대답에서 바꾼다)'], ['Esc', '대화에서: Claude 중단 · 다른 영역에서: 대화 입력칸으로'], ['Esc Esc', '대화에서 Claude가 쉴 때: 되감기'],
       ['↑ ↓ · Enter', '세션 목록·즐겨찾기: 옮기기 · 열고 입력칸으로'], ['스페이스 · Enter · ⌫⌫', '메모 줄: 끝남 표시 · 고치기 · 지우기']]
     return <>
       <Section title="영역 옮기기">
@@ -210,7 +216,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
 
 export function SettingsWindow({ S }: { S: Snapshot }) {
   const ui = useUI()
-  const cur: Draft = { detail: ui.detail, motion: ui.motion, toast: ui.toast }
+  const cur: Draft = { detail: ui.detail, motion: ui.motion, toast: ui.toast, quick: ui.quick }
   const [d, setD] = useState<Draft>(cur)
   const [q, setQ] = useState('')
   const [pos, setPos] = useState({ x: 0, y: 0 })
@@ -223,10 +229,11 @@ export function SettingsWindow({ S }: { S: Snapshot }) {
     setPos({ x: Math.round((innerWidth - w) / 2), y: Math.round((innerHeight - h) / 2) })
   }, [ui.settings])
   const close = () => setUI({ settings: false, settingsPage: '' }) // 다음엔 맨 위에서 연다
-  const changed = d.detail !== ui.detail || d.motion !== ui.motion || d.toast !== ui.toast
+  const changed = d.detail !== ui.detail || d.motion !== ui.motion || d.toast !== ui.toast || d.quick !== ui.quick
   const apply = () => {
     if (d.detail !== ui.detail) setDetail(d.detail)
     if (d.motion !== ui.motion) setMotion(d.motion)
+    if (d.quick !== ui.quick) setQuick(d.quick)
     if (d.toast !== ui.toast) { setToast(d.toast); setTimeout(() => toast('알림은 이제 여기에 뜹니다.'), 50) }
   }
   useEffect(() => {
