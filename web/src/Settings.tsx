@@ -3,7 +3,7 @@
 // 되돌리기·모두 재시작 같은 동작 버튼과 접속 관리는 누르면 바로 실행된다
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Box, Button, CloseButton, Code, Group, SegmentedControl, Stack, Switch, Text, TextInput, UnstyledButton } from '@mantine/core'
+import { Box, Button, CloseButton, Code, Group, Modal, SegmentedControl, Stack, Switch, Text, TextInput, UnstyledButton } from '@mantine/core'
 import { IconAccessPoint, IconCalendar, IconKeyboard, IconLayoutColumns, IconMail, IconPalette, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { api, toast } from './store'
 import { ACTIONS, AREAS, DEFAULT_KEYS, TOAST_POS, type ToastPos, resetLayout, setKeys, setDetail, setMotion, setToast, setUI, useUI } from './ui'
@@ -58,15 +58,26 @@ function ToastPicker({ value, onChange }: { value: ToastPos; onChange: (v: Toast
   </Group>
 }
 
+// 일하는 중인 세션도 끊기므로 확인 창으로 묻는다. 기본 포커스는 취소(사용자 요청)
 function RestartAll({ S }: { S: Snapshot }) {
-  const [confirm, setConfirm] = useState(false)
+  const [ask, setAsk] = useState(false)
   const n = S.sessions.filter(s => s.host === 'web').length
-  return <Button variant="default" size="xs" color={confirm ? 'red' : undefined} disabled={!n} onBlur={() => setConfirm(false)} onClick={async () => {
-    if (!confirm) { setConfirm(true); return }
-    setConfirm(false)
-    const r = await api<number>('session/restart')
-    if (r) toast(`웹 세션 ${r.result}개를 다시 띄웁니다. 대화는 그대로 이어집니다.`)
-  }}>{confirm ? `한 번 더 누르면 ${n}개 재시작` : `모두 재시작 (${n}개)`}</Button>
+  return <>
+    <Button variant="default" size="xs" disabled={!n} onClick={() => setAsk(true)}>모두 재시작 ({n}개)</Button>
+    <Modal opened={ask} onClose={() => setAsk(false)} title="모두 재시작" size="sm" zIndex={300}>{/* 환경설정 창(.hq-overlay 200) 위로 */}
+      <Stack gap="sm">
+        <Text size="sm">웹 세션 {n}개를 모두 끄고 같은 대화로 다시 띄울까요? 일하는 중인 세션도 끊깁니다.</Text>
+        <Group justify="flex-end">
+          <Button variant="default" data-autofocus onClick={() => setAsk(false)}>취소</Button>
+          <Button color="red" onClick={async () => {
+            setAsk(false)
+            const r = await api<number>('session/restart')
+            if (r) toast(`웹 세션 ${r.result}개를 다시 띄웁니다. 대화는 그대로 이어집니다.`)
+          }}>재시작</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  </>
 }
 
 // 이 맥에 남은 대화 기록 전부(닫힌 세션 목록을 비웠거나 HQ 밖에서 쓴 대화도). 자주 보는 것이 아니라서 누를 때만 읽는다(사용자 결정).
