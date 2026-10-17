@@ -4,7 +4,7 @@ import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Paper, Scroll
 import { api, toast, useNow } from './store'
 import { pick, setUI, setView, useUI } from './ui'
 import type { Session, Snapshot } from './types'
-import { COLOR, LABEL, Since, bySt, cssColor, sessOf, withForks } from './util'
+import { COLOR, D, LABEL, Since, bySt, hhmm, cssColor, sessOf, withForks } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
 import { ChatView, bgCount, bgText, copyName, useFlash } from './Chat'
@@ -143,7 +143,9 @@ function ClosedList({ S }: { S: Snapshot }) {
       {S.closed.map(c => <Group key={c.sid} gap={6} wrap="nowrap" px={8} py={4} align="flex-start">
         <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
           <Text size="sm" className="hq-wrap" lh={1.35} c="dimmed">{c.title}</Text>
-          <Text size="xs" c="dimmed">{c.cwd} · <Since t={c.closedAt} suf=" 전" /></Text>
+          <Text size="xs" c="dimmed" truncate title={c.cwd}>{c.cwd}</Text>
+          {/* 하루가 지나면 '며칠 전' 대신 닫은 날짜·시각 */}
+          <Text size="xs" c="dimmed">{Date.now() - c.closedAt < D ? <Since t={c.closedAt} suf=" 전" /> : `${new Date(c.closedAt).getMonth() + 1}. ${new Date(c.closedAt).getDate()}. ${hhmm(c.closedAt)}`}</Text>
         </Stack>
         <Button size="compact-xs" variant="light" onClick={async () => { if (await api('session/reopen', { sid: c.sid })) toast('웹에서 다시 열었습니다.') }}>다시 열기</Button>
       </Group>)}
