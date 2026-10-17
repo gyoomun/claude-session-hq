@@ -41,12 +41,12 @@ export function CloseSessionModal({ S }: { S: Snapshot }) {
   const ui = useUI()
   const s = S.sessions.find(x => x.sid === ui.closeFor)
   const close = () => setUI({ closeFor: '' })
-  return <Modal opened={!!s} onClose={close} title="세션 종료" size="sm">
+  return <Modal opened={!!s} onClose={close} title="세션 종료" size="sm" withCloseButton={false}>
     <Stack gap="sm">
       <Text size="sm">"{s?.title}" 세션을 종료할까요? 일하는 중이어도 끊깁니다. 대화 기록은 남습니다.</Text>
       <Group justify="flex-end">
-        <Button variant="default" onClick={close}>취소</Button>
-        <Button color="red" data-autofocus onClick={async () => {
+        <Button size="xs" variant="default" onClick={close}>취소</Button>
+        <Button size="xs" variant="light" color="red" data-autofocus onClick={async () => {
           close()
           if (s && await api('session/close', { name: s.tmux })) toast('세션을 종료했습니다. 대화 기록은 남아 있습니다.')
         }}>종료</Button>

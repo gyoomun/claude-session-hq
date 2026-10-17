@@ -80,12 +80,12 @@ export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
         {tab === 'memo'
           ? <Box p="8px 12px 12px" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{s.sid ? <MemoBox key={s.sid} S={S} sid={s.sid} fill /> : <Skeleton h={11} w="60%" />}</Box>
           : <BtwTab S={S} s={s} />}
-        <Modal opened={askClear} onClose={() => setAskClear(false)} title="btw 비우기" size="sm">
+        <Modal opened={askClear} onClose={() => setAskClear(false)} title="btw 비우기" size="sm" withCloseButton={false}>
           <Stack gap="sm">
             <Text size="sm">이 세션의 btw 질문과 답을 모두 지울까요?</Text>
             <Group justify="flex-end">
-              <Button variant="default" onClick={() => setAskClear(false)}>취소</Button>
-              <Button color="red" data-autofocus onClick={() => { setAskClear(false); api('btw/clear', { sid: s.sid }) }}>비우기</Button>
+              <Button size="xs" variant="default" onClick={() => setAskClear(false)}>취소</Button>
+              <Button size="xs" variant="light" color="red" data-autofocus onClick={() => { setAskClear(false); api('btw/clear', { sid: s.sid }) }}>비우기</Button>
             </Group>
           </Stack>
         </Modal>

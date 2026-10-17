@@ -147,12 +147,12 @@ function ClosedList({ S, held, onOpen }: { S: Snapshot; held: Closed[]; onOpen: 
       <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setAsk({ open: true, kind: 'forget' })}>목록 비우기</Button>
     </Group>}
     {/* 두 버튼은 잘못 누르면 Claude가 한꺼번에 뜨거나 목록이 사라져서 묻는다. 기본 포커스는 취소(사용자 요청) */}
-    <Modal opened={ask.open} onClose={hide} title={kind === 'reopen' ? '모두 다시 열기' : '목록 비우기'} size="sm">
+    <Modal opened={ask.open} onClose={hide} title={kind === 'reopen' ? '모두 다시 열기' : '목록 비우기'} size="sm" withCloseButton={false}>
       <Stack gap="sm">
         <Text size="sm">{kind === 'reopen' ? `닫힌 세션 ${S.closed.length}개를 모두 웹에서 다시 열까요?` : `닫힌 세션 ${S.closed.length}개를 목록에서 지울까요? 대화 기록은 남지만 여기서 다시 열 수 없게 됩니다.`}</Text>
         <Group justify="flex-end">
-          <Button variant="default" data-autofocus onClick={hide}>취소</Button>
-          <Button color={kind === 'reopen' ? undefined : 'red'} onClick={async () => {
+          <Button size="xs" variant="default" data-autofocus onClick={hide}>취소</Button>
+          <Button size="xs" variant={kind === 'reopen' ? 'filled' : 'light'} color={kind === 'reopen' ? undefined : 'red'} onClick={async () => {
             hide()
             if (kind === 'forget') { api('session/forget-closed', {}); return }
             const r = await api<string[]>('session/reopen', { sids: S.closed.map(c => c.sid) }); if (r) toast(`${r.result.length}개를 다시 열었습니다.`)

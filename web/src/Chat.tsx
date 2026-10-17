@@ -283,11 +283,11 @@ function NoInput({ s }: { s: Session }) {
       <Text size="sm" c="dimmed">다른 터미널에서 직접 띄운 세션이라 여기서 입력할 수 없습니다.</Text>
       <Button size="xs" variant="default" onClick={() => setAsk(true)}>웹에서도 열기</Button>
     </Group>
-    <Modal opened={ask} onClose={() => setAsk(false)} title="같은 대화를 웹에서도 띄울까요?">
+    <Modal opened={ask} onClose={() => setAsk(false)} title="같은 대화를 웹에서도 띄울까요?" withCloseButton={false}>
       <Stack>
         <Text size="sm">원래 터미널의 Claude는 그대로 두고, 같은 대화를 웹에서 하나 더 띄웁니다. 두 곳에서 동시에 말하면 서로 모르는 채 대화가 두 갈래로 엉킬 수 있습니다. 원래 터미널은 쓰지 않는 게 좋습니다.</Text>
-        <Group justify="flex-end"><Button variant="default" onClick={() => setAsk(false)}>취소</Button>
-          <Button color="orange" onClick={async () => {
+        <Group justify="flex-end"><Button size="xs" variant="default" onClick={() => setAsk(false)}>취소</Button>
+          <Button size="xs" variant="light" color="orange" onClick={async () => {
             setAsk(false)
             const r = await api<string>('session/resume', { sid: s.sid, force: true })
             if (r) { pickNew(r.result, { cwd: s.cwd, task: s.task }); toast('웹에서도 열었습니다.') }

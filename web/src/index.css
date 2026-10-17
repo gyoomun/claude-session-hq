@@ -272,8 +272,9 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 /* 권한 모드 등을 바꾸는 동안의 돌아가는 표시. 동작 줄이기가 켜져 있어도 돈다(짧게 도는 기능 표시라서) */
 .hq-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--mantine-color-indigo-3); border-right-color: transparent; animation: hq-spin .7s linear infinite; }
 @keyframes hq-spin { to { transform: rotate(360deg); } }
-/* 확인 창의 포커스 버튼: 엔터를 치면 무엇이 눌리는지 한눈에 보이게(사용자 요청). 마우스로 연 창에 자동 포커스를 주면 :focus-visible이 안 걸려서 :focus로 그린다 */
-.mantine-Modal-content .mantine-Button-root:focus { outline: 2px solid var(--mantine-color-yellow-4); outline-offset: 3px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--mantine-color-yellow-4) 25%, transparent); }
+/* 확인 창의 포커스 버튼: 엔터를 치면 무엇이 눌리는지 보이게(사용자 요청). 번짐 없이 얇은 테두리만(두껍게 둘렀더니 요란했다).
+   마우스로 연 창에 자동 포커스를 주면 :focus-visible이 안 걸려서 :focus로 그린다 */
+.mantine-Modal-content .mantine-Button-root:focus { outline: 1px solid var(--mantine-color-yellow-4); outline-offset: 2px; }
 /* 세션 카드 안의 칸 나눔: 가로줄(머리|대화, 대화|입력칸)과 대화|오른쪽 칸 사이 세로 경계(끌어서 너비를 바꾼다. 핀|메모 사이는 .hq-split-line) */
 .hq-rule { flex: none; height: 1px; background: var(--mantine-color-default-border); }
 .hq-split-vline { width: 1px; position: relative; z-index: 2; display: grid; place-items: center; outline: none; background: var(--mantine-color-default-border); }
