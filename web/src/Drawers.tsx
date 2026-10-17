@@ -18,11 +18,11 @@ export function SessionDrawer({ S }: { S: Snapshot }) {
     title={s && <Stack gap={0}><span className="hq-pixel">SESSION · {s.name}</span><Text fw={600} size="lg" className="hq-wrap">{s.title}</Text></Stack>}>
     {s && <Stack gap="md">
       <Text size="xs" c="dimmed">{s.cwd} · pid {s.pid} · 연 지 <Since t={s.startedAt} /></Text>
-      <Group gap={8}><StatePill state={s.state} /><Text size="xs" c="dimmed"><Since t={s.since} suf="째" /></Text>{s.act && <Text size="xs" ff="monospace" c="teal.5">{s.act}</Text>}</Group>
+      <Group gap={8}><StatePill state={s.state} /><Text size="xs" c="dimmed"><Since t={s.since} suf="째" /></Text>{s.act && <Text size="xs" ff="monospace" c={`${COLOR.working}.5`}>{s.act}</Text>}</Group>
       <Box><Text size="xs" c="dimmed" mb={4}>업무 배치</Text><AssignSelect S={S} s={s} size="sm" /></Box>
       <Group gap={6}>
         <Button size="xs" variant="default" onClick={() => pick(s.sid)}>작업 보기에서 열기</Button>
-        {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함 · 쉼으로</Button>}
+        {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>알겠어, 쉬어</Button>}
         {s.task && <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: null, openTask: s.task })}>업무 보기</Button>}
       </Group>
       <ReplyForm s={s} />

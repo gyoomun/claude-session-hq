@@ -16,7 +16,7 @@ function DeskTile({ S, s, sel, showTask }: { S: Snapshot; s: Session; sel?: bool
         <Stack gap={1} style={{ minWidth: 0 }}>
           <Text size="sm" fw={600} lh={1.35} className="hq-wrap">{s.title}</Text>
           <Text size="xs" c="dimmed"><Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" /></Text>
-          {s.act ? <Text size="xs" ff="monospace" c="teal.5" truncate title={s.act}>{s.act}</Text>
+          {s.act ? <Text size="xs" ff="monospace" c={`${COLOR.working}.5`} truncate title={s.act}>{s.act}</Text>
             : <Text size="xs" ff="monospace" c="dimmed" truncate title={s.cwd}>{base(s.cwd)}</Text>}
           {showTask && <Text size="xs" c={s.task ? 'indigo.4' : 'dimmed'} truncate>{tname(S, s.task)}</Text>}
         </Stack>
@@ -56,7 +56,7 @@ function Queue({ S }: { S: Snapshot }) {
           <ReplyForm s={s} />
           <Group gap={6}>
             <Button size="xs" variant="default" onClick={() => pick(s.sid)}>열기</Button>
-            {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함 · 쉼으로</Button>}
+            {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>알겠어, 쉬어</Button>}
           </Group>
         </Stack>
       </Paper>) : <Text size="sm" c="dimmed">나를 기다리는 세션이 없습니다.</Text>}

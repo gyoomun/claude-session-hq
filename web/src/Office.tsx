@@ -64,7 +64,7 @@ function DeskSprite({ s, x, y, ghost, onDown }: { s: Session; x: number; y: numb
   const tip = <Stack gap={2} maw={280}>
     <Text size="sm" fw={600}>{s.title}</Text>
     <Text size="xs"><Text span c={`${COLOR[s.state]}.4`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" /> · {s.cwd}</Text>
-    {s.act && <Text size="xs" ff="monospace" c="teal.3">{s.act}</Text>}
+    {s.act && <Text size="xs" ff="monospace" c={`${COLOR.working}.3`}>{s.act}</Text>}
     {!s.act && s.msg && <Text size="xs" className="hq-msg" style={{ WebkitLineClamp: 4 }}>{s.msg}</Text>}
     <Text size="xs" c="dimmed">누르면 열고, 끌면 자리를 옮깁니다</Text>
   </Stack>

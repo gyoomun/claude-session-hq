@@ -4,7 +4,7 @@ import { Autocomplete, Badge, Button, Code, Group, List, Modal, NativeSelect, Pa
 import { api, toast } from './store'
 import { lastCwd, pickNew, rememberCwd, setMode, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
-import { Since, bySt, fmt, lastOf, overdue, stale, tname, waiting } from './util'
+import { COLOR, Since, bySt, fmt, lastOf, overdue, stale, tname, waiting } from './util'
 
 export function NewSessionModal({ S }: { S: Snapshot }) {
   const ui = useUI()
@@ -89,11 +89,11 @@ export function BriefModal({ S }: { S: Snapshot }) {
   ]
   return <Modal opened={ui.brief} onClose={() => setUI({ brief: false })} title="지금 상황 브리핑" size="lg">
     <Stack gap="sm">
-      <Text>열린 Claude 세션 {ss.length}개 중 <Text span c="teal.5" fw={600}>{working.length}개가 일하는 중</Text>이고, <Text span c="yellow.5" fw={600}>{appr.length + mine.length}개가 나를 기다립니다.</Text> 사람 쪽으로는 {over.length}건이 4시간 넘게 답이 없습니다.</Text>
+      <Text>열린 Claude 세션 {ss.length}개 중 <Text span c={`${COLOR.working}.5`} fw={600}>{working.length}개가 일하는 중</Text>이고, <Text span c={`${COLOR.myturn}.5`} fw={600}>{appr.length + mine.length}개가 나를 기다립니다.</Text> 사람 쪽으로는 {over.length}건이 4시간 넘게 답이 없습니다.</Text>
       {todo.length ? <><Text size="xs" c="dimmed">이 순서로 처리하면 됩니다</Text><List type="ordered" spacing={4}>{todo.map((x, i) => <List.Item key={i}>{x}</List.Item>)}</List></>
         : <Text>지금 내가 처리할 일은 없습니다.</Text>}
       {working.length > 0 && <><Text size="xs" c="dimmed">맡겨 둔 일 (손댈 필요 없음)</Text>
-        <List type="ordered" spacing={4}>{working.map(s => <List.Item key={s.pid}>{s.title} — <Text span ff="monospace" size="xs" c="teal.5">{s.act}</Text></List.Item>)}</List></>}
+        <List type="ordered" spacing={4}>{working.map(s => <List.Item key={s.pid}>{s.title} — <Text span ff="monospace" size="xs" c={`${COLOR.working}.5`}>{s.act}</Text></List.Item>)}</List></>}
       {un.length > 0 && <><Text size="xs" c="dimmed">정리할 것</Text><List type="ordered" spacing={4}>
         <List.Item>미배치 세션 {un.length}개 중 {un.filter(waiting).length}개가 나를 기다립니다. 업무에 배치하면 업무 카드에서 함께 보입니다.</List.Item>
         {oldIdle.length > 0 && <List.Item>하루 넘게 쉬는 미배치 세션 {oldIdle.length}개: {oldIdle.map(s => s.title).join(', ')}. 닫아도 되는지 보세요.</List.Item>}

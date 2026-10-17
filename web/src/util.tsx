@@ -9,7 +9,7 @@ export const LABEL: Record<string, string> = {
 }
 // 상태 색은 Mantine 색 이름. 픽셀 그림에서도 같은 색을 쓴다
 export const COLOR: Record<string, string> = {
-  working: 'teal', compact: 'cyan', myturn: 'yellow', approval: 'red', idle: 'gray',
+  working: 'orange', compact: 'cyan', myturn: 'sage', approval: 'red', idle: 'gray',
   human: 'grape', empty: 'gray', open: 'indigo', closed: 'gray',
 }
 export const cssColor = (state: string, shade = 6) => `var(--mantine-color-${COLOR[state] || 'gray'}-${shade})`

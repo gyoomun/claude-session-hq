@@ -116,12 +116,12 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         <Text size="xs" c="dimmed" truncate title={s.act || undefined}>{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
           {/* 세션 이름: 상태줄에 보이고 다른 Claude가 이 세션을 부르는 이름. 제목과 같아도 늘 보이고 누르면 복사한다(같은 자리에서 늘 복사하게) */}
           {s.sid && s.name && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyName(s.name)) flashName() }}> · @{s.name}{named && <Text span c="teal.4" ff="inherit"> ✓ 복사됨</Text>}</UnstyledButton>}
-          {s.act && <Text span ff="monospace" c="teal.5"> · {s.act}</Text>}</Text>
+          {s.act && <Text span ff="monospace" c={`${COLOR.working}.5`}> · {s.act}</Text>}</Text>
       </Stack>
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
-        {s.state === 'myturn' && <Button size="xs" variant="subtle" color="gray" onClick={() => api('seen', { sid: s.sid })}>확인함</Button>}
-        <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
+                <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
+        {s.state === 'myturn' && <Button size="xs" variant="outline" color="sage" onClick={() => api('seen', { sid: s.sid })}>알겠어, 쉬어</Button>}
         {s.host === 'web' && <Button size="xs" variant="outline" color="orange" title="전역 CLAUDE.md·.zshrc 등을 바꾼 뒤. 같은 대화로 다시 띄워 이어집니다(일하는 중이어도 끊습니다)" onClick={async () => {
           if (await api('session/restart', { names: [s.tmux] })) toast('세션을 다시 띄웁니다. 대화는 그대로 이어집니다.')
         }}>세션 재시작</Button>}
