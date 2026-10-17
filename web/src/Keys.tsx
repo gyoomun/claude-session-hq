@@ -5,7 +5,7 @@ import { ActionIcon, Group, Kbd, Text, Tooltip } from '@mantine/core'
 import { IconKeyboard } from '@tabler/icons-react'
 import { toast } from './store'
 import { copyName } from './Chat'
-import { AREAS, ACTIONS, KEY_LABEL, type Area, type Combo, type KeyId, setKeys, setMode, setView, useUI } from './ui'
+import { AREAS, ACTIONS, KEY_LABEL, type Area, type Combo, type KeyId, setKeys, setMode, setSideTab, setView, sideTab, useUI } from './ui'
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform)
 const keyName = (code: string) => code.replace(/^Key|^Digit|^Numpad/, '').replace(/^Arrow(\w+)$/, (_, d) => ({ Up: '↑', Down: '↓', Left: '←', Right: '→' } as Record<string, string>)[d] || d)
@@ -56,7 +56,9 @@ export function KeyRec({ area }: { area: KeyId }) {
 }
 
 // 영역으로 옮겨 커서를 둔다. 목록·즐겨찾기는 고른 세션(없으면 첫 줄), 핀은 스크롤 칸, 메모·btw·대화는 입력칸
-export function focusArea(area: Area) {
+export function focusArea(area: Area): boolean {
+  // 메모·btw는 한 칸의 탭이라 보이지 않는 쪽이면 탭부터 바꾸고 그려진 뒤에 옮긴다
+  if ((area === 'memo' || area === 'btw') && sideTab() !== area && document.querySelector('[data-side-tabs]')) { setSideTab(area); setTimeout(() => focusArea(area), 30); return true }
   const box = document.querySelector<HTMLElement>(`[data-area="${area}"]`)
   if (!box) return false
   const target = area === 'list' || area === 'favs' ? box.querySelector<HTMLElement>('button.hq-item[data-on="true"]') || box.querySelector<HTMLElement>('button.hq-item')

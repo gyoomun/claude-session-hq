@@ -193,9 +193,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-flash { animation: hq-flash .7s ease-out; }
 @keyframes hq-flash { 0% { box-shadow: 0 0 0 2px var(--mantine-color-indigo-4); } 100% { box-shadow: 0 0 0 2px transparent; } }
 .hq-recording { animation: hq-breathe 1.2s ease-in-out infinite; }
-.hq-scrollfocus:focus-visible, .hq-memo-row:focus-visible { outline: 2px solid var(--mantine-color-indigo-4); outline-offset: -2px; border-radius: 6px; }
-.hq-memo-row { border-radius: 6px; padding: 2px; }
-.hq-memo-row.del { background: color-mix(in srgb, var(--mantine-color-red-7) 18%, transparent); }
+.hq-scrollfocus:focus-visible { outline: 2px solid var(--mantine-color-indigo-4); outline-offset: -2px; border-radius: 6px; }
 .hq-item:focus-visible { outline: 2px solid var(--mantine-color-indigo-4); outline-offset: -2px; }
 /* 머리의 오늘 일정(App.tsx Today) */
 /* 세션 줄 오른쪽 이름 복사 아이콘: 늘 보이되 흐리게, 올리면 또렷하게 */

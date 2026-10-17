@@ -1,74 +1,31 @@
 // 대화 오른쪽 칸(핀·메모·btw)과 메모 보기(F4).
-// 핀: Claude 핀보드 모드가 올린 할 일·결정할 것(읽기만). 메모: Claude가 알 수 없는 사정을 내가 적거나, 내가 시킬 때 Claude가 적는다(skills/hq-memo)
-import { useState } from 'react'
-import { Badge, Box, Button, Checkbox, CloseButton, Group, Paper, ScrollArea, SimpleGrid, Skeleton, Stack, Text, Textarea, UnstyledButton } from '@mantine/core'
+// 핀: Claude 핀보드 모드가 올린 할 일·결정할 것(읽기만). 메모: Claude가 알 수 없는 사정을 내가 적거나, 내가 시킬 때 Claude가 덧붙인다(skills/hq-memo)
+import { useEffect, useRef, useState } from 'react'
+import { Badge, Box, Button, Group, Paper, ScrollArea, SegmentedControl, SimpleGrid, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api } from './store'
-import { pick, useUI } from './ui'
-import type { Memo, Session, Snapshot } from './types'
-import { Since } from './util'
+import { pick, setSideTab, useUI } from './ui'
+import type { Session, Snapshot } from './types'
 import { BtwTab } from './Btw'
 import { KeyRec, areaKeys } from './Keys'
 import type { Area } from './ui'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 
-const enter = (f: () => void) => (e: React.KeyboardEvent) => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); f() }
-}
-export const hasMemo = (S: Snapshot, sid: string) => !!S.memos?.[sid]?.items.some(m => !m.done)
+export const hasMemo = (S: Snapshot, sid: string) => !!S.memos?.[sid]?.text.trim()
 
-// 메모 한 줄. 키보드로: 스페이스 끝남 표시, Enter 고치기, ⌫ 두 번 지우기(↑↓ 옮기기는 MemoList)
-function MemoRow({ sid, m }: { sid: string; m: Memo }) {
-  const [edit, setEdit] = useState<string | null>(null)
-  const [del, setDel] = useState(false)
-  const save = async () => { if (edit !== null && edit.trim() && edit !== m.text && !await api('memo/update', { sid, id: m.id, text: edit })) return; setEdit(null) }
-  const key = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget) return
-    if (e.key === ' ') { e.preventDefault(); api('memo/update', { sid, id: m.id, done: !m.done }) }
-    else if (e.key === 'Enter') { e.preventDefault(); setEdit(m.text) }
-    else if (e.key === 'Backspace' || e.key === 'Delete') {
-      e.preventDefault()
-      if (!del) { setDel(true); return }
-      // 지운 줄과 함께 커서가 사라지지 않게 다음 줄(없으면 앞 줄, 그다음 입력칸)로 옮긴다
-      const stops = [...(e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('.hq-memo-row, textarea[aria-label="메모 적기"]') || [])]
-      const i = stops.indexOf(e.currentTarget)
-      ;(stops[i + 1] || stops[i - 1])?.focus()
-      api('memo/delete', { sid, id: m.id })
-    }
-  }
-  return <Group gap={8} wrap="nowrap" align="flex-start" tabIndex={0} className={'hq-memo-row' + (del ? ' del' : '')} onKeyDown={key} onBlur={() => setDel(false)}
-    title={del ? '한 번 더 누르면 지웁니다' : undefined}>
-    <Checkbox size="xs" mt={3} checked={m.done} onChange={e => api('memo/update', { sid, id: m.id, done: e.currentTarget.checked })} aria-label="끝남 표시" />
-    <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-      {edit !== null
-        ? <Textarea size="xs" autosize minRows={1} maxRows={6} autoFocus value={edit} onChange={e => setEdit(e.currentTarget.value)} onBlur={save}
-            onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setEdit(null) } else enter(save)(e) }} aria-label="메모 고치기" />
-        : <UnstyledButton onClick={() => setEdit(m.text)} title="눌러서 고치기">
-            <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', textDecoration: m.done ? 'line-through' : undefined }} c={m.done ? 'dimmed' : undefined}>{m.text}</Text>
-          </UnstyledButton>}
-      <Text fz={11} c="dimmed"><Since t={m.at} suf=" 전" /></Text>
-    </Stack>
-    <CloseButton size="xs" aria-label="메모 지우기" onClick={() => api('memo/delete', { sid, id: m.id })} />
-  </Group>
-}
-
-export function MemoList({ S, sid }: { S: Snapshot; sid: string }) {
-  const items = S.memos?.[sid]?.items || []
-  const [text, setText] = useState('')
-  const add = async () => { if (text.trim() && await api('memo/add', { sid, text })) setText('') }
-  // ↑↓로 메모 줄과 입력칸 사이를 옮긴다(입력칸에서는 비었거나 커서가 맨 앞일 때만 위로)
-  const nav = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
-    const t = e.target as HTMLElement
-    if (t.tagName === 'TEXTAREA' && (e.key === 'ArrowDown' || (t as HTMLTextAreaElement).selectionStart > 0) || t.getAttribute('aria-label') === '메모 고치기') return
-    const stops = [...e.currentTarget.querySelectorAll<HTMLElement>('.hq-memo-row, textarea[aria-label="메모 적기"]')]
-    const i = stops.indexOf(t), next = stops[i + (e.key === 'ArrowUp' ? -1 : 1)]
-    if (next) { e.preventDefault(); next.focus(); next.scrollIntoView({ block: 'nearest' }) }
-  }
-  return <Stack gap={10} onKeyDown={nav}>
-    {items.map(m => <MemoRow key={m.id} sid={sid} m={m} />)}
-    <Textarea size="sm" autosize minRows={1} maxRows={5} value={text} onChange={e => setText(e.currentTarget.value)} onKeyDown={enter(add)}
-      placeholder="메모 적기 (Enter)" aria-label="메모 적기" />
-  </Stack>
+// 메모 칸: 세션마다 글 하나를 그냥 고친다(줄 목록이 아니다: 사용자 요청). 치는 동안 잠깐 멈추면, 그리고 칸을 떠나면 남긴다.
+// 남긴 값이 서버에서 돌아올 때까지는 친 글을 그대로 보인다(되돌아가 깜빡이지 않게). 세션을 바꾸면 key로 새로 그린다
+export function MemoBox({ S, sid, fill }: { S: Snapshot; sid: string; fill?: boolean }) {
+  const saved = S.memos?.[sid]?.text || ''
+  const [draft, setDraft] = useState<string | null>(null)
+  const timer = useRef(0), focused = useRef(false), latest = useRef<string | null>(null)
+  latest.current = draft
+  const save = (v: string) => { clearTimeout(timer.current); timer.current = 0; if (v !== saved) api('memo/set', { sid, text: v }) }
+  useEffect(() => { if (draft !== null && !focused.current && saved === draft) setDraft(null) }, [saved, draft])
+  useEffect(() => () => { if (timer.current && latest.current !== null) api('memo/set', { sid, text: latest.current }) }, [sid]) // 남기기 전에 세션을 바꿔도 잃지 않게
+  return <Textarea value={draft ?? saved} placeholder="메모 (Claude가 알 수 없는 사정 등. 그냥 적으면 남습니다)" aria-label="메모"
+    onChange={e => { const v = e.currentTarget.value; setDraft(v); clearTimeout(timer.current); timer.current = window.setTimeout(() => save(v), 800) }}
+    onFocus={() => { focused.current = true }} onBlur={() => { focused.current = false; if (draft !== null) save(draft) }}
+    {...(fill ? { styles: { root: { flex: 1, display: 'flex', flexDirection: 'column' }, wrapper: { flex: 1 }, input: { height: '100%', resize: 'none' } } } : { autosize: true, minRows: 3, maxRows: 16 })} />
 }
 
 const MARK = { '>': ['▸', 'yellow.5'], ' ': ['○', undefined], 'x': ['✓', 'dimmed'], '?': ['?', 'orange.4'] } as const
@@ -100,19 +57,24 @@ function Section({ area, title, sub, children }: { area: Area; title: string; su
   </Paper>
 }
 
-// 대화 오른쪽 칸: 핀·메모·btw를 위아래로 늘 펼쳐 둔다. 사이 경계를 끌어 높이를 바꾸고, 바꾼 비율은 이 브라우저에 남는다
+// 대화 오른쪽 칸: 위 핀, 아래 메모·btw 한 칸(탭으로 오간다: 둘 다 따로 두기엔 좁아서, 사용자 요청). 사이 경계를 끌어 높이를 바꾸고, 바꾼 비율은 이 브라우저에 남는다.
+// 탭 칸의 data-area는 보이는 탭이고, 영역 단축키로 안 보이는 탭을 부르면 탭이 바뀐다(Keys.tsx focusArea)
 export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
-  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-side' })
-  const { layoutKey } = useUI()
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-side2' })
+  const { layoutKey, sideTab: tab } = useUI()
   return <Split key={layoutKey} orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
-    <Panel id="pin" defaultSize="25" minSize={70}><Section area="pin" title="핀" sub="Claude 핀보드"><PinList s={s} /></Section></Panel>
+    <Panel id="pin" defaultSize="30" minSize={70}><Section area="pin" title="핀" sub="Claude 핀보드"><PinList s={s} /></Section></Panel>
     <Separator className="hq-split" />
-    <Panel id="memo" defaultSize="30" minSize={70}><Section area="memo" title="메모"><MemoList S={S} sid={s.sid} /></Section></Panel>
-    <Separator className="hq-split" />
-    <Panel id="btw" minSize={200}>
-      <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area="btw" tabIndex={-1} onKeyDown={areaKeys()}>
-        <Group p="8px 12px 0" gap={6} wrap="nowrap"><Text fw={600} size="sm">btw</Text><Box ml="auto"><KeyRec area="btw" /></Box></Group>
-        <BtwTab S={S} s={s} />
+    <Panel id="notes" minSize={200}>
+      <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area={tab} data-side-tabs tabIndex={-1} onKeyDown={areaKeys()}>
+        <Group p="6px 12px 0" gap={6} wrap="nowrap">
+          <SegmentedControl size="xs" value={tab} onChange={v => setSideTab(v as 'memo' | 'btw')}
+            data={[{ value: 'memo', label: hasMemo(S, s.sid) ? '메모 •' : '메모' }, { value: 'btw', label: 'btw' }]} />
+          <Box ml="auto"><KeyRec area={tab} /></Box>
+        </Group>
+        {tab === 'memo'
+          ? <Box p="8px 12px 12px" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{s.sid ? <MemoBox key={s.sid} S={S} sid={s.sid} fill /> : <Skeleton h={11} w="60%" />}</Box>
+          : <BtwTab S={S} s={s} />}
       </Paper>
     </Panel>
   </Split>
@@ -120,8 +82,7 @@ export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
 
 // 메모 보기(F4): 메모가 있는 세션을 모아 본다. 닫힌 대화의 메모도 남아 있다
 export function MemoView({ S }: { S: Snapshot }) {
-  const list = Object.entries(S.memos || {}).filter(([, m]) => m.items.length)
-    .sort(([, a], [, b]) => Number(b.items.some(x => !x.done)) - Number(a.items.some(x => !x.done)) || Math.max(...b.items.map(x => x.at)) - Math.max(...a.items.map(x => x.at)))
+  const list = Object.entries(S.memos || {}).filter(([, m]) => m.text.trim()).sort(([, a], [, b]) => b.at - a.at)
   if (!list.length) return <Paper withBorder p="xl" style={{ borderStyle: 'dashed' }}>
     <Text c="dimmed">아직 메모가 없습니다. 작업 보기에서 대화 옆 메모 칸에 적거나, Claude에게 "이거 메모해 둬"라고 시키세요.</Text>
   </Paper>
@@ -135,7 +96,7 @@ export function MemoView({ S }: { S: Snapshot }) {
             {live ? <Button size="compact-xs" variant="light" style={{ flex: 'none' }} onClick={() => pick(sid)}>열기</Button>
               : <Badge size="sm" variant="outline" color="gray" style={{ flex: 'none' }}>닫힌 대화</Badge>}
           </Group>
-          <MemoList S={S} sid={sid} />
+          <MemoBox key={sid} S={S} sid={sid} />
         </Paper>
       })}
     </SimpleGrid>

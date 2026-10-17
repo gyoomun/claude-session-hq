@@ -37,6 +37,8 @@ const TERM_ENV = {
 let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, usageShare: {}, forks: {}, pins: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 // 세션별 한도 추정은 한도 종류(5시간·주간)마다 따로 둔다. 예전 모양(대화 ID가 바로 키)은 창이 지나면 버려지는 값이라 옮기지 않는다
+// 메모는 세션마다 글 하나(화면에서 큰 칸 하나로 고친다). 예전 모양(줄 목록 items)은 줄을 이어 붙여 옮긴다(끝난 줄은 앞에 ✓)
+for (const m of Object.values(db.memos)) if (m.items) { m.text = m.items.map(x => (x.done ? '✓ ' : '') + x.text).join('\n'); m.at = Math.max(0, ...m.items.map(x => x.at)); delete m.items; }
 db.usageShare = { five_hour: db.usageShare.five_hour || {}, seven_day: db.usageShare.seven_day || {} };
 // 서버가 꺼지면서 끊긴 곁가지 질문은 실패로 표시한다
 for (const list of Object.values(db.btw || {})) for (const it of list) if (it.state === 'asking') { it.state = 'error'; it.a = '서버가 다시 시작돼 답을 받지 못했습니다.'; }
@@ -748,6 +750,18 @@ function favBelow(sid, origin) {
   else items.splice(i + 1, 0, { sid, slot });
 }
 
+function memoSid(b) {
+  if (!/^[0-9a-f-]{36}$/.test(String(b.sid))) throw new Error('대화 ID 형식이 아닙니다');
+  return b.sid;
+}
+// 그 대화의 메모(없으면 만든다). 제목은 메모 보기(F4)에서 닫힌 대화도 알아보게 남겨 둔다
+function memoOf(sid) {
+  const live = snapshot.sessions.find(x => x.sid === sid), c = db.closed.find(x => x.sid === sid);
+  const m = db.memos[sid] = db.memos[sid] || { title: '', text: '', at: 0 };
+  m.title = live?.title || c?.title || m.title || sid.slice(0, 8);
+  return m;
+}
+
 let migrating = false;
 const userClosed = new Set(); // 사용자가 '세션 종료'로 닫은 대화: 기록은 남기되 경고(quiet)는 띄우지 않는다
 // HQ 밖(Orca·iTerm 등)에서 돈 세션도 경고하지 않는다: 사용자가 일부러 끈 것이다. 경고는 HQ tmux 세션이 한꺼번에 꺼지는 사고만 알린다
@@ -949,26 +963,16 @@ const routes = {
     return expand(new Date(from), new Date(to));
   },
   'btw/clear': b => { delete db.btw[b.sid]; },
-  // 세션 메모: 내가 적거나, 내가 시킬 때 Claude가 적는다(skills/hq-memo). 대화 ID에 붙어 있어 닫았다 다시 열어도 남는다
+  // 세션 메모: 세션마다 글 하나. 내가 화면의 큰 칸에서 고치거나, 내가 시킬 때 Claude가 한 줄 덧붙인다(skills/hq-memo). 대화 ID에 붙어 있어 닫았다 다시 열어도 남는다
+  'memo/set': b => {
+    const sid = memoSid(b), text = String(b.text ?? '').slice(0, 20000);
+    if (!text.trim()) { delete db.memos[sid]; return; }
+    Object.assign(memoOf(sid), { text, at: Date.now() });
+  },
   'memo/add': b => {
     const text = str(b.text, 2000); if (!text) throw new Error('메모 내용을 적어 주세요');
-    if (!/^[0-9a-f-]{36}$/.test(String(b.sid))) throw new Error('대화 ID 형식이 아닙니다');
-    const live = snapshot.sessions.find(x => x.sid === b.sid), c = db.closed.find(x => x.sid === b.sid);
-    const m = db.memos[b.sid] = db.memos[b.sid] || { title: '', items: [] };
-    m.title = live?.title || c?.title || m.title || b.sid.slice(0, 8);
-    const id = crypto.randomBytes(4).toString('hex');
-    m.items.push({ id, text, by: b.by === 'claude' ? 'claude' : 'me', done: false, at: Date.now() });
-    return id;
-  },
-  'memo/update': b => {
-    const it = db.memos[b.sid]?.items.find(x => x.id === b.id); if (!it) throw new Error('없는 메모입니다');
-    if ('text' in b) { const t = str(b.text, 2000); if (!t) throw new Error('메모 내용을 적어 주세요'); it.text = t; }
-    if ('done' in b) it.done = !!b.done;
-  },
-  'memo/delete': b => {
-    const m = db.memos[b.sid]; if (!m) return;
-    m.items = m.items.filter(x => x.id !== b.id);
-    if (!m.items.length) delete db.memos[b.sid];
+    const m = memoOf(memoSid(b));
+    Object.assign(m, { text: m.text.trim() ? m.text.replace(/\n*$/, '\n') + text : text, at: Date.now() });
   },
   // 웹 세션 다시 띄우기(전역 CLAUDE.md·.zshrc를 바꾼 뒤 등): 일하는 중이어도 바로 끄고, 같은 tmux 이름·옵션으로 --resume 해서 이어 띄운다.
   // 응답부터 보내고 뒤에서 한다. 이 요청을 보낸 세션(웹 안의 Claude)도 같이 다시 뜬다

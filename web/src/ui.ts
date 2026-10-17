@@ -42,6 +42,7 @@ interface UI {
   sideW: number // 펼친 사이드바 폭(px). 오른쪽 경계를 끌어 바꾼다(이 브라우저에 남는다)
   slimW: number // 접은 사이드바 폭(px). 펼친 폭과 따로 끌어 바꾼다
   slim: boolean // 왼쪽 사이드바를 아이콘만 남기고 접었는지(이 브라우저에 남는다)
+  sideTab: 'memo' | 'btw' // 대화 오른쪽 아래 칸에서 보고 있는 탭(메모·btw를 한 칸에 탭으로 둔다. 이 브라우저에 남는다)
   layoutKey: number // 칸 경계를 기본값으로 되돌릴 때 올린다(경계 묶음은 처음 그릴 때만 저장값을 읽어서, 다시 그리게 한다)
 }
 export const SIDE_W = 164, SLIM_W = 68 // 사이드바 처음 폭(펼침·접힘)
@@ -50,12 +51,15 @@ const clampSlim = (v: number) => Math.round(Math.min(110, Math.max(52, v)))
 let ui: UI = {
   mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', closeFor: '', pendingSel: '', pendingTask: '', pendingCwd: '', pendingWorking: false,
   openTask: null, openSess: null, newFor: null, addTask: false, brief: false,
-  settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system', slim: get('hq-slim') === '1', sideW: clampSide(Number(get('hq-sidew')) || SIDE_W), slimW: clampSlim(Number(get('hq-slimw')) || SLIM_W),
+  settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', sideTab: get('hq-sidetab') === 'btw' ? 'btw' : 'memo', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system', slim: get('hq-slim') === '1', sideW: clampSide(Number(get('hq-sidew')) || SIDE_W), slimW: clampSlim(Number(get('hq-slimw')) || SLIM_W),
 }
 history.replaceState(null, '', '#' + ui.mode)
 const subs = new Set<() => void>()
 export const useUI = () => useSyncExternalStore(f => { subs.add(f); return () => { subs.delete(f) } }, () => ui)
 export function setUI(p: Partial<UI>) { ui = { ...ui, ...p }; subs.forEach(f => f()) }
+
+export const sideTab = () => ui.sideTab
+export function setSideTab(t: UI['sideTab']) { set('hq-sidetab', t); setUI({ sideTab: t }) }
 
 export function setMode(m: Mode) {
   if (m === ui.mode) return
