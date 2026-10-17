@@ -215,7 +215,7 @@ function UsagePanel({ S }: { S: Snapshot }) {
       {old && <Text size="xs" c="dimmed" title={new Date(u.at).toLocaleString('ko-KR')}><Since t={u.at} suf=" 전 값" /></Text>}</Group>
     {S.account && <UnstyledButton className="hq-item" p="2px 4px" m="-2px -4px" style={{ borderRadius: 6 }} title="누르면 브라우저가 열립니다. 거기서 로그인하면 끝나고, 이미 떠 있는 세션도 새 계정을 씁니다"
       onClick={() => api('account/login')}>
-      <Group gap={6} wrap="nowrap"><Text size="xs" fw={600} w={40} style={{ flex: 'none' }}>이메일</Text><Text size="xs" c="dimmed" lineClamp={1} style={{ flex: 1 }}>{S.account.email}</Text>{S.login && <Loader size={12} style={{ flex: 'none' }} />}</Group>
+      <Group gap={6} wrap="nowrap"><Text size="xs" fw={600} w={40} style={{ flex: 'none' }}>이메일</Text><Text size="xs" c="dimmed" lineClamp={1} style={{ flex: 1 }}>{S.account.email.split('@')[0]}</Text>{S.login && <Loader size={12} style={{ flex: 'none' }} />}</Group>
     </UnstyledButton>}
     {S.account?.plan && <Group gap={6} wrap="nowrap"><Text size="xs" fw={600} w={40} style={{ flex: 'none' }}>요금제</Text><Text size="xs" c="dimmed">{S.account.plan}</Text></Group>}
     {!u?.limits?.length ? <Text size="xs" c="dimmed">세션에서 답을 한 번 받으면 보입니다(hq-usage 플러그인)</Text>
