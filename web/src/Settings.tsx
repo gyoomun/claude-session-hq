@@ -157,8 +157,8 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
         {AREAS.map(([a, label]) => <Row key={a} label={label} help={`${label}(으)로 커서를 옮깁니다. 영역 이름 옆 ⌨로도 바꿉니다`}><KeyRec area={a} /></Row>)}
       </Section>
       <Section title="동작">
-        {ACTIONS.map(([a, label]) => <Row key={a} label={label} help="웹 세션의 대화 칸을 대화 화면(UI)과 터미널(Claude Code 화면 그대로) 사이에서 바꿉니다. 대화 칸 오른쪽 위에서도 바꿉니다"><KeyRec area={a} /></Row>)}
-        <Row label="처음 값으로" help="영역 단축키를 ⌥1~⌥6, 터미널·UI 전환을 ⌥T로 되돌립니다"><Button size="xs" variant="default" onClick={() => { setKeys(DEFAULT_KEYS); toast('영역 단축키를 처음 값으로 되돌렸습니다.') }}>기본값으로</Button></Row>
+        {ACTIONS.map(([a, label, help]) => <Row key={a} label={label} help={help}><KeyRec area={a} /></Row>)}
+        <Row label="처음 값으로" help="영역 단축키를 ⌥1~⌥6, 터미널·UI 전환을 ⌥T, 새로고침을 ⌘R(윈도우 Ctrl+R)로 되돌립니다"><Button size="xs" variant="default" onClick={() => { setKeys(DEFAULT_KEYS); toast('영역 단축키를 처음 값으로 되돌렸습니다.') }}>기본값으로</Button></Row>
       </Section>
       <Section title="정해진 키">
         {fixed.map(([k, what]) => <Row key={k} label={what}><Text size="xs" ff="monospace" c="dimmed">{k}</Text></Row>)}

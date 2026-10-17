@@ -10,11 +10,15 @@ export type ToastPos = typeof TOAST_POS[number]
 export const AREAS = [['list', '세션 목록'], ['favs', '즐겨찾기'], ['pin', '핀'], ['memo', '메모'], ['btw', 'btw']] as const
 export type Area = typeof AREAS[number][0] | 'chat'
 // 영역이 아닌 동작 단축키(같은 녹화 버튼으로 바꾼다). view: 대화 칸을 UI(대화 화면)와 터미널 사이에서 바꾼다
-export const ACTIONS = [['view', '터미널·UI 전환']] as const
+export const ACTIONS = [
+  ['view', '터미널·UI 전환', '웹 세션의 대화 칸을 대화 화면(UI)과 터미널(Claude Code 화면 그대로) 사이에서 바꿉니다. 대화 칸 오른쪽 위에서도 바꿉니다'],
+  ['reload', '새로고침', '화면을 다시 불러옵니다. 크롬 없이 띄운 앱(desktop/)에는 새로고침 메뉴가 없어서 둡니다'],
+] as const
 export type KeyId = Area | typeof ACTIONS[number][0]
-export const KEY_LABEL = Object.fromEntries([...AREAS, ...ACTIONS]) as Record<KeyId, string>
+export const KEY_LABEL = Object.fromEntries([...AREAS, ...ACTIONS.map(([a, label]) => [a, label])]) as Record<KeyId, string>
 export type Combo = { code: string; ctrl: boolean; alt: boolean; shift: boolean; meta: boolean }
-export const DEFAULT_KEYS = { ...Object.fromEntries(AREAS.map(([a], i) => [a, { code: `Digit${i + 1}`, ctrl: false, alt: true, shift: false, meta: false }])), view: { code: 'KeyT', ctrl: false, alt: true, shift: false, meta: false } } as Record<KeyId, Combo | null>
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform)
+export const DEFAULT_KEYS = { ...Object.fromEntries(AREAS.map(([a], i) => [a, { code: `Digit${i + 1}`, ctrl: false, alt: true, shift: false, meta: false }])), view: { code: 'KeyT', ctrl: false, alt: true, shift: false, meta: false }, reload: { code: 'KeyR', ctrl: !IS_MAC, alt: false, shift: false, meta: IS_MAC } } as Record<KeyId, Combo | null>
 export type Mode = 'work' | 'task' | 'all' | 'memo'
 const MODES: Mode[] = ['work', 'task', 'all', 'memo']
 const get = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }

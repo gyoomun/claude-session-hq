@@ -77,6 +77,7 @@ export function useAreaKeys() {
       if (recording || settings || e.isComposing) return
       // 터미널·UI 전환(터미널에 글을 쓰는 중에도 먹도록 capture에서 먼저 가로챈다)
       if (keys.view && sameKey(e, keys.view)) { e.preventDefault(); e.stopPropagation(); if (sel) setView(sel, views[sel] ? 'chat' : 'term'); return }
+      if (keys.reload && sameKey(e, keys.reload)) { e.preventDefault(); e.stopPropagation(); location.reload(); return }
       const hit = AREAS.find(([a]) => keys[a] && sameKey(e, keys[a]!))
       if (!hit) return
       e.preventDefault(); e.stopPropagation()
