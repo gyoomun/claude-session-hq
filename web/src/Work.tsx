@@ -131,13 +131,13 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
   </Paper>
 }
 
-// 최근 닫힌 세션: 대화는 남아 있으니 웹에서 같은 옵션으로 다시 연다
+// 닫힌 세션: 대화는 남아 있으니 웹에서 같은 옵션으로 다시 연다
 function ClosedList({ S }: { S: Snapshot }) {
   const [open, setOpen] = useState(false)
   if (!S.closed.length) return null
   return <Stack gap={2}>
     <UnstyledButton px={8} onClick={() => setOpen(o => !o)}>
-      <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{open ? '▾' : '▸'} 최근 닫힌 세션</Text><Text size="xs" c="dimmed">{S.closed.length}</Text></Group>
+      <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{open ? '▾' : '▸'} 닫힌 세션</Text><Text size="xs" c="dimmed">{S.closed.length}</Text></Group>
     </UnstyledButton>
     {open && <>
       {S.closed.map(c => <Group key={c.sid} gap={6} wrap="nowrap" px={8} py={4} align="flex-start">

@@ -353,19 +353,19 @@ function scan() {
     prev.delete(sid);
     const was = snapshot.sessions.find(x => x.sid === sid);
     pushFeed({ at: now, sid, title: was?.title || sid, task: db.assign[sid] || '', from: st, to: 'closed' });
-    // 최근 닫힌 세션: Orca가 꺼지는 등으로 한꺼번에 사라져도 웹에서 같은 명령으로 다시 열 수 있게 남긴다
+    // 닫힌 세션(제한 없이 보관): Orca가 꺼지는 등으로 한꺼번에 사라져도 웹에서 같은 명령으로 다시 열 수 있게 남긴다
     if (was && !restarting.has(sid)) {
       db.closed = [{ sid, title: was.title, dir: was.dir, cwd: was.cwd, args: argsByPid.get(was.pid) || [], host: was.host, state: was.state, closedAt: now, quiet: userClosed.delete(sid) || was.host !== 'web' },
-        ...db.closed.filter(c => c.sid !== sid)].slice(0, 60);
+        ...db.closed.filter(c => c.sid !== sid)];
       dirty = true;
     }
   }
-  // 다시 열린 대화와 7일 지난 기록은 목록에서 뺀다
-  const keep = db.closed.filter(c => !ids.has(c.sid) && now - c.closedAt < 7 * 864e5);
+  // 다시 열린 대화는 목록에서 뺀다
+  const keep = db.closed.filter(c => !ids.has(c.sid));
   if (keep.length !== db.closed.length) { db.closed = keep; dirty = true; }
   // 닫힌 세션의 확인 기록은 지운다. 웹 세션은 다시 뜨는 중일 수 있으니 남긴다
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
-  // 포크 관계는 다시 열 수 있는 동안(최근 닫힌 세션)만 둔다
+  // 포크 관계는 다시 열 수 있는 동안(닫힌 세션)만 둔다
   for (const sid of Object.keys(db.forks)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid) && !db.closed.some(c => c.sid === sid)) { delete db.forks[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
@@ -788,7 +788,7 @@ function memoOf(sid) {
 let migrating = false;
 const userClosed = new Set(); // 사용자가 '세션 종료'로 닫은 대화: 기록은 남기되 경고(quiet)는 띄우지 않는다
 // HQ 밖(Orca·iTerm 등)에서 돈 세션도 경고하지 않는다: 사용자가 일부러 끈 것이다. 경고는 HQ tmux 세션이 한꺼번에 꺼지는 사고만 알린다
-const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '최근 닫힌 세션'에 넣지 않는다
+const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '닫힌 세션'에 넣지 않는다
 const keepSince = new Map(); // 다시 띄운 세션의 sid -> 끄기 전 { state, since }
 let notice = null; // 화면에 한 번 띄울 알림 { text, color, at } (모두 재시작이 끝났을 때 등)
 async function migrateOne(pid) {
@@ -911,7 +911,7 @@ const routes = {
     })();
     return list.length;
   },
-  // 최근 닫힌 세션을 웹에서 같은 옵션으로 다시 연다(하나 또는 여러 개)
+  // 닫힌 세션을 웹에서 같은 옵션으로 다시 연다(하나 또는 여러 개)
   'session/reopen': async b => {
     const sids = Array.isArray(b.sids) ? b.sids : [b.sid];
     const names = [];
