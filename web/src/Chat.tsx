@@ -255,7 +255,7 @@ function Composer({ s, d, working, onSent, interrupt }: {
           const t = e.clipboardData.getData('text/plain')
           if (bigPaste(t)) { e.preventDefault(); place(addPaste(t, sel), at) }
         }}
-        placeholder={s.sid ? `${s.title}에게 말하기 · Enter 보내기 · Shift+Enter 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기 · Esc 두 번 되감기` : "새 세션을 여는 중…"} aria-label="보낼 말"
+        placeholder="Enter 보내기 · Shift+Enter 줄바꿈 · 이미지는 붙여넣기나 끌어다 놓기 · Esc 두 번 되감기" aria-label="보낼 말"
         onKeyDown={e => {
           // 한글 입력 중(조합 중)의 Enter는 글자 확정이라 보내지 않는다
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }

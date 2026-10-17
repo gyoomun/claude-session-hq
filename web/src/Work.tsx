@@ -186,9 +186,6 @@ function ItemSkeleton({ state, since }: { state: Session['state']; since: number
 }
 // 새 세션을 여는 동안: 진짜 세션 화면을 빈 세션(ghost)으로 그리고 손만 못 대게 막는다(inert. disabled로 막으면 버튼 모양·크기가 바뀌어 뜰 때 움찔한다).
 // 폴더·상태·버튼·칸 제목·입력칸은 그대로 보이고, 아직 모르는 제목·핀·대화만 반짝인다. 배치가 같아 세션이 뜰 때 튀지 않는다
-function WorkSkeleton({ S, ghost }: { S: Snapshot; ghost: Session }) {
-  return <Box inert className="hq-ghost" aria-busy="true"><SessionArea S={S} s={ghost} /></Box>
-}
 // 대화 칸 오른쪽 위: 대화 화면(UI)과 터미널(Claude Code 화면 그대로) 바꾸기. 단축키는 옆 ⌨로 정한다(처음 ⌥T, 환경설정 '단축키'에도 있다). 웹 세션만(터미널을 띄울 수 있어서)
 function ViewToggle() {
   const ui = useUI()
@@ -208,7 +205,7 @@ function SessionArea({ S, s }: { S: Snapshot; s: Session }) {
       <Panel id="chat" minSize={360}>
         <Box h="100%" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
           {s.host === 'web' && <ViewToggle />}
-          {s.sid && s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
+          {s.sid && s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.tmux || s.pid} s={s} detail={ui.detail} />}
         </Box>
       </Panel>
       <Separator className="hq-split-vline" />
@@ -430,13 +427,14 @@ export function WorkView({ S }: { S: Snapshot }) {
     <Panel id="favs" defaultSize={240} minSize={210} maxSize={480}><FavColumn S={S} sel={ui.sel} /></Panel>
     <Separator className="hq-split-v" />
     <Panel id="main" minSize={480}>
-    {/* 나머지: 2행 격자. 위: 세션 머리(두 칸에 걸침) / 아래: 대화 | 핀·메모·btw. 오른쪽 칸이 대화창과 같은 높이에서 시작한다 */}
-    {!s && ghost ? <WorkSkeleton S={S} ghost={ghost} /> : !s ? <Paper withBorder p="xl" h="100%" style={{ borderStyle: 'dashed' }}>
+    {/* 새 세션을 여는 동안은 빈 세션(ghost)을 같은 자리·같은 모양으로 그리고 손만 못 대게 막는다(inert). 뜨면 같은 화면을 그대로 이어 쓴다:
+        다른 요소로 바꿔 그리면 대화·입력칸이 처음부터 다시 그려져 한 번 깜박였다 */}
+    {s || ghost ? <Box inert={!s} className="hq-ghost" aria-busy={!s || undefined}><SessionArea S={S} s={(s || ghost)!} /></Box> : <Paper withBorder p="xl" h="100%" style={{ borderStyle: 'dashed' }}>
       <Stack align="flex-start">
         <Text>왼쪽에서 세션을 고르거나, 새 세션으로 일을 시작하세요.</Text>
         <Button onClick={() => setUI({ newFor: '' })}>+ 새 세션</Button>
       </Stack>
-    </Paper> : <SessionArea S={S} s={s} />}
+    </Paper>}
     </Panel>
   </Split>
 }
