@@ -64,10 +64,13 @@ export function CalendarCard({ S }: { S: Snapshot }) {
     {mode === 'month' ? <Month today={today} pick={pick} setPick={setPick} />
       : mode === 'strip' ? <Strip today={today} />
       : <div className="hq-cal-today">
-        <Text size="sm" fw={600} mb={4}>
-          {dayLabel(today)} · 오늘 일정
-          {c.error && <Text span size="xs" c="red.4" ml={6} title={c.error}>일부 못 읽음</Text>}
-        </Text>
+        <Group justify="space-between" gap={6} wrap="nowrap" mb={4}>
+          <Text size="sm" fw={600}>
+            {dayLabel(today)} · 오늘 일정
+            {c.error && <Text span size="xs" c="red.4" ml={6} title={c.error}>일부 못 읽음</Text>}
+          </Text>
+          {c.at > 0 && <Text size="xs" c="dimmed" style={{ flex: 'none' }} title="마지막으로 읽은 시각(10분마다 다시 읽는다)">{hm(c.at)} 불러옴</Text>}
+        </Group>
         {on(c.events, today).map(e => <Row key={e.id} e={e} t={today} />)}
         {!on(c.events, today).length && <Text size="xs" c="dimmed">일정 없음</Text>}
       </div>}
