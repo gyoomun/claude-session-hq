@@ -225,9 +225,11 @@ function UsagePanel({ S }: { S: Snapshot }) {
         const reset = l.resetsAt ? Date.parse(l.resetsAt) : 0
         return <Group key={l.kind} gap={6} wrap="nowrap" style={{ opacity: old ? .55 : 1 }}>
           <Text size="xs" fw={600} w={40} style={{ flex: 'none' }}>{LIMIT[l.kind] || l.kind}</Text>
-          <Text size="xs" ff="monospace" c={`${color}.4`} style={{ flex: 'none' }} title="남은 양">{rest}%</Text>
-          {reset > 0 && <Text size="xs" c="dimmed" lineClamp={1} title={`${new Date(reset).toLocaleString('ko-KR')} 초기화`}>· {left(reset - Date.now())}</Text>}
-          {(l.kind === 'five_hour' || l.kind === 'seven_day') && <AllCoin S={S} sids={sids} kind={l.kind} />}
+          {S.usageStale ? <Box title="새 계정 값을 받는 중(아무 세션이 한 번 답하면 들어옵니다)" style={{ display: 'flex' }}><Loader size={12} /></Box> : <>
+            <Text size="xs" ff="monospace" c={`${color}.4`} style={{ flex: 'none' }} title="남은 양">{rest}%</Text>
+            {reset > 0 && <Text size="xs" c="dimmed" lineClamp={1} title={`${new Date(reset).toLocaleString('ko-KR')} 초기화`}>· {left(reset - Date.now())}</Text>}
+            {(l.kind === 'five_hour' || l.kind === 'seven_day') && <AllCoin S={S} sids={sids} kind={l.kind} />}
+          </>}
         </Group>
       })}
   </Paper>

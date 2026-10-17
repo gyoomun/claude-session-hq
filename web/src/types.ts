@@ -57,6 +57,7 @@ export interface Snapshot {
   layout: Record<string, { x: number; y: number }> // 가상 사무실의 책상 위치(방 안 0~1 비율)
   usage: { at: number; limits: { kind: string; percentUsed: number; resetsAt: string | null }[] } | null // Claude 사용량 한도(플러그인 hq-usage가 남김)
   account: { email: string; plan: string } | null // 이 맥의 Claude 로그인 계정(~/.claude.json)
+  usageStale: boolean // 계정을 바꾼 뒤 사용량이 아직 이전 계정 값인지(서버가 usage.json이 써질 때의 계정을 기억한다)
   login: boolean // 계정 줄로 띄운 로그인 창(tmux 'login')이 떠 있는지
   usageShare: Record<string, Record<string, { share: number; windowEnd: number; at: number }>> // 한도 종류(five_hour·seven_day) -> 대화 ID -> 동전으로 조회한 세션별 한도 사용 추정(%p)
   calendar: { at: number; error: string; sources: number; events: CalEvent[] } // 회사 일정(구글 캘린더, 오늘부터 7일)

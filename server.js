@@ -370,7 +370,7 @@ function scan() {
   if (dirty) save();
   firstScan = false;
   checkLogin();
-  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, flow, usage: readUsage(), account: readAccount(), login: !!login, usageShare: db.usageShare, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
+  snapshot = { now, sessions, tasks: db.tasks, feed: feed.slice(0, 120), orca: fs.existsSync(ORCA), worktrees, focus: focusReq, layout: db.layout, rooms: db.rooms, favs: db.favs, notice, calendar, inbox, flow, usage: readUsage(), account: readAccount(), usageStale: !!(usage && account && usageOwner !== account.email), login: !!login, usageShare: db.usageShare, btw: db.btw, memos: db.memos, closed: db.closed, migrating,
     // 화면 빌드 시각: 열려 있는 화면이 자기보다 새 빌드가 나왔는지 알아채게 한다
     build: (() => { try { return fs.statSync(path.join(DIST, 'index.html')).mtimeMs; } catch { return 0; } })() };
 }
@@ -655,11 +655,13 @@ function loadFlow() {
 
 /* Claude 사용량 한도(5시간·주간): 플러그인 hq-usage(~/.claude/my-mods)가 응답마다 ~/.claude/board/usage.json에 남긴다(계정 단위) */
 const USAGE_FILE = path.join(BOARD_DIR, 'usage.json');
-let usage = null, usageMtime = 0;
+// 파일에는 어느 계정 값인지가 없어서, 새로 써질 때 로그인돼 있던 계정을 주인으로 기억한다(서버가 켜질 때는 지금 계정).
+// 계정을 바꾼 뒤 아무 세션도 답하지 않았으면 주인이 달라 낡은 값이다(usageStale, 화면은 스피너)
+let usage = null, usageMtime = 0, usageOwner = '';
 function readUsage() {
   try {
     const st = fs.statSync(USAGE_FILE);
-    if (st.mtimeMs !== usageMtime) { usageMtime = st.mtimeMs; usage = JSON.parse(fs.readFileSync(USAGE_FILE, 'utf8')); }
+    if (st.mtimeMs !== usageMtime) { usageMtime = st.mtimeMs; usage = JSON.parse(fs.readFileSync(USAGE_FILE, 'utf8')); usageOwner = readAccount()?.email ?? ''; }
   } catch {}
   return usage;
 }
@@ -712,11 +714,12 @@ function readAccount() {
 
 /* 계정 바꾸기: 계정 줄을 누르면 tmux 'login'(HQ 목록에 넣지 않는다)에서 claude /login을 화면 없이 띄운다. 사용자는 저절로 열리는 브라우저에서 로그인만 한다.
    ~/.claude/board/login 에서 띄우면 폴더 신뢰 확인이 나오지 않는다(확인함). 로그인 방식 메뉴(1번 구독이 기본)는 Enter를 대신 누르고,
-   'Login successful'이 보이거나 이메일이 바뀌면 끝: tmux를 끄고 기본 브라우저의 로그인 완료 탭을 닫는다. 10분이 지나면 그만둔다.
+   'Login successful'이 보이거나 이메일이 바뀌면 기본 브라우저의 로그인 완료 탭을 닫고, 새 계정 사용량을 바로 받으려고 그 claude에 '.'을 한 번 보낸다
+   (한도 값은 답과 함께만 온다. hq-usage 플러그인이 usage.json에 쓰면, 또는 1분이 지나면 tmux를 끈다). 10분 안에 로그인하지 않으면 그만둔다.
    이미 떠 있던 세션도 새 계정 토큰을 쓴다(확인함) */
 const LOGIN_TMUX = 'login', LOGIN_DIR = path.join(BOARD_DIR, 'login');
 const LOGIN_TAB = 'https://platform.claude.com/oauth/code/success';
-let login = null; // { from: 시작할 때 이메일, at, entered: 방식 메뉴에서 Enter를 눌렀는지 }
+let login = null; // { from: 시작할 때 이메일, at, entered: 방식 메뉴에서 Enter를 눌렀는지, phase: 로그인 뒤 'enter'(완료 화면 넘김)·'ping'(사용량 받는 중), phaseAt, mtime }
 async function closeLoginTab() {
   // 기본 브라우저(https를 여는 앱)의 번들 ID로 부른다. Safari·Chrome·Brave·Edge·Arc는 같은 문법이고, AppleScript가 없는 브라우저(Firefox)는 닫지 못한다
   const ls = path.join(HOME, 'Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist');
@@ -724,16 +727,36 @@ async function closeLoginTab() {
     .then(out => JSON.parse(out).LSHandlers.find(h => h.LSHandlerURLScheme === 'https')?.LSHandlerRoleAll).catch(() => '') || 'com.apple.safari';
   await run('/usr/bin/osascript', ['-e', `tell application id ${JSON.stringify(id)} to close (every tab of every window whose URL starts with ${JSON.stringify(LOGIN_TAB)})`]).catch(() => {});
 }
+let checking = false; // 2초마다 부르는데 tmux가 늦으면 겹쳐 같은 키를 두 번 보낼 수 있어서
 async function checkLogin() {
-  if (!login) return;
+  if (!login || checking) return;
+  checking = true;
+  try { await checkLoginOnce(); } finally { checking = false; }
+}
+async function checkLoginOnce() {
   const screen = await tmux(['capture-pane', '-p', '-t', LOGIN_TMUX]).catch(() => null);
   if (screen === null) { login = null; return; } // 끝났거나 누가 껐다
+  const end = async () => { login = null; await tmux(['kill-session', '-t', LOGIN_TMUX]).catch(() => {}); };
+  if (login.phase === 'enter') {
+    // 완료 화면이 넘어가 입력칸이 나오면 짧은 말을 보낸다
+    if (screen.includes('Login successful') && Date.now() - login.phaseAt < 10e3) return;
+    Object.assign(login, { phase: 'ping', phaseAt: Date.now(), mtime: usageMtime });
+    await tmux(['send-keys', '-t', LOGIN_TMUX, '-l', '.']).catch(() => {});
+    await tmux(['send-keys', '-t', LOGIN_TMUX, 'Enter']).catch(() => {});
+    return;
+  }
+  if (login.phase === 'ping') {
+    readUsage();
+    if (usageMtime !== login.mtime || Date.now() - login.phaseAt > 60e3) await end();
+    return;
+  }
   const done = screen.includes('Login successful') || (readAccount()?.email ?? '') !== login.from;
-  if (done || Date.now() - login.at > 10 * 60e3) {
-    login = null;
-    await tmux(['kill-session', '-t', LOGIN_TMUX]).catch(() => {});
-    if (done) await closeLoginTab();
-  } else if (!login.entered && screen.includes('Select login method')) {
+  if (done) {
+    Object.assign(login, { phase: 'enter', phaseAt: Date.now() });
+    await tmux(['send-keys', '-t', LOGIN_TMUX, 'Enter']).catch(() => {});
+    await closeLoginTab();
+  } else if (Date.now() - login.at > 10 * 60e3) await end();
+  else if (!login.entered && screen.includes('Select login method')) {
     login.entered = true;
     await tmux(['send-keys', '-t', LOGIN_TMUX, 'Enter']).catch(() => {});
   }
