@@ -101,6 +101,9 @@ function scanLines(text, info) {
     }
     if (d.type === 'user' && d.permissionMode) info.mode = d.permissionMode; // 권한 모드(보낸 말마다 남는다. 화면을 못 읽는 세션에서 쓴다)
     else if (d.type === 'user') {
+      // /model·/effort를 치면 Claude Code가 'Set effort level to medium (saved…' 같은 줄을 남긴다. 다음 답을 기다리지 않고 바로 화면에 반영한다
+      const set = textOf(d.message?.content).match(/^<local-command-stdout>Set (effort level|model) to `?(.+?)`?(?: and saved| \(saved| for this| \(this|<\/)/);
+      if (set) info[set[1] === 'model' ? 'model' : 'effort'] = set[2];
       // 핀보드 플러그인은 바꿀 때마다 보드 전체를 도구 결과로 남긴다("Pinboard now: …"). 그 마지막 것이 지금 보드다
       for (const x of Array.isArray(d.message?.content) ? d.message.content : []) {
         const r = x.type === 'tool_result' ? textOf(x.content) : '';
