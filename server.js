@@ -6,9 +6,32 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
+const net = require('net');
 const pty = require('node-pty');
 
 const HOME = os.homedir();
+
+// hq-browser(~/01dev/80ai/hq-browser): Claude 세션이 사용자 크롬을 다루는 확장. 세션별로 지금 연 탭을 받아 지구본으로 보여 준다
+// 확장이 없거나 크롬이 꺼져 있으면 탭 없음으로 본다
+const HQB_SOCK = path.join(HOME, '.hq-browser', 'sock');
+let browserTabs = {};
+function hqb(method, params) {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(HQB_SOCK);
+    let line = '';
+    socket.setTimeout(3000, () => { socket.destroy(); reject(new Error('크롬이 답하지 않습니다')); });
+    socket.on('connect', () => socket.write(JSON.stringify({ method, params }) + '\n'));
+    socket.on('data', chunk => {
+      line += chunk;
+      if (!line.includes('\n')) return;
+      socket.end();
+      const { result, error } = JSON.parse(line);
+      error ? reject(new Error(error)) : resolve(result);
+    });
+    socket.on('error', reject);
+  });
+}
+const loadBrowserTabs = () => hqb('tabs', {}).then(tabs => { browserTabs = tabs; }, () => { browserTabs = {}; });
 const PORT = +process.env.PORT || 7420;
 const CLAUDE_DIR = path.join(HOME, '.claude');
 const SESS_DIR = path.join(CLAUDE_DIR, 'sessions'); // Claude Code가 프로세스마다 <pid>.json을 쓴다
@@ -357,6 +380,7 @@ function scan() {
       mode: (where.tmux && footers.get(where.tmux)?.mode) || t.mode || '', bg: (where.tmux && footers.get(where.tmux)?.bg) || { shells: 0, agents: [] }, next: (where.tmux && footers.get(where.tmux)?.next) || [], task: db.assign[s.sessionId] || '',
       pin: db.pins[s.sessionId] ? pinItems(db.pins[s.sessionId].text) : [],
       host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '', forkOf: db.forks[s.sessionId] || '',
+      browser: browserTabs[s.sessionId] || null,
     };
   });
   // 웹 세션이 스스로 끝났으면(/exit 등) 목록에서 뺀다. 다시 띄우지 않는다
@@ -1095,6 +1119,8 @@ const routes = {
   'inbox/reload': async () => { await loadInbox(); return inbox.error || ''; },
   'flow/reload': async () => { await loadFlow(); return flow.error || ''; },
   'flow/open': () => run('/usr/bin/open', ['-a', 'flow']),
+  // 지구본: 그 세션이 연 크롬 탭을 화면 앞에 띄운다(Claude 전용 창이 최소화에서 풀린다)
+  'browser/show': b => hqb('show', { owner: b.sid }),
   // chrome:// 주소는 웹 페이지가 링크로 열 수 없다(크롬이 막는다). 대화 속 chrome:// 주소를 누르면 이 맥의 크롬에서 연다
   'chrome/open': b => {
     if (!/^chrome:\/\/[\w-]+\/?[\w\-./#?=&]*$/.test(b.url || '')) throw new Error('chrome:// 주소가 아닙니다');
@@ -1582,6 +1608,7 @@ http.createServer((req, res) => {
 
 restoreWeb().finally(() => {
   scan(); setInterval(scan, SCAN_MS);
+  loadBrowserTabs(); setInterval(loadBrowserTabs, 3000);
   setInterval(readFooters, 3000);
   loadCalendar(); setInterval(loadCalendar, 10 * 60e3);
   loadInbox(); setInterval(loadInbox, 2 * 60e3);

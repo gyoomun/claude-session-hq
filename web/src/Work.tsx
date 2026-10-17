@@ -8,7 +8,7 @@ import { COLOR, D, H, LABEL, M, Since, bySt, hhmm, cssColor, sessOf, withForks }
 import { TerminalView } from './Terminal'
 import { ChatView, SessionInfo, bgCount, bgText, copyName, stopSession, useFlash } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
-import { IconCheck, IconCoin, IconCopy, IconPinFilled } from '@tabler/icons-react'
+import { IconCheck, IconCoin, IconCopy, IconPinFilled, IconWorld } from '@tabler/icons-react'
 import { KeyRec, areaKeys } from './Keys'
 import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 
@@ -123,6 +123,8 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         <SessionInfo s={s} />
       </Stack>
       <Group gap={6}>
+        {/* 지구본: 이 세션이 크롬 탭을 쓰는 동안만 보이고, 누르면 그 탭을 화면 앞에 띄운다. 맨 앞에 둬서 나타나고 사라져도 다른 버튼 자리가 그대로다(사용자 결정) */}
+        {s.browser && <ActionIcon size="md" variant="subtle" color="blue" aria-label="크롬 탭 보기" title={`${s.browser.title}\n${s.browser.url}`} onClick={() => api('browser/show', { sid: s.sid })}><IconWorld size={18} /></ActionIcon>}
                 <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
         {s.host === 'web' && <ViewToggle s={s} />}
         {/* 중단: 늘 같은 자리에 두고 일하는 중에만 켠다(사용자 요청). Esc와 같다 */}
