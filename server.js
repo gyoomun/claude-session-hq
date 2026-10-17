@@ -1087,6 +1087,11 @@ const routes = {
   'inbox/reload': async () => { await loadInbox(); return inbox.error || ''; },
   'flow/reload': async () => { await loadFlow(); return flow.error || ''; },
   'flow/open': () => run('/usr/bin/open', ['-a', 'flow']),
+  // chrome:// 주소는 웹 페이지가 링크로 열 수 없다(크롬이 막는다). 대화 속 chrome:// 주소를 누르면 이 맥의 크롬에서 연다
+  'chrome/open': b => {
+    if (!/^chrome:\/\/[\w-]+\/?[\w\-./#?=&]*$/.test(b.url || '')) throw new Error('chrome:// 주소가 아닙니다');
+    return run('/usr/bin/open', ['-a', 'Google Chrome', b.url]);
+  },
   'account/login': async () => {
     if (login) return; // 이미 로그인 중
     fs.mkdirSync(LOGIN_DIR, { recursive: true });

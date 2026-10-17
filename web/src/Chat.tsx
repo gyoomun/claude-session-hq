@@ -53,7 +53,14 @@ function Pre(p: React.HTMLAttributes<HTMLPreElement>) {
     <button type="button" className="hq-copy" onClick={async () => { if (await copyText(ref.current?.innerText.replace(/\n$/, '') || '')) flash() }}>{done ? '✓ 복사됨' : '복사'}</button>
   </div>
 }
-const Md = memo(({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab, pre: Pre }}>{text}</ReactMarkdown></div>)
+// `chrome://…`는 웹 페이지에서 링크로 열 수 없다(크롬이 막는다). 누르면 서버가 이 맥의 크롬에서 연다
+const CHROME = /^chrome:\/\/[\w-]+\/?[\w\-./#?=&]*$/
+function Code({ node: _, ...p }: React.HTMLAttributes<HTMLElement> & { node?: unknown }) {
+  const url = String(p.children)
+  if (!CHROME.test(url)) return <code {...p} />
+  return <code {...p} className="hq-link hq-chrome" title="누르면 이 맥의 크롬에서 엽니다" onClick={() => api('chrome/open', { url })} />
+}
+const Md = memo(({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab, pre: Pre, code: Code }}>{text}</ReactMarkdown></div>)
 // 내 말풍선은 마크다운이 아니라 그대로 보이되, 주소만 링크로
 // 붙여넣은 긴 글(Claude Code가 <pasted_content>로 감싼 것)은 접을 수 있는 칸으로 따로 보인다. 짧으면 펼쳐 둔다
 const PASTED = /<pasted_content(?: id="[^"]*")?>\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/
