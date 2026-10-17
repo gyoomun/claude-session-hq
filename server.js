@@ -34,7 +34,7 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, usageShare: {}, forks: {}, pins: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, usageShare: {}, forks: {}, keepSince: {}, pins: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 // 세션별 한도 추정은 한도 종류(5시간·주간)마다 따로 둔다. 예전 모양(대화 ID가 바로 키)은 창이 지나면 버려지는 값이라 옮기지 않는다
 // 메모는 세션마다 글 하나(화면에서 큰 칸 하나로 고친다). 예전 모양(줄 목록 items)은 줄을 이어 붙여 옮긴다(끝난 줄은 앞에 ✓)
@@ -319,10 +319,11 @@ function scan() {
     const h = hookInfo(s);
     const t = transcriptInfo(s);
     let [state, since] = stateOf(s, h, now);
-    // 다시 띄운 세션은 상태가 그대로면 상태가 시작된 시각도 그대로 둔다(안 그러면 모두 '1분째'가 된다)
-    const kept = keepSince.get(s.sessionId);
-    if (kept && kept.state === state) since = kept.since;
-    else if (kept && !restarting.has(s.sessionId)) keepSince.delete(s.sessionId);
+    // 다시 띄운 세션은 상태가 그대로면 상태가 시작된 시각도 그대로 둔다(안 그러면 모두 재시작한 때로 보인다).
+    // hq.json에 둔다: 메모리에만 두면 HQ 서버를 다시 띄울 때 사라져 같은 버그가 났다. 다시 띄운 뒤 1분 넘어 생긴 상태 시각은 새 일이라 버린다
+    const kept = db.keepSince[s.sessionId];
+    if (kept && kept.state === state && since < kept.at + 60e3) since = kept.since;
+    else if (kept && !restarting.has(s.sessionId)) { delete db.keepSince[s.sessionId]; dirty = true; }
     // 핀보드는 Claude 프로세스 메모리에만 있어 다시 띄우면 Claude 쪽은 비워진다. 화면에는 마지막 보드를 저장해 두고 계속 보인다
     if (t.pin && (!db.pins[s.sessionId] || t.pin.at > db.pins[s.sessionId].at)) { db.pins[s.sessionId] = { text: t.pin.text, at: t.pin.at }; dirty = true; }
     const toolNow = h && h.at >= (s.statusUpdatedAt || 0) - 2000 && /^(PreToolUse|PostToolUse|PermissionRequest)$/.test(h.event);
@@ -371,6 +372,8 @@ function scan() {
   if (keep.length !== db.closed.length) { db.closed = keep; dirty = true; }
   // 닫힌 세션의 확인 기록은 지운다. 웹 세션은 다시 뜨는 중일 수 있으니 남긴다
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
+  // 다시 띄우기 전 상태 시각은 떠 있는(또는 다시 뜨는 중인) 세션 것만 둔다
+  for (const sid of Object.keys(db.keepSince)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.keepSince[sid]; dirty = true; }
   // 포크 관계는 다시 열 수 있는 동안(닫힌 세션)만 둔다
   for (const sid of Object.keys(db.forks)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid) && !db.closed.some(c => c.sid === sid)) { delete db.forks[sid]; dirty = true; }
   if (dirty) save();
@@ -865,7 +868,6 @@ let migrating = false;
 const userClosed = new Set(); // 사용자가 '세션 종료'로 닫은 대화: 기록은 남기되 경고(quiet)는 띄우지 않는다
 // HQ 밖(Orca·iTerm 등)에서 돈 세션도 경고하지 않는다: 사용자가 일부러 끈 것이다. 경고는 HQ tmux 세션이 한꺼번에 꺼지는 사고만 알린다
 const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '닫힌 세션'에 넣지 않는다
-const keepSince = new Map(); // 다시 띄운 세션의 sid -> 끄기 전 { state, since }
 let notice = null; // 화면에 한 번 띄울 알림 { text, color, at } (세션 하나 재시작이 끝났을 때 등)
 // 모두 재시작의 진행: { at, end, items: [{ sid, title, phase, ms, s }] }. phase: wait→kill→start→ok(돌아옴)|fail(30초 안에 안 돌아옴).
 // 화면 오른쪽 아래 부팅 패널과 목록의 도는 표시가 이것을 본다(모든 기기). 끝나고 15초 뒤 지운다
@@ -1135,7 +1137,7 @@ const routes = {
       for (const { w, s } of list) {
         const x = item(s.sid); if (x) { x.phase = 'kill'; x.t0 = Date.now(); }
         restarting.add(s.sid);
-        keepSince.set(s.sid, { state: s.state, since: s.since });
+        db.keepSince[s.sid] = { state: s.state, since: s.since, at: Date.now() }; // 끄기 전 상태와 그 시각(hq.json)
         w.sid = s.sid; w.createdAt = Date.now(); // 끈 사이에 목록에서 빠지지 않게
         if (s.state !== 'myturn' && s.state !== 'approval') db.seen[s.sid] = Date.now() + 30e3;
         try {
