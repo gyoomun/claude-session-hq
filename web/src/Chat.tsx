@@ -4,7 +4,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkCjkFriendly from 'remark-cjk-friendly'
-import { Box, Button, UnstyledButton, CloseButton, Code, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
+import { Box, Button, UnstyledButton, CloseButton, Code, Group, Kbd, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
 import { openMenuView, pickNew, setView, useUI } from './ui'
 import type { Session } from './types'
@@ -222,30 +222,54 @@ export function SessionInfo({ s }: { s: Session }) {
 // 머리의 '중단' 버튼이 대화 칸의 중단(보낸 말 되살리기 포함)을 부른다. 대화 칸이 없으면(터미널 보기) Esc만 보낸다
 const stopper = { pid: 0, fn: () => {} }
 export const stopSession = (s: Session) => stopper.pid === s.pid ? stopper.fn() : api('term/key', { pid: s.pid, key: 'esc' })
-// 질문마다 한 줄: 번호·머리·질문, 그 옆에 선택지. 질문 하나에 하나만 고르기는 누르면 바로 답한다.
+// 질문마다 한 줄: 번호·머리·질문, 그 옆에 선택지. 질문 하나에 하나만 고르기는 고르면 바로 답한다.
 // 그 밖(질문 여러 개, 여러 개 고르기)은 골라 두고 [보내기]로 한꺼번에 넣는다. 서버가 키를 넣다 어긋나면 멈추고 터미널 보기로 바꾼다
+// 키보드(되감기 창처럼, 나타나면 여기로 포커스가 온다): ↑↓·Tab 질문 · ←→ 선택지 · 숫자 바로 · Space·Enter 고르기(하나만 고르기는 다음 질문으로) · 맨 아래 [보내기]에서 Enter
 type Question = NonNullable<NonNullable<Session['ask']>['questions']>[number]
 function Questions({ s, questions }: { s: Session; questions: Question[] }) {
   const [picks, setPicks] = useState<number[][]>(() => questions.map(() => []))
   const [busy, setBusy] = useState(false)
+  const [cur, setCur] = useState(0) // 지금 질문. questions.length면 [보내기]
+  const [opt, setOpt] = useState(0) // 지금 질문 안의 선택지
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => { root.current?.focus() }, [])
   const instant = questions.length === 1 && !questions[0].multiSelect
+  const ready = !picks.some(p => !p.length)
   const send = async (all: number[][]) => {
     setBusy(true)
     const r = await api('term/answer', { pid: s.pid, questions: questions.map((q, i) => ({ question: q.question, multi: !!q.multiSelect, count: q.options.length, picks: all[i] })) })
     if (!r) setView(s.sid, 'term')
     setBusy(false)
   }
+  const go = (i: number) => { setCur(Math.max(0, Math.min(instant ? 0 : questions.length, i))); setOpt(0) }
   const pick = (i: number, n: number) => {
     const next = picks.map((p, j) => j !== i ? p : questions[i].multiSelect ? (p.includes(n) ? p.filter(x => x !== n) : [...p, n]) : [n])
-    setPicks(next)
+    setPicks(next); setCur(i); setOpt(n - 1)
     if (instant) send(next)
+    else if (!questions[i].multiSelect) go(i + 1)
   }
-  return <Stack gap={6}>
-    {questions.map((q, i) => <Group key={i} gap={6} wrap="wrap">
+  const key = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing || busy) return
+    const k = e.key, q = questions[cur] as Question | undefined
+    if (k === 'ArrowUp' || (k === 'Tab' && e.shiftKey)) go(cur - 1)
+    else if (k === 'ArrowDown' || k === 'Tab') go(cur + 1)
+    else if (q && (k === 'ArrowLeft' || k === 'ArrowRight')) setOpt(o => Math.max(0, Math.min(q.options.length - 1, o + (k === 'ArrowLeft' ? -1 : 1))))
+    else if (q && /^[1-9]$/.test(k) && +k <= q.options.length) pick(cur, +k)
+    else if (q && (k === ' ' || k === 'Enter')) pick(cur, opt + 1)
+    else if (!q && k === 'Enter') { if (ready) send(picks) }
+    else return
+    e.preventDefault(); e.stopPropagation()
+  }
+  const hint = (keys: string[], what: string) => <Group gap={4} wrap="nowrap">{keys.map(x => <Kbd key={x} size="xs">{x}</Kbd>)}<Text size="xs" c="dimmed">{what}</Text></Group>
+  return <Stack gap={6} ref={root} tabIndex={-1} onKeyDown={key} className="hq-questions" style={{ outline: 'none' }}>
+    {questions.map((q, i) => <Group key={i} gap={6} wrap="wrap" className={'hq-q-row' + (i === cur ? ' on' : '')}>
       <Text size="sm" c="red.4" fw={600}>{i + 1}. {q.header ? q.header + ' ' : ''}{q.question}</Text>
-      {q.options.map((o, j) => <Button key={j} size="xs" disabled={busy} variant={picks[i].includes(j + 1) ? 'filled' : 'default'} title={o.description} onClick={() => pick(i, j + 1)}>{j + 1} · {o.label}</Button>)}
+      {q.options.map((o, j) => <Button key={j} size="xs" disabled={busy} className={i === cur && j === opt ? 'hq-q-opt on' : 'hq-q-opt'} variant={picks[i].includes(j + 1) ? 'filled' : 'default'} title={o.description} onClick={() => pick(i, j + 1)}>{j + 1} · {o.label}</Button>)}
     </Group>)}
-    {!instant && <Group><Button size="xs" color="teal" loading={busy} disabled={picks.some(p => !p.length)} onClick={() => send(picks)}>보내기</Button></Group>}
+    <Group gap="md" wrap="wrap">
+      {!instant && <Button size="xs" color="teal" className={cur === questions.length ? 'hq-q-opt on' : 'hq-q-opt'} loading={busy} disabled={!ready} onClick={() => send(picks)}>보내기</Button>}
+      {hint(['↑', '↓'], '질문')}{hint(['←', '→'], '선택지')}{hint(['1~' + Math.max(...questions.map(q => q.options.length))], '바로')}{hint(['Enter'], '고르기')}
+    </Group>
   </Stack>
 }
 
@@ -267,7 +291,8 @@ function Composer({ s, d, history, onSent }: {
     return true
   }
   // 세션을 고르면(누르기·Ctrl+Tab·다른 데서 열기) 바로 칠 수 있게 입력칸에 커서를 둔다
-  useEffect(() => { box.current?.focus({ preventScroll: true }) }, [s.sid])
+  // 질문이 떠 있으면 포커스는 질문(Questions)이 가져간다(키보드로 고르게)
+  useEffect(() => { if (!(s.state === 'approval' && s.ask?.questions)) box.current?.focus({ preventScroll: true }) }, [s.sid])
   const shown = imgs.filter(i => text.includes(tok(i.n))) // 표시를 지운 이미지·글은 보내지 않는다
   const shownPastes = pastes.filter(p => text.includes(ptok(p)))
   const send = async () => {
