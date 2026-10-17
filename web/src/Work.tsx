@@ -371,13 +371,13 @@ export function WorkView({ S }: { S: Snapshot }) {
   // 크롬은 일반 탭에서 이 키를 탭 전환에 먼저 쓴다. '앱으로 설치'한 창에서는 브라우저가 키를 가져가지 않아 여기로 온다
   const order = useRef({ favs, normal: [] as string[], sel: '' })
   order.current = { favs, normal: groups.flatMap(g => g.ss.map(x => x.sid)), sel: ui.sel }
-  // 보고 있던 세션이 닫히면(⌘W·세션 종료·/exit) 브라우저 탭처럼 직전 순서에서 바로 위(맨 위였으면 바로 아래) 세션을 고른다
+  // 보고 있던 세션이 닫히면(⌘W·세션 종료·/exit) 그 자리에 올라오는 세션, 곧 직전 순서에서 바로 아래(맨 아래였으면 바로 위) 세션을 고른다(사용자 요청)
   const prev = useRef<string[]>([])
   useEffect(() => {
     const { favs, normal, sel } = order.current, i = prev.current.indexOf(sel)
     if (sel && !s && !ui.pendingSel && i >= 0) {
       const live = new Set([...favs, ...normal])
-      const next = [...prev.current.slice(0, i).reverse(), ...prev.current.slice(i + 1)].find(x => live.has(x))
+      const next = [...prev.current.slice(i + 1), ...prev.current.slice(0, i).reverse()].find(x => live.has(x))
       if (next) pick(next)
     }
     prev.current = favs.includes(sel) ? favs : normal
