@@ -213,11 +213,23 @@ export function SessionInfo({ s }: { s: Session }) {
 // 머리의 '중단' 버튼이 대화 칸의 중단(보낸 말 되살리기 포함)을 부른다. 대화 칸이 없으면(터미널 보기) Esc만 보낸다
 const stopper = { pid: 0, fn: () => {} }
 export const stopSession = (s: Session) => stopper.pid === s.pid ? stopper.fn() : api('term/key', { pid: s.pid, key: 'esc' })
-function Composer({ s, d, onSent }: {
-  s: Session; d: Draft; onSent: (x: Sent, done: Promise<unknown>) => void
+function Composer({ s, d, history, onSent }: {
+  s: Session; d: Draft; history: string[]; onSent: (x: Sent, done: Promise<unknown>) => void
 }) {
   const { text, setText, imgs, setImgs, pastes, setPastes, uploading, attach, addPaste } = d
   const box = useRef<HTMLTextAreaElement>(null)
+  // ↑↓로 지난 내 말 불러오기(터미널처럼). at: 지금 보이는 history 자리(null이면 안 둘러보는 중), keep: 둘러보기 전에 쓰던 글
+  const hist = useRef<{ at: number | null; keep: string }>({ at: null, keep: '' })
+  const browse = (dir: -1 | 1) => {
+    const h = hist.current, at = (h.at ?? history.length) + dir
+    if (at < 0 || at > history.length || (h.at === null && dir > 0)) return false
+    if (h.at === null) h.keep = text
+    h.at = at === history.length ? null : at
+    const t = h.at === null ? h.keep : history[at]
+    setText(t)
+    requestAnimationFrame(() => { const el = box.current; if (el) { const c = dir < 0 ? 0 : t.length; el.setSelectionRange(c, c) } })
+    return true
+  }
   // 세션을 고르면(누르기·Ctrl+Tab·다른 데서 열기) 바로 칠 수 있게 입력칸에 커서를 둔다
   useEffect(() => { box.current?.focus({ preventScroll: true }) }, [s.sid])
   const shown = imgs.filter(i => text.includes(tok(i.n))) // 표시를 지운 이미지·글은 보내지 않는다
@@ -232,6 +244,7 @@ function Composer({ s, d, onSent }: {
     })
     // 입력칸은 바로 비우고 보낸 말은 대화에 바로 보인다(ChatView의 '보내는 중' 말풍선). 실패하면 입력칸에 되살린다
     const x = { text, imgs, pastes, at: serverNow() }
+    hist.current.at = null
     setText(''); setImgs([]); setPastes([])
     const req = api('term/send', { pid: s.pid, parts })
     onSent(x, req) // 보내는 중에도(글을 넣는 데 시간이 걸린다) 바로 '일하는 중'으로 본다
@@ -258,7 +271,7 @@ function Composer({ s, d, onSent }: {
           <CloseButton size="xs" aria-label="붙여넣은 글 빼기" onClick={() => setText(x => x.replace(ptok(p), ''))} />
         </Group>)}
       </Group>}
-      <Textarea ref={box} autosize minRows={2} maxRows={10} value={text} onChange={e => setText(e.currentTarget.value)}
+      <Textarea ref={box} autosize minRows={2} maxRows={10} value={text} onChange={e => { hist.current.at = null; setText(e.currentTarget.value) }}
         onPaste={e => {
           const el = e.currentTarget, at = el.selectionStart, sel: [number, number] = [at, el.selectionEnd]
           const files = [...e.clipboardData.files].filter(f => f.type.startsWith('image/'))
@@ -270,6 +283,11 @@ function Composer({ s, d, onSent }: {
         onKeyDown={e => {
           // 한글 입력 중(조합 중)의 Enter는 글자 확정이라 보내지 않는다
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
+          // ↑는 커서가 첫 줄에 있을 때, ↓는 마지막 줄에 있을 때만 지난 말로 넘긴다(그 밖에는 줄 사이 이동)
+          const el = e.currentTarget, v = el.value
+          if (e.nativeEvent.isComposing || e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return
+          if (e.key === 'ArrowUp' && !v.slice(0, el.selectionStart).includes('\n') && browse(-1)) e.preventDefault()
+          else if (e.key === 'ArrowDown' && !v.slice(el.selectionEnd).includes('\n') && browse(1)) e.preventDefault()
         }} />
     </Stack>
   </Paper>
@@ -346,6 +364,8 @@ const Messages = memo(function Messages({ items, detail }: { items: Item[]; deta
 
 export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   const { items, missing, poke } = useTranscript(s.sid)
+  // 입력칸 ↑↓로 불러올 지난 내 말(오래된 것부터, 연달아 같은 말은 하나로)
+  const history = useMemo(() => items.filter(i => i.t === 'user' && i.text.trim()).map(i => i.text).filter((t, i, a) => t !== a[i - 1]), [items])
   // 방금 보낸 말: 대화 기록에 실제로 들어올 때까지(보낸 시각 이후의 내 말이 보이면) 아래에 '보내는 중' 말풍선으로 먼저 보인다
   const [pending, setPending] = useState<Sent | null>(null)
   useEffect(() => { if (pending && items.some(i => i.t === 'user' && i.at >= pending.at - 1500)) setPending(null) }, [items, pending])
@@ -450,7 +470,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
     {/* 되감기는 터미널처럼 입력칸 자리에서 고른다(입력칸에 쓰던 글은 그대로 남는다) */}
     {/* next-steps-multi 플러그인의 제안을 참고로만 보인다(누르기 없음: 사용자 요청) */}
     {s.host && !rewind && s.state !== 'working' && s.state !== 'compact' && !!s.next?.length && <Text size="xs" c="dimmed" px="md" pt={6}>{s.next!.join(' / ')}</Text>}
-    {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : <Composer s={s} d={draft} onSent={(x, req) => {
+    {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : <Composer s={s} d={draft} history={history} onSent={(x, req) => {
       sent.current = x; sending.current = req; setSentAt(x.at); setPending(x); stick.current = true
       req.then(ok => { if (ok) poke.current(); else { sent.current = null; setPending(null) } })
     }} />}
