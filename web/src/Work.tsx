@@ -5,7 +5,6 @@ import { api, toast, useNow } from './store'
 import { pick, setUI, setView, useUI } from './ui'
 import type { Closed, Session, Snapshot } from './types'
 import { COLOR, D, LABEL, Since, bySt, hhmm, cssColor, sessOf, withForks } from './util'
-import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
 import { ChatView, SessionInfo, bgCount, bgText, copyName, stopSession, useFlash } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
@@ -116,7 +115,6 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         <SessionInfo s={s} />
       </Stack>
       <Group gap={6}>
-        <AssignSelect S={S} s={s} />
                 <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
         {s.host === 'web' && <ViewToggle />}
         {/* 중단: 늘 같은 자리에 두고 일하는 중에만 켠다(사용자 요청). Esc와 같다 */}
