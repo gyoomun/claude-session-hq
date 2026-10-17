@@ -448,6 +448,8 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
     </Box>
     <Box className="hq-rule" />
     {/* 되감기는 터미널처럼 입력칸 자리에서 고른다(입력칸에 쓰던 글은 그대로 남는다) */}
+    {/* next-steps-multi 플러그인의 제안을 참고로만 보인다(누르기 없음: 사용자 요청) */}
+    {s.host && !rewind && s.state !== 'working' && s.state !== 'compact' && !!s.next?.length && <Text size="xs" c="dimmed" px="md" pt={6}>next: {s.next!.join(' · ')}</Text>}
     {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : <Composer s={s} d={draft} onSent={(x, req) => {
       sent.current = x; sending.current = req; setSentAt(x.at); setPending(x); stick.current = true
       req.then(ok => { if (ok) poke.current(); else { sent.current = null; setPending(null) } })

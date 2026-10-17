@@ -23,6 +23,7 @@ export interface Session {
   effort: string // 그 답의 effort(low·medium·high·xhigh·max)
   mode: string // 권한 모드(bypassPermissions·acceptEdits·plan·default·auto). 모르면 ''
   bg: { shells: number; agents: string[] } // 뒤에서 도는 셸 수와 하위 에이전트(설명). 웹 세션만 안다
+  next?: string[] // next-steps-multi 플러그인이 터미널에 띄운 다음 말 제안(화면의 짧은 라벨). 웹 세션만 안다
 }
 
 export interface PinItem { id: string; mark: ' ' | '>' | 'x' | '?'; text: string }

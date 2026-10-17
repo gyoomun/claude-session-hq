@@ -338,7 +338,7 @@ function scan() {
       act: state === 'working' ? (toolNow ? toolLine(h) : '생각 중') : state === 'compact' ? '대화 압축 중' : '',
       msg, prompt: clip(t.lastPrompt, 400), model: t.model || '', effort: t.effort || '',
       // 권한 모드와 뒤에서 도는 작업: 웹 세션은 Claude Code 화면 맨 아래 줄을 읽는다(모드를 바꾸면 바로 보인다), 아니면 대화 기록의 마지막 모드
-      mode: (where.tmux && footers.get(where.tmux)?.mode) || t.mode || '', bg: (where.tmux && footers.get(where.tmux)?.bg) || { shells: 0, agents: [] }, task: db.assign[s.sessionId] || '',
+      mode: (where.tmux && footers.get(where.tmux)?.mode) || t.mode || '', bg: (where.tmux && footers.get(where.tmux)?.bg) || { shells: 0, agents: [] }, next: (where.tmux && footers.get(where.tmux)?.next) || [], task: db.assign[s.sessionId] || '',
       pin: db.pins[s.sessionId] ? pinItems(db.pins[s.sessionId].text) : [],
       host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '', forkOf: db.forks[s.sessionId] || '',
     };
@@ -1279,7 +1279,7 @@ function webPane(pid) {
 }
 /* Claude Code 화면 맨 아래(입력칸 아래 줄들): 권한 모드('⏵⏵ bypass permissions on', '⏸ plan mode on' 등, 기본 모드면 안 나온다),
    뒤에서 도는 셸('· 2 shells'), 뒤에서 도는 하위 에이전트('◯ general-purpose  설명  6s · ↓ 44k tokens' 줄들). 웹 세션마다 3초마다 읽는다 */
-const footers = new Map(); // tmux 이름 -> { mode, bg: { shells, agents: [설명] } }
+const footers = new Map(); // tmux 이름 -> { mode, bg: { shells, agents: [설명] }, next: [라벨] }
 const MODES = { 'bypass permissions': 'bypassPermissions', 'accept edits': 'acceptEdits', 'plan mode': 'plan', 'auto mode': 'auto', 'manual mode': 'default' };
 function parseFooter(text) {
   const lines = text.split('\n').map(l => l.trimEnd());
@@ -1292,7 +1292,11 @@ function parseFooter(text) {
   // 에이전트 줄 목록이 접히면 '/tasks to see subagents'만 남는다(몇 개인지는 모른다)
   if (!agents.length && /\/tasks to see subagents/.test(below.join(' '))) agents.push('하위 에이전트(목록은 터미널의 /tasks)');
   // 기본 모드면 모드 글이 없다. 그런데 되감기·질문 창 등이 아래를 덮어도 없으니, 화면에서 못 찾으면 대화 기록의 모드를 쓴다('')
-  return { mode: m ? MODES[m[1]] || m[1] : '', bg: { shells, agents } };
+  // next-steps-multi 플러그인의 다음 말 제안: 입력칸 바로 위 'next:' 아래 '  1: ☐ 라벨' 줄들. 화면에 보이는 짧은 라벨만 안다. 오른쪽에 핀보드 칸이 있으면 줄 끝에 '│'가 붙는다
+  const top = lines.findLastIndex((l, i) => i < border && /^─{20,}(?: .+ ─+)?$/.test(l.trim()));
+  const at = lines.findLastIndex((l, i) => i < top && /^\s*next:\s*│?$/.test(l));
+  const next = at < 0 || top - at > 6 ? [] : lines.slice(at + 1, top).map(l => l.match(/^\s*[1-3]: [☐☑] (.+?)\s*│?$/)).filter(Boolean).map(x => x[1]);
+  return { mode: m ? MODES[m[1]] || m[1] : '', bg: { shells, agents }, next };
 }
 let readingFooters = false;
 async function readFooters() {
