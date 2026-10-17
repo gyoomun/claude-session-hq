@@ -22,9 +22,10 @@ export function NewSessionModal({ S }: { S: Snapshot }) {
       if (!cwd.trim()) { toast('폴더를 적거나 골라 주세요.', 'red'); return }
       setBusy(true)
       // 즐겨찾기의 세션을 보다가 열면 새 세션도 즐겨찾기(그 세션 바로 밑)에 들어간다
-      const r = await api<string>('session/new', { cwd: cwd.trim(), task, favOf: favSids(S).includes(ui.sel) ? ui.sel : '' })
+      const favOf = favSids(S).includes(ui.sel) ? ui.sel : ''
+      const r = await api<string>('session/new', { cwd: cwd.trim(), task, favOf })
       setBusy(false)
-      if (r) { rememberCwd(cwd.trim()); close(); pickNew(r.result, { task, cwd: cwd.trim().replace(/\/+$/, '').replace(/^\/Users\/[^/]+/, '~') }) }
+      if (r) { rememberCwd(cwd.trim()); close(); pickNew(r.result, { task, fav: favOf, cwd: cwd.trim().replace(/\/+$/, '').replace(/^\/Users\/[^/]+/, '~') }) }
     }}>
       <Stack gap="sm">
         <Autocomplete label="폴더" placeholder="예: ~/01dev/13engsoft" data={dirs} value={cwd} onChange={setCwd} data-autofocus={!cwd || undefined} />

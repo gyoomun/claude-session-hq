@@ -215,10 +215,10 @@ function SessionArea({ S, s }: { S: Snapshot; s: Session }) {
 }
 
 // 즐겨찾기 칸 아래 사용량 칸(핀·메모·btw처럼 위아래로 나누고 경계를 끌어 높이를 바꾼다). 즐겨찾기가 높이를 다 채울 일은 드물어서
-function FavColumn({ S, sel }: { S: Snapshot; sel: string }) {
+function FavColumn({ S, sel, ghost }: { S: Snapshot; sel: string; ghost: Session | null }) {
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-work-favcol' })
   return <Split orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
-    <Panel id="favlist" minSize={160}><Favs S={S} sel={sel} /></Panel>
+    <Panel id="favlist" minSize={160}><Favs S={S} sel={sel} ghost={ghost} /></Panel>
     <Separator className="hq-split" />
     <Panel id="usage" defaultSize={110} minSize={84}><UsagePanel S={S} /></Panel>
   </Split>
@@ -276,7 +276,9 @@ export const favSids = (S: Snapshot) => {
   const items = f.items.filter(x => live.has(x.sid))
   return (f.mode === 'free' ? [...items].sort((a, b) => a.slot - b.slot) : items).map(x => x.sid)
 }
-function Favs({ S, sel }: { S: Snapshot; sel: string }) {
+function Favs({ S, sel, ghost }: { S: Snapshot; sel: string; ghost: Session | null }) {
+  // 즐겨찾기의 세션을 보다가 연 새 세션은 뜨면 그 세션 밑에 들어간다(서버 favBelow). 뜨기 전에도 그 자리에 뼈대를 둔다(목록 대신)
+  const { pendingFav } = useUI(), favGhost = ghost && pendingFav ? ghost : null
   const f = S.favs || { mode: 'auto' as const, items: [] }
   const byId = new Map(S.sessions.map(s => [s.sid, s]))
   const live = f.items.filter(x => byId.has(x.sid)) // 닫힌 세션은 목록에 남겨 두고(다시 열면 돌아온다) 보이지만 않는다
@@ -331,11 +333,18 @@ function Favs({ S, sel }: { S: Snapshot; sel: string }) {
               {live.map(x => <Box key={x.sid} data-fav={x.sid} pos="absolute" left={0} right={0} className="hq-slide" style={{ top: x.slot * SLOT, height: SLOT }}>
                 <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} clamp />
               </Box>)}
+              {favGhost && (() => {
+                // 서버 favBelow와 같은 칸: 그 세션 바로 아래부터 비어 있는 칸
+                const used = new Set(f.items.map(x => x.slot)); let slot = (f.items.find(x => x.sid === pendingFav)?.slot ?? -1) + 1
+                while (used.has(slot)) slot++
+                return <Box pos="absolute" left={0} right={0} style={{ top: slot * SLOT, height: SLOT }}><ItemSkeleton state={favGhost.state} since={favGhost.since} /></Box>
+              })()}
             </>
           : <Stack gap={2}>
               {live.filter(x => x.sid !== dragSid || hover === null).map((x, i) => <Box key={x.sid} data-fav={x.sid}>
                 {hover === i && <Box className="hq-fav-line" />}
                 <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} />
+                {favGhost && x.sid === pendingFav && <ItemSkeleton state={favGhost.state} since={favGhost.since} />}
               </Box>)}
               {hover !== null && hover >= live.length && <Box className="hq-fav-line" />}
             </Stack>}
@@ -414,17 +423,17 @@ export function WorkView({ S }: { S: Snapshot }) {
             <UnstyledButton px={8} onClick={g.id ? () => setUI({ openTask: g.id }) : undefined} style={{ cursor: g.id ? 'pointer' : 'default' }}>
               <Group justify="space-between"><Text size="xs" fw={600} c="dimmed">{g.name}</Text><Text size="xs" c="dimmed">{g.ss.length}</Text></Group>
             </UnstyledButton>
-            {ghost && ghost.task === g.id && <ItemSkeleton state={ghost.state} since={ghost.since} />}
+            {ghost && !ui.pendingFav && ghost.task === g.id && <ItemSkeleton state={ghost.state} since={ghost.since} />}
             {g.ss.map(x => <Item key={x.pid} s={x} on={x.sid === ui.sel} memo={hasMemo(S, x.sid)} />)}
             {g.favs.map(x => <FavGhost key={x.pid} s={x} on={x.sid === ui.sel} />)}
-            {!g.ss.length && !g.favs.length && !(ghost && ghost.task === g.id) && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
+            {!g.ss.length && !g.favs.length && !(ghost && !ui.pendingFav && ghost.task === g.id) && <Text size="xs" c="dimmed" px={8}>세션 없음</Text>}
           </Stack>)}
         </Stack>}
       </ScrollArea>
     </Paper>
     </Panel>
     <Separator className="hq-split-v" />
-    <Panel id="favs" defaultSize={240} minSize={210} maxSize={480}><FavColumn S={S} sel={ui.sel} /></Panel>
+    <Panel id="favs" defaultSize={240} minSize={210} maxSize={480}><FavColumn S={S} sel={ui.sel} ghost={ghost} /></Panel>
     <Separator className="hq-split-v" />
     <Panel id="main" minSize={480}>
     {/* 새 세션을 여는 동안은 빈 세션(ghost)을 같은 자리·같은 모양으로 그리고 손만 못 대게 막는다(inert). 뜨면 같은 화면을 그대로 이어 쓴다:

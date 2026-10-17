@@ -26,6 +26,7 @@ interface UI {
   pendingSel: string // 방금 연 웹 세션(tmux 이름). 목록에 나타나면 고른다. 그때까지 작업 보기는 뼈대(스켈레톤)를 보인다
   pendingTask: string // 그 세션이 들어갈 업무(목록의 뼈대 자리). ''는 미배치
   pendingCwd: string // 그 세션의 폴더(새 세션 창에서 고른 것). 뜨기 전에도 머리에 보인다
+  pendingFav: string // 즐겨찾기의 이 세션(sid) 밑에 들어갈 것이면 그 sid. 뼈대 자리를 목록 대신 즐겨찾기에 둔다. 아니면 ''
   pendingWorking: boolean // 첫 지시를 줬으면 뜨자마자 일한다(작업중), 아니면 내 차례
   openTask: string | null
   openSess: string | null
@@ -49,7 +50,7 @@ export const SIDE_W = 164, SLIM_W = 68 // 사이드바 처음 폭(펼침·접힘
 const clampSide = (v: number) => Math.round(Math.min(360, Math.max(120, v)))
 const clampSlim = (v: number) => Math.round(Math.min(110, Math.max(52, v)))
 let ui: UI = {
-  mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', closeFor: '', pendingSel: '', pendingTask: '', pendingCwd: '', pendingWorking: false,
+  mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', closeFor: '', pendingSel: '', pendingTask: '', pendingCwd: '', pendingFav: '', pendingWorking: false,
   openTask: null, openSess: null, newFor: null, addTask: false, brief: false,
   settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', sideTab: get('hq-sidetab') === 'btw' ? 'btw' : 'memo', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system', slim: get('hq-slim') === '1', sideW: clampSide(Number(get('hq-sidew')) || SIDE_W), slimW: clampSlim(Number(get('hq-slimw')) || SLIM_W),
 }
@@ -77,8 +78,8 @@ export function pick(sid: string) {
   setUI({ sel: sid, openTask: null, openSess: null })
   setMode('work')
 }
-export function pickNew(tmux: string, o: { task?: string; cwd?: string; working?: boolean } = {}) {
-  setUI({ pendingSel: tmux, pendingTask: o.task || '', pendingCwd: o.cwd || '', pendingWorking: !!o.working, sel: '', openTask: null, openSess: null })
+export function pickNew(tmux: string, o: { task?: string; cwd?: string; working?: boolean; fav?: string } = {}) {
+  setUI({ pendingSel: tmux, pendingTask: o.task || '', pendingCwd: o.cwd || '', pendingFav: o.fav || '', pendingWorking: !!o.working, sel: '', openTask: null, openSess: null })
   burst()
   setMode('work')
 }
