@@ -385,12 +385,16 @@ export function WorkView({ S }: { S: Snapshot }) {
   })
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab' || !e.ctrlKey || e.altKey || e.metaKey) return
+      // ⌘↓·⌘↑도 같은 순회다(노트북에서 Ctrl+Tab이 불편하다: 사용자 요청). 입력칸의 맨 앞·끝 이동은 못 쓰게 된다
+      const tab = e.key === 'Tab' && e.ctrlKey && !e.altKey && !e.metaKey
+      const arrow = (e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey
+      if (!tab && !arrow) return
       e.preventDefault(); e.stopPropagation()
+      const back = tab ? e.shiftKey : e.key === 'ArrowUp'
       const { favs, normal, sel } = order.current, list = favs.includes(sel) ? favs : normal
       if (!list.length) return
       const i = list.indexOf(sel)
-      pick(list[i < 0 ? 0 : (i + (e.shiftKey ? -1 : 1) + list.length) % list.length])
+      pick(list[i < 0 ? 0 : (i + (back ? -1 : 1) + list.length) % list.length])
     }
     addEventListener('keydown', on, true)
     return () => removeEventListener('keydown', on, true)

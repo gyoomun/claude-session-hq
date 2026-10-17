@@ -143,7 +143,7 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
     </Row>
   </Section>
   if (id === 'keys') {
-    const fixed: [string, string][] = [['F1 · F2 · F3 · F4', '작업 · 업무별 · 세션 전체 · 메모 보기'], ['Ctrl+Tab · Ctrl+Shift+Tab', '같은 목록(즐겨찾기 또는 세션 목록) 안에서 다음·이전 세션'],
+    const fixed: [string, string][] = [['F1 · F2 · F3 · F4', '작업 · 업무별 · 세션 전체 · 메모 보기'], ['Ctrl+Tab · Ctrl+Shift+Tab (⌘↓ · ⌘↑)', '같은 목록(즐겨찾기 또는 세션 목록) 안에서 다음·이전 세션'],
       ['⌘T (Ctrl+T)', '새 세션'], ['Esc', '대화에서: Claude 중단 · 다른 영역에서: 대화 입력칸으로'], ['Esc Esc', '대화에서 Claude가 쉴 때: 되감기'],
       ['↑ ↓ · Enter', '세션 목록·즐겨찾기: 옮기기 · 열고 입력칸으로'], ['스페이스 · Enter · ⌫⌫', '메모 줄: 끝남 표시 · 고치기 · 지우기']]
     return <>
