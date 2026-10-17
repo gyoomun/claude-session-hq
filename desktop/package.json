@@ -9,7 +9,7 @@
     "start": "electron .",
     "dist:mac": "electron-builder --mac dmg --arm64 --publish never",
     "dist:win": "electron-builder --win zip --x64 --publish never",
-    "install:mac": "electron-builder --mac dir --arm64 --publish never && (pkill -x 'Claude Session HQ'; rm -rf '/Applications/Claude Session HQ.app' && cp -R 'release/mac-arm64/Claude Session HQ.app' /Applications/ && open '/Applications/Claude Session HQ.app')"
+    "install:mac": "electron-builder --mac dir --arm64 --publish never && (pkill -x 'Claude Session HQ'; rm -rf '/Applications/Claude Session HQ.app' && mv 'release/mac-arm64/Claude Session HQ.app' /Applications/ && open '/Applications/Claude Session HQ.app')"
   },
   "build": {
     "appId": "dev.gyoomun.claude-session-hq.desktop",
