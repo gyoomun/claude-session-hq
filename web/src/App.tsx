@@ -64,9 +64,12 @@ function Notices({ S }: { S: Snapshot }) {
   useEffect(() => {
     if (!S.build || !build.current || S.build === build.current || S.build === shown.current) return
     shown.current = S.build
-    notifications.show({ id: 'hq-new-build', color: 'indigo', autoClose: false, title: '새 버전이 나왔습니다',
-      message: <Group justify="space-between" gap="sm" wrap="nowrap"><Text size="sm">새로고침하면 바뀐 화면이 보입니다.</Text>
-        <Button size="xs" onClick={() => location.reload()}>새로고침</Button></Group> })
+    // 제목까지 message 안에 넣어야 버튼이 글 두 줄의 가운데에 온다(title을 쓰면 버튼이 둘째 줄로 내려간다)
+    notifications.show({ id: 'hq-new-build', color: 'indigo', autoClose: false, withCloseButton: false,
+      message: <Group justify="space-between" gap="sm" wrap="nowrap">
+        <Stack gap={2}><Text size="sm" fw={600} c="var(--mantine-color-text)">새 버전이 나왔습니다</Text><Text size="sm">새로고침하면 바뀐 화면이 보입니다.</Text></Stack>
+        <Group gap={6} wrap="nowrap"><Button size="xs" onClick={() => location.reload()}>새로고침</Button>
+          <Button size="xs" variant="default" onClick={() => notifications.hide('hq-new-build')}>닫기</Button></Group></Group> })
   }, [S.build])
   return <>
     {orca.length > 0 && <Alert color="yellow" variant="light" p="xs">
