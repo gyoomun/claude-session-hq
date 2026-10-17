@@ -147,6 +147,14 @@ function toolLine(h) {
   return clip((tool + (x ? ' · ' + x : '')).replace(/\s+/g, ' '), 160);
 }
 
+// 허락을 기다리는 도구의 내용 전체. 무엇을 허락하는지 터미널을 안 봐도 대화 화면에서 알게 한다(사용자 요청)
+function askOf(h) {
+  if (!h.input) return { tool: h.tool, what: toolLine(h), why: '' };
+  const i = h.input;
+  if (h.tool === 'AskUserQuestion' && i.questions) return { tool: h.tool, what: '', why: '', questions: i.questions.map(q => ({ question: q.question, header: q.header, options: (q.options || []).map(o => ({ label: o.label, description: o.description })) })) };
+  return { tool: h.tool.replace(/^mcp__(.+?)__/, '$1:'), what: clip(i.command || i.file_path || i.url || i.pattern || i.query || JSON.stringify(i, null, 2), 4000), why: i.description || '' };
+}
+
 const quiet = new Map(); // sid -> 마지막으로 본 쉬는 상태(idle/myturn). 압축이 끝난 뒤 되돌릴 때 쓴다
 function stateOf(s, h, now) {
   const at = s.statusUpdatedAt || s.startedAt || now;
@@ -342,7 +350,7 @@ function scan() {
     const tabTitle = where.tmux ? tmuxPanes.get(where.tmux) : orcaTitles.get(where.orca);
     return {
       pid: s.pid, sid: s.sessionId, name: s.name, title: t.custom || (tabTitle && tabTitle !== 'Claude Code' ? tabTitle : '') || t.title || s.name,
-      cwd: s.cwd.replace(HOME, '~'), dir: s.cwd, state, since, startedAt: s.startedAt,
+      cwd: s.cwd.replace(HOME, '~'), dir: s.cwd, state, since, startedAt: s.startedAt, ask: state === 'approval' && h?.tool ? askOf(h) : null,
       act: state === 'working' ? (toolNow ? toolLine(h) : '생각 중') : state === 'compact' ? '대화 압축 중' : '',
       msg, prompt: clip(t.lastPrompt, 400), model: t.model || '', effort: t.effort || '',
       // 권한 모드와 뒤에서 도는 작업: 웹 세션은 Claude Code 화면 맨 아래 줄을 읽는다(모드를 바꾸면 바로 보인다), 아니면 대화 기록의 마지막 모드

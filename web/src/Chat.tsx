@@ -3,7 +3,8 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Box, Button, UnstyledButton, CloseButton, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
+import remarkCjkFriendly from 'remark-cjk-friendly'
+import { Box, Button, UnstyledButton, CloseButton, Code, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
 import { openMenuView, pickNew, useUI } from './ui'
 import type { Session } from './types'
@@ -55,13 +56,13 @@ function Pre(p: React.HTMLAttributes<HTMLPreElement>) {
 }
 // 백틱 안이 주소 하나뿐이면 링크로. `chrome://…`는 웹 페이지에서 링크로 열 수 없다(크롬이 막는다). 누르면 서버가 이 맥의 크롬에서 연다
 const CHROME = /^chrome:\/\/[\w-]+\/?[\w\-./#?=&]*$/
-function Code({ node: _, ...p }: React.HTMLAttributes<HTMLElement> & { node?: unknown }) {
+function InlineCode({ node: _, ...p }: React.HTMLAttributes<HTMLElement> & { node?: unknown }) {
   const url = String(p.children)
   if (/^https?:\/\/\S+$/.test(url)) return <NewTab href={url}><code {...p} /></NewTab>
   if (!CHROME.test(url)) return <code {...p} />
   return <code {...p} className="hq-link hq-chrome" title="누르면 이 맥의 크롬에서 엽니다" onClick={() => api('chrome/open', { url })} />
 }
-const Md = memo(({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: NewTab, pre: Pre, code: Code }}>{text}</ReactMarkdown></div>)
+const Md = memo(({ text }: { text: string }) => <div className="hq-md"><ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={{ a: NewTab, pre: Pre, code: InlineCode }}>{text}</ReactMarkdown></div>)
 // 내 말풍선은 마크다운이 아니라 그대로 보이되, 주소만 링크로
 // 붙여넣은 긴 글(Claude Code가 <pasted_content>로 감싼 것)은 접을 수 있는 칸으로 따로 보인다. 짧으면 펼쳐 둔다
 const PASTED = /<pasted_content(?: id="[^"]*")?>\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/
@@ -267,14 +268,27 @@ function Composer({ s, d, history, onSent }: {
   }
   const key = (k: string) => api('term/key', { pid: s.pid, key: k })
   const place = (len: number, at: number) => requestAnimationFrame(() => box.current?.setSelectionRange(at + len, at + len))
+  // Claude가 고르라고 낸 질문(AskUserQuestion)도 허락 요청으로 온다. 허용/거부가 아니라 질문과 선택지를 보이고, 숫자 키로 고른다
+  const question = s.ask?.questions?.[0]
   return <Paper p="sm">
     <Stack gap={8}>
-      {s.state === 'approval' && <Group gap={6} wrap="wrap">
+      {s.state === 'approval' && question && <Stack gap={6}>
+        <Text size="sm" c="red.4" fw={600}>{question.header ? question.header + ' · ' : ''}{question.question}</Text>
+        <Group gap={6} wrap="wrap">
+          {question.options.map((o, n) => <Button key={n} size="xs" variant="default" title={o.description} onClick={() => key(String(n + 1))}>{n + 1} · {o.label}</Button>)}
+        </Group>
+        {(s.ask?.questions?.length || 0) > 1 && <Text size="xs" c="dimmed">질문이 {s.ask!.questions!.length}개입니다. 나머지는 터미널 보기에서 답합니다</Text>}
+      </Stack>}
+      {s.state === 'approval' && !question && <Group gap={6} wrap="wrap">
         <Text size="sm" c="red.4" fw={600}>실행 허락을 기다립니다</Text>
         <Button size="xs" color="teal" onClick={() => key('1')}>1 · 허용</Button>
         <Button size="xs" variant="default" onClick={() => key('2')}>2 · 이번 세션 동안 허용</Button>
         <Button size="xs" variant="outline" color="red" onClick={() => key('3')}>3 · 거부</Button>
       </Group>}
+      {s.state === 'approval' && s.ask && !question && <Stack gap={4}>
+        <Text size="xs" c="dimmed">{s.ask.tool}{s.ask.why && ' · ' + s.ask.why}</Text>
+        <Code block mah={200} style={{ overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{s.ask.what}</Code>
+      </Stack>}
       {(shown.length > 0 || shownPastes.length > 0) && <Group gap={6} align="flex-end">
         {shown.map(i => <Box key={i.n} pos="relative" className="hq-pop">
           <img src={i.url} alt={tok(i.n)} style={{ height: 64, borderRadius: 6, display: 'block', border: '1px solid var(--mantine-color-default-border)' }} />

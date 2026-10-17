@@ -13,6 +13,7 @@ export interface Session {
   startedAt: number
   act: string
   msg: string
+  ask?: { tool: string; what: string; why: string; questions?: { question: string; header?: string; options: { label: string; description?: string }[] }[] } | null // 허락을 기다리는 도구(state가 approval일 때)
   prompt: string
   task: string
   host: 'web' | 'orca' | ''
