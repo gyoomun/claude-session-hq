@@ -238,7 +238,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-cal.strip { width: calc(100vw - var(--side) - var(--mantine-spacing-xl) - var(--mantine-spacing-md)); }
 .hq-cal.month { width: min(1100px, 100vw - var(--side) - var(--mantine-spacing-xl) - var(--mantine-spacing-md)); height: 72vh; }
 .hq-cal-today { flex: 1; min-width: 0; overflow-y: auto; padding: 10px 8px 34px 12px; }
-.hq-cal-row { display: block; width: 100%; padding: 4px 6px; margin-left: -6px; border-radius: 6px; transition: background-color .12s ease; }
+.hq-cal-row { display: block; width: 100%; padding: 1px 6px; margin-left: -6px; border-radius: 6px; transition: background-color .12s ease; }
 .hq-cal-row:hover, .hq-cal-row:focus-visible { background: var(--mantine-color-default-hover); }
 .hq-cal-more { flex: none; width: 28px; display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--mantine-color-default-border); color: var(--mantine-color-dimmed); }
 .hq-cal-more:hover, .hq-cal-more.on { background: var(--mantine-color-default-hover); color: var(--mantine-color-text); }
