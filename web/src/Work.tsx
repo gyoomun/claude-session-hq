@@ -138,6 +138,10 @@ function ClosedList({ S, held, onOpen }: { S: Snapshot; held: Closed[]; onOpen: 
   const list = [...S.closed, ...held.filter(h => !S.closed.some(c => c.sid === h.sid))].sort((a, b) => b.closedAt - a.closedAt)
   if (!list.length) return <Text size="xs" c="dimmed" px={8}>닫힌 세션 없음</Text>
   return <Stack gap={2}>
+    {S.closed.length > 0 && <Group gap={6} px={8} mb={6}>
+      <Button size="compact-xs" variant="subtle" onClick={async () => { const r = await api<string[]>('session/reopen', { sids: S.closed.map(c => c.sid) }); if (r) toast(`${r.result.length}개를 다시 열었습니다.`) }}>모두 다시 열기</Button>
+      <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('session/forget-closed', {})}>목록 비우기</Button>
+    </Group>}
     {list.map(c => {
       const isHeld = held.some(h => h.sid === c.sid), isLive = live.has(c.sid)
       return <UnstyledButton key={c.sid} p="7px 8px" w="100%" className="hq-item" style={{ borderRadius: 8 }}
@@ -152,10 +156,6 @@ function ClosedList({ S, held, onOpen }: { S: Snapshot; held: Closed[]; onOpen: 
         </Stack>
       </UnstyledButton>
     })}
-    {S.closed.length > 0 && <Group gap={6} px={8} mt={6}>
-      <Button size="compact-xs" variant="subtle" onClick={async () => { const r = await api<string[]>('session/reopen', { sids: S.closed.map(c => c.sid) }); if (r) toast(`${r.result.length}개를 다시 열었습니다.`) }}>모두 다시 열기</Button>
-      <Button size="compact-xs" variant="subtle" color="gray" onClick={() => api('session/forget-closed', {})}>목록 비우기</Button>
-    </Group>}
   </Stack>
 }
 
@@ -341,6 +341,17 @@ export function WorkView({ S }: { S: Snapshot }) {
   // 크롬은 일반 탭에서 이 키를 탭 전환에 먼저 쓴다. '앱으로 설치'한 창에서는 브라우저가 키를 가져가지 않아 여기로 온다
   const order = useRef({ favs, normal: [] as string[], sel: '' })
   order.current = { favs, normal: groups.flatMap(g => g.ss.map(x => x.sid)), sel: ui.sel }
+  // 보고 있던 세션이 닫히면(⌘W·세션 종료·/exit) 브라우저 탭처럼 직전 순서에서 바로 위(맨 위였으면 바로 아래) 세션을 고른다
+  const prev = useRef<string[]>([])
+  useEffect(() => {
+    const { favs, normal, sel } = order.current, i = prev.current.indexOf(sel)
+    if (sel && !s && !ui.pendingSel && i >= 0) {
+      const live = new Set([...favs, ...normal])
+      const next = [...prev.current.slice(0, i).reverse(), ...prev.current.slice(i + 1)].find(x => live.has(x))
+      if (next) pick(next)
+    }
+    prev.current = favs.includes(sel) ? favs : normal
+  })
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (e.key !== 'Tab' || !e.ctrlKey || e.altKey || e.metaKey) return
@@ -372,7 +383,7 @@ export function WorkView({ S }: { S: Snapshot }) {
       }}>
       <Group justify="space-between" px={4} gap={4} wrap="nowrap">
         <SegmentedControl size="xs" value={listTab} onChange={v => { setListTab(v as 'open' | 'closed'); setHeld([]) }}
-          data={[{ value: 'open', label: '세션 목록' }, { value: 'closed', label: `닫힌 세션 ${S.closed.length}` }]} />
+          data={[{ value: 'open', label: '세션 목록' }, { value: 'closed', label: '닫힌 세션' }]} />
         <KeyRec area="list" />
       </Group>
       <ScrollArea style={{ flex: 1 }}>
