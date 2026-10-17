@@ -107,7 +107,7 @@ function Title({ s }: { s: Session }) {
 
 function Head({ S, s }: { S: Snapshot; s: Session }) {
   const [named, flashName] = useFlash()
-  return <Paper withBorder p="10px 12px">
+  return <Box p="10px 12px">
     <Group gap="sm" wrap="wrap">
       <Stack gap={0} style={{ minWidth: 0, flex: '1 1 260px' }}>
         {/* 제목은 Claude가 정해서 아직 모른다. 같은 글줄 안에 반짝이를 넣어 높이를 똑같이 맞춘다 */}
@@ -128,7 +128,7 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         {s.host === 'web' && <Button size="xs" variant="outline" color="red" onClick={() => setUI({ closeFor: s.sid })}>세션 종료</Button>}
       </Group>
     </Group>
-  </Paper>
+  </Box>
 }
 
 // 닫힌 세션 탭: 대화는 남아 있으니 누르면 바로 웹에서 같은 옵션으로 다시 연다.
@@ -197,17 +197,24 @@ function ViewToggle() {
     <KeyRec area="view" />
   </Group>
 }
-// 고른 세션: 위 머리(두 칸에 걸침) / 아래 대화 | 핀·메모·btw. 오른쪽 칸은 대화창과 같은 높이에서 시작한다
+// 고른 세션: 카드 하나 안에 위 머리 / 아래 대화 | 핀·메모·btw. 칸 사이는 줄로만 나누고(사용자 요청), 대화|오른쪽 칸 너비와 핀|메모 높이는 줄을 끌어 바꾼다
 function SessionArea({ S, s }: { S: Snapshot; s: Session }) {
   const ui = useUI()
-  return <Box className={s.sid ? undefined : 'hq-fade'} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 420px)', gridTemplateRows: 'auto minmax(0, 1fr)', gap: 12, height: '100%' }}>
-    <Box style={{ gridColumn: '1 / -1', minWidth: 0 }}><Head S={S} s={s} /></Box>
-    <Box style={{ gridColumn: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      {s.host === 'web' && <ViewToggle />}
-      {s.sid && s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
-    </Box>
-    <Box style={{ gridColumn: 2, gridRow: 2, minHeight: 0 }}><SidePanel S={S} s={s} /></Box>
-  </Box>
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: 'hq-chat-side' })
+  return <Paper withBorder h="100%" className={s.sid ? undefined : 'hq-fade'} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Head S={S} s={s} />
+    <Box className="hq-rule" />
+    <Split key={ui.layoutKey} orientation="horizontal" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ flex: 1, minHeight: 0 }}>
+      <Panel id="chat" minSize={360}>
+        <Box h="100%" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+          {s.host === 'web' && <ViewToggle />}
+          {s.sid && s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.pid} s={s} detail={ui.detail} />}
+        </Box>
+      </Panel>
+      <Separator className="hq-split-vline" />
+      <Panel id="side" defaultSize={380} minSize={300} maxSize={640}><SidePanel S={S} s={s} /></Panel>
+    </Split>
+  </Paper>
 }
 
 // 즐겨찾기 칸 아래 사용량 칸(핀·메모·btw처럼 위아래로 나누고 경계를 끌어 높이를 바꾼다). 즐겨찾기가 높이를 다 채울 일은 드물어서

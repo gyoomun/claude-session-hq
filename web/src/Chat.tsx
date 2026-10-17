@@ -228,7 +228,7 @@ function Composer({ s, d, working, onSent, interrupt }: {
   }
   const key = (k: string) => api('term/key', { pid: s.pid, key: k })
   const place = (len: number, at: number) => requestAnimationFrame(() => box.current?.setSelectionRange(at + len, at + len))
-  return <Paper withBorder p="sm">
+  return <Paper p="sm">
     <Stack gap={8}>
       {s.state === 'approval' && <Group gap={6} wrap="wrap">
         <Text size="sm" c="red.4" fw={600}>실행 허락을 기다립니다</Text>
@@ -277,7 +277,7 @@ function Composer({ s, d, working, onSent, interrupt }: {
 // 다른 터미널에서 직접 띄운 세션: 입력을 넣을 방법이 없어서, 원하면 같은 대화를 웹에서도 띄운다
 function NoInput({ s }: { s: Session }) {
   const [ask, setAsk] = useState(false)
-  return <Paper withBorder p="sm">
+  return <Paper p="sm">
     <Group justify="space-between" gap="sm">
       <Text size="sm" c="dimmed">다른 터미널에서 직접 띄운 세션이라 여기서 입력할 수 없습니다.</Text>
       <Button size="xs" variant="default" onClick={() => setAsk(true)}>웹에서도 열기</Button>
@@ -418,7 +418,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
   }, [])
   const [dropOver, setDropOver] = useState(false)
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
-  return <Stack gap={8} className="hq-fade" data-area="chat" style={{ flex: 1, minHeight: 0, position: 'relative' }}
+  return <Stack gap={0} className="hq-fade" data-area="chat" style={{ flex: 1, minHeight: 0, position: 'relative' }}
     onDragOver={e => { if (s.host && hasFiles(e)) { e.preventDefault(); setDropOver(true) } }}
     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(false) }}
     onDrop={e => {
@@ -427,7 +427,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
       draft.attach([...e.dataTransfer.files])
     }}>
     {dropOver && <Box className="hq-dropzone"><Text fw={600}>여기에 놓으면 이미지를 붙입니다</Text></Box>}
-    <Paper withBorder style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+    <Box style={{ flex: 1, minHeight: 0, display: 'flex' }}>
       <ScrollArea viewportRef={view} style={{ flex: 1 }} onScrollPositionChange={({ y }) => {
         const v = view.current
         if (v) stick.current = v.scrollHeight - (y + v.clientHeight) < 80
@@ -442,7 +442,8 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
           {(s.state === 'working' || s.state === 'compact') && !rewind && <Group gap={8}><Loader size="xs" color={COLOR[s.state]} /><Text size="sm" c={`${COLOR[s.state]}.4`} ff="monospace">{s.act || '생각 중'}</Text></Group>}
         </Stack>
       </ScrollArea>
-    </Paper>
+    </Box>
+    <Box className="hq-rule" />
     {/* 되감기는 터미널처럼 입력칸 자리에서 고른다(입력칸에 쓰던 글은 그대로 남는다) */}
     {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : <Composer s={s} d={draft} working={working} onSent={(x, req) => {
       sent.current = x; sending.current = req; setSentAt(x.at); setPending(x); stick.current = true

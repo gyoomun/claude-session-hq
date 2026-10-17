@@ -51,7 +51,7 @@ function PinList({ s }: { s: Session }) {
 
 // 오른쪽 칸 하나: 이름 옆에 영역 단축키(녹화 버튼). 안의 스크롤 칸은 키보드로도 스크롤된다(↑↓)
 function Section({ area, title, sub, children }: { area: Area; title: string; sub?: string; children: React.ReactNode }) {
-  return <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area={area} tabIndex={-1} onKeyDown={areaKeys()}>
+  return <Paper h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area={area} tabIndex={-1} onKeyDown={areaKeys()}>
     <Group p="8px 12px 2px" gap={6} wrap="nowrap"><Text fw={600} size="sm">{title}</Text>{sub && <Text size="xs" c="dimmed">{sub}</Text>}<Box ml="auto"><KeyRec area={area} /></Box></Group>
     <ScrollArea style={{ flex: 1, minHeight: 0 }} viewportProps={{ tabIndex: 0, className: 'hq-scrollfocus' }}><Box p="6px 12px 12px">{children}</Box></ScrollArea>
   </Paper>
@@ -64,9 +64,9 @@ export function SidePanel({ S, s }: { S: Snapshot; s: Session }) {
   const { layoutKey, sideTab: tab } = useUI()
   return <Split key={layoutKey} orientation="vertical" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ height: '100%' }}>
     <Panel id="pin" defaultSize="30" minSize={70}><Section area="pin" title="핀" sub="Claude 핀보드"><PinList s={s} /></Section></Panel>
-    <Separator className="hq-split" />
+    <Separator className="hq-split-line" />
     <Panel id="notes" minSize={200}>
-      <Paper withBorder h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area={tab} data-side-tabs tabIndex={-1} onKeyDown={areaKeys()}>
+      <Paper h="100%" style={{ display: 'flex', flexDirection: 'column' }} data-area={tab} data-side-tabs tabIndex={-1} onKeyDown={areaKeys()}>
         <Group p="6px 12px 0" gap={6} wrap="nowrap">
           <SegmentedControl size="xs" value={tab} onChange={v => setSideTab(v as 'memo' | 'btw')}
             data={[{ value: 'memo', label: hasMemo(S, s.sid) ? '메모 •' : '메모' }, { value: 'btw', label: 'btw' }]} />

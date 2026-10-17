@@ -78,7 +78,7 @@ export function RewindPanel({ s, onClose, onDone }: {
     e.preventDefault(); e.stopPropagation()
   }
   const hint = (keys: string[], what: string) => <Group gap={4} wrap="nowrap">{keys.map(x => <Kbd key={x} size="xs">{x}</Kbd>)}<Text size="xs" c="dimmed">{what}</Text></Group>
-  return <Paper withBorder p="sm" className="hq-rewind hq-in" ref={root} tabIndex={-1} onKeyDown={key} style={{ outline: 'none' }}>
+  return <Paper p="sm" className="hq-rewind hq-in" ref={root} tabIndex={-1} onKeyDown={key} style={{ outline: 'none' }}>
     <Group justify="space-between" mb={8} wrap="nowrap">
       <Text size="sm" fw={600}>되감기 <Text span size="xs" c="dimmed" fw={400}>{confirm ? '이 말을 보내기 전으로 돌아갑니다' : '고른 말을 보내기 전으로 돌아갑니다'}</Text></Text>
       <Group gap="md" wrap="nowrap">{hint(['↑', '↓'], '고르기')}{confirm && hint(['1~' + confirm.options.length], '바로')}{hint(['Enter'], busy ? '처리 중…' : '정하기')}{hint(['Esc'], '닫기')}</Group>

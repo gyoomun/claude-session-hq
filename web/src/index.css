@@ -14,7 +14,7 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 .hq-pane { min-width: 0; min-height: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .hq-pixel { font-family: var(--hq-pixel); font-size: 9.5px; letter-spacing: .1em; color: var(--mantine-color-dimmed); }
 .hq-display { font-family: var(--hq-display); }
-.hq-term { height: 100%; min-height: 0; background: #0b0f1a; border: 1px solid var(--mantine-color-default-border); border-radius: var(--mantine-radius-md); padding: 8px 4px 4px 10px; overflow: hidden; }
+.hq-term { height: 100%; min-height: 0; background: #0b0f1a; padding: 8px 4px 4px 10px; overflow: hidden; }
 .hq-term .xterm { height: 100%; }
 .hq-msg { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
 .hq-wrap { word-break: keep-all; overflow-wrap: anywhere; }
@@ -269,3 +269,10 @@ body { background: var(--mantine-color-body); overflow: hidden; }
 @keyframes hq-spin { to { transform: rotate(360deg); } }
 /* 확인 창의 포커스 버튼: 엔터를 치면 무엇이 눌리는지 한눈에 보이게(사용자 요청). 마우스로 연 창에 자동 포커스를 주면 :focus-visible이 안 걸려서 :focus로 그린다 */
 .mantine-Modal-content .mantine-Button-root:focus { outline: 2px solid var(--mantine-color-yellow-4); outline-offset: 3px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--mantine-color-yellow-4) 25%, transparent); }
+/* 세션 카드 안의 칸 나눔: 가로줄(머리|대화, 대화|입력칸)과 대화|오른쪽 칸 사이 세로 경계(끌어서 너비를 바꾼다. 핀|메모 사이는 .hq-split-line) */
+.hq-rule { flex: none; height: 1px; background: var(--mantine-color-default-border); }
+.hq-split-vline { width: 9px; position: relative; display: grid; place-items: center; outline: none; }
+.hq-split-vline::before { content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--mantine-color-default-border); }
+.hq-split-vline::after { content: ''; position: relative; width: 3px; height: 44px; border-radius: 2px; background: var(--mantine-color-default-border); }
+.hq-split-vline[data-separator="hover"]::before, .hq-split-vline[data-separator="active"]::before, .hq-split-vline[data-separator="focus"]::before,
+.hq-split-vline[data-separator="hover"]::after, .hq-split-vline[data-separator="active"]::after, .hq-split-vline[data-separator="focus"]::after { background: var(--mantine-color-indigo-5); }
