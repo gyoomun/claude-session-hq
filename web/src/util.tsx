@@ -41,10 +41,10 @@ export function fmt(ms: number) {
   const d = Math.floor(h / 24)
   return d + '일' + (h % 24 ? ' ' + (h % 24) + '시간' : '')
 }
-// 목록 한 줄 끝에 쓰는 짧은 시간: 가장 큰 단위 하나만(1일 8시간 → 1일)
+// 목록 한 줄 끝에 쓰는 짧은 시간: 가장 큰 단위 하나만, 영문 단위(1일 8시간 → 1d)
 export function fmtShort(ms: number) {
   const m = Math.floor(Math.max(0, ms) / M)
-  return m < 1 ? '<1분' : m < 60 ? m + '분' : m < 1440 ? Math.floor(m / 60) + '시간' : Math.floor(m / 1440) + '일'
+  return m < 1 ? '<1m' : m < 60 ? m + 'm' : m < 1440 ? Math.floor(m / 60) + 'h' : Math.floor(m / 1440) + 'd'
 }
 export function Since({ t, suf = '', short }: { t: number; suf?: string; short?: boolean }) {
   const n = useNow()
