@@ -159,16 +159,17 @@ function ClosedList({ S, held, onOpen }: { S: Snapshot; held: Closed[]; onOpen: 
     </Modal>
     {list.map(c => {
       const isHeld = held.some(h => h.sid === c.sid), isLive = live.has(c.sid)
-      return <UnstyledButton key={c.sid} p="7px 8px" w="100%" className="hq-item" style={{ borderRadius: 8 }}
+      // 두 줄: 제목 · 닫은 시각(또는 다시 연 상태) / 폴더
+      return <UnstyledButton key={c.sid} p="5px 4px" w="100%" className="hq-item" style={{ borderRadius: 8 }}
         title={isHeld ? (isLive ? '눌러서 보기' : '여는 중') : '눌러서 다시 열기'}
         onClick={() => isHeld ? isLive && pick(c.sid) : onOpen(c)}>
-        <Stack gap={0} style={{ minWidth: 0 }}>
-          <Text size="sm" className="hq-wrap" lh={1.35} c={isHeld ? undefined : 'dimmed'}>{c.title}</Text>
-          <Text size="xs" c="dimmed" truncate title={c.cwd}>{c.cwd}</Text>
+        <Group gap={6} wrap="nowrap">
+          <Text size="sm" lh={1.35} truncate title={c.title} style={{ flex: 1, minWidth: 0 }} c={isHeld ? undefined : 'dimmed'}>{c.title}</Text>
           {/* 하루가 지나면 '며칠 전' 대신 닫은 날짜·시각 */}
-          <Text size="xs" c="dimmed">{isHeld ? <Text span c={isLive ? `${COLOR.myturn}.5` : 'dimmed'}>{isLive ? '다시 열림 · 누르면 보기' : '여는 중…'}</Text>
+          <Text size="xs" c="dimmed" style={{ flex: 'none' }}>{isHeld ? <Text span inherit c={isLive ? `${COLOR.myturn}.5` : 'dimmed'}>{isLive ? '다시 열림 · 누르면 보기' : '여는 중…'}</Text>
             : Date.now() - c.closedAt < D ? <Since t={c.closedAt} suf=" 전" /> : `${new Date(c.closedAt).getMonth() + 1}. ${new Date(c.closedAt).getDate()}. ${hhmm(c.closedAt)}`}</Text>
-        </Stack>
+        </Group>
+        <Text size="xs" c="dimmed" truncate title={c.cwd}>{c.cwd}</Text>
       </UnstyledButton>
     })}
   </Stack>
