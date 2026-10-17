@@ -63,7 +63,7 @@ function RestartAll({ S }: { S: Snapshot }) {
   const [ask, setAsk] = useState(false)
   const n = S.sessions.filter(s => s.host === 'web').length
   return <>
-    <Button variant="default" size="xs" disabled={!n} onClick={() => setAsk(true)}>모두 재시작 ({n}개)</Button>
+    <Button variant="filled" color="orange" size="xs" disabled={!n} onClick={() => setAsk(true)}>모두 재시작 ({n}개)</Button>
     <Modal opened={ask} onClose={() => setAsk(false)} title="모두 재시작" size="sm" zIndex={300} withCloseButton={false}>{/* 환경설정 창(.hq-overlay 200) 위로 */}
       <Stack gap="sm">
         <Text size="sm">웹 세션 {n}개를 모두 끄고 같은 대화로 다시 띄울까요? 일하는 중인 세션도 끊깁니다.</Text>
