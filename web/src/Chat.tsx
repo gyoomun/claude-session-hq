@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm'
 import remarkCjkFriendly from 'remark-cjk-friendly'
 import { Box, Button, UnstyledButton, CloseButton, Code, Group, Loader, Modal, Paper, ScrollArea, Skeleton, Stack, Text, Textarea } from '@mantine/core'
 import { api, serverNow, toast } from './store'
-import { openMenuView, pickNew, useUI } from './ui'
+import { hardQuestion, openMenuView, pickNew, setView, useUI } from './ui'
 import type { Session } from './types'
 import { COLOR } from './util'
 import { RewindPanel } from './Rewind'
@@ -274,9 +274,12 @@ function Composer({ s, d, history, onSent }: {
     <Stack gap={8}>
       {s.state === 'approval' && question && <Stack gap={6}>
         <Text size="sm" c="red.4" fw={600}>{question.header ? question.header + ' · ' : ''}{question.question}</Text>
-        <Group gap={6} wrap="wrap">
+        {hardQuestion(s) ? <Group gap={6}>
+          <Text size="xs" c="dimmed">{s.ask!.questions!.length > 1 ? `질문이 ${s.ask!.questions!.length}개라` : '여러 개 고르는 질문이라'} 대화 화면에서는 답할 수 없습니다</Text>
+          <Button size="xs" variant="default" onClick={() => setView(s.sid, 'term')}>터미널에서 답하기</Button>
+        </Group> : <Group gap={6} wrap="wrap">
           {question.options.map((o, n) => <Button key={n} size="xs" variant="default" title={o.description} onClick={() => key(String(n + 1))}>{n + 1} · {o.label}</Button>)}
-        </Group>
+        </Group>}
       </Stack>}
       {s.state === 'approval' && !question && <Group gap={6} wrap="wrap">
         <Text size="sm" c="red.4" fw={600}>실행 허락을 기다립니다</Text>

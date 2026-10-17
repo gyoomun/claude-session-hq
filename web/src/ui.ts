@@ -87,15 +87,29 @@ export function pickNew(tmux: string, o: { task?: string; cwd?: string; working?
   burst()
   setMode('work')
 }
-export function setView(sid: string, v: 'chat' | 'term') {
-  disarm()
+export function setView(sid: string, v: 'chat' | 'term') { disarm(); storeView(sid, v) }
+function storeView(sid: string, v: 'chat' | 'term') {
   const views = { ...ui.views }
   if (v === 'term') views[sid] = 'term'; else delete views[sid]
   set('hq-views', JSON.stringify(views)); setUI({ views })
 }
-// 화면에서 답할 수 없는 질문(한 번에 여러 개, 여러 개 고르기)이 오면 그 세션만 그동안 터미널로 보인다. 답하면 원래 보기로 돌아간다
-const termOnly = (s: Session) => s.state === 'approval' && !!s.ask?.questions && (s.ask.questions.length > 1 || s.ask.questions.some(q => q.multiSelect))
-export const viewOf = (u: UI, s: Session) => termOnly(s) || u.views[s.sid] ? 'term' : 'chat'
+export const viewOf = (u: UI, s: Session) => u.views[s.sid] ? 'term' : 'chat'
+// 화면에서 답할 수 없는 질문(한 번에 여러 개, 여러 개 고르기)이 오면 그 세션만 터미널 보기로 한 번 바꿔 둔다. 그 뒤에도 사용자가 마음대로 바꾼다(사용자 요청: 묶어 두지 않는다).
+// 답하고 나면, 이것이 바꿔 둔 것이고 아직 터미널이면 UI로 되돌린다
+export const hardQuestion = (s: Session) => s.state === 'approval' && !!s.ask?.questions && (s.ask.questions.length > 1 || s.ask.questions.some(q => q.multiSelect))
+const switched = new Map<string, boolean>() // sid -> 질문 때문에 터미널로 바꿨는지
+export function followQuestions(sessions: Session[]) {
+  for (const s of sessions) {
+    if (hardQuestion(s)) {
+      if (switched.has(s.sid)) continue
+      switched.set(s.sid, !ui.views[s.sid])
+      if (!ui.views[s.sid]) storeView(s.sid, 'term')
+    } else if (switched.has(s.sid)) {
+      if (switched.get(s.sid) && ui.views[s.sid]) storeView(s.sid, 'chat')
+      switched.delete(s.sid)
+    }
+  }
+}
 // 터미널 보기로 /model·/effort 창을 띄운 뒤, 창이 모두 닫혀 보통 입력칸으로 돌아오면(effort는 Enter 뒤에 확인 창이 한 번 더 뜬다) 대화 화면으로 되돌린다.
 // 키가 아니라 서버가 화면을 보고 판단한다. 창이 한 번 보인 뒤에만 닫힘으로 친다. 이미 터미널 보기였으면 그대로 두고, 사용자가 먼저 보기를 바꾸면 되돌리지 않는다
 let menuTimer = 0
