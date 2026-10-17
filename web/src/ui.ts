@@ -5,8 +5,9 @@ import { api, burst } from './store'
 export const TOAST_POS = ['top-left', 'top-center', 'top-right', 'right-center', 'bottom-right', 'bottom-center', 'bottom-left', 'left-center'] as const
 export type ToastPos = typeof TOAST_POS[number]
 // 영역 단축키: 영역마다 키 하나. 이 브라우저에 남는다(localStorage hq-keys). 처음 값은 ⌥1~⌥6
-export const AREAS = [['list', '세션 목록'], ['favs', '즐겨찾기'], ['chat', '대화'], ['pin', '핀'], ['memo', '메모'], ['btw', 'btw']] as const
-export type Area = typeof AREAS[number][0]
+// 대화는 넣지 않는다: 어느 영역에서든 Esc를 누르면 대화 입력칸으로 오므로 단축키가 필요 없다(사용자 요청)
+export const AREAS = [['list', '세션 목록'], ['favs', '즐겨찾기'], ['pin', '핀'], ['memo', '메모'], ['btw', 'btw']] as const
+export type Area = typeof AREAS[number][0] | 'chat'
 // 영역이 아닌 동작 단축키(같은 녹화 버튼으로 바꾼다). view: 대화 칸을 UI(대화 화면)와 터미널 사이에서 바꾼다
 export const ACTIONS = [['view', '터미널·UI 전환']] as const
 export type KeyId = Area | typeof ACTIONS[number][0]

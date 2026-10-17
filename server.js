@@ -395,6 +395,9 @@ function chatItems(entries) {
   const out = [];
   for (const d of entries) {
     // 자동 압축 요약(isCompactSummary)은 Claude Code가 내 말처럼 넣은 긴 글이라 보이지 않는다(터미널에서도 접혀 있다)
+    // Claude가 일하는 중에 보낸 말은 user 항목이 아니라 첨부(queued_command)로 남는다. 이것도 내 말풍선으로
+    const q = d.type === 'attachment' && d.attachment?.type === 'queued_command' && d.attachment.commandMode === 'prompt' && !d.isSidechain ? d.attachment : null;
+    if (q) { const t = typeof q.prompt === 'string' ? q.prompt : textOf(q.prompt); if (t.trim()) out.push({ id: d.uuid || String(out.length), at: Date.parse(q.timestamp || d.timestamp) || 0, t: 'user', text: t.trim() }); continue; }
     if (d.isSidechain || d.isMeta || d.isCompactSummary || (d.type !== 'user' && d.type !== 'assistant')) continue;
     const c = d.message && d.message.content, at = Date.parse(d.timestamp) || 0, id = d.uuid || String(out.length);
     if (d.type === 'user') {

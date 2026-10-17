@@ -106,13 +106,14 @@ function Title({ s }: { s: Session }) {
 }
 
 function Head({ S, s }: { S: Snapshot; s: Session }) {
-  const [named, flashName] = useFlash()
   const busy = s.state === 'working' || s.state === 'compact' || s.state === 'approval'
   return <Box p="10px 12px">
     <Group gap="sm" wrap="wrap">
       <Stack gap={0} style={{ minWidth: 0, flex: '1 1 260px' }}>
         {/* 제목은 Claude가 정해서 아직 모른다. 같은 글줄 안에 반짝이를 넣어 높이를 똑같이 맞춘다 */}
         {s.sid ? <Title s={s} /> : <Text component="div" fw={600} size="lg"><Skeleton h="0.9em" w="38%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>}
+        {/* 제목 밑: 권한 모드·모델·effort(폴더·상태·세션 이름은 목록에 있어 뺐다: 사용자 요청) */}
+        <SessionInfo s={s} />
       </Stack>
       <Group gap={6}>
         <AssignSelect S={S} s={s} />
@@ -125,15 +126,6 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
         }}>세션 재시작</Button>}
         {s.host === 'web' && <Button size="xs" variant="outline" color="red" onClick={() => setUI({ closeFor: s.sid })}>세션 종료</Button>}
       </Group>
-    </Group>
-    {/* 둘째 줄은 머리 전체 폭: 왼쪽 폴더·상태·이름(넘치면 줄임), 오른쪽 대화 단축키·권한 모드·모델·effort */}
-    <Group gap={14} wrap="nowrap" justify="space-between">
-      {/* 한 줄로 고정: 실행 중인 명령(act)이 길어도 머리가 두꺼워지지 않게 끝을 줄이고, 마우스를 올리면 전체가 보인다 */}
-      <Text size="xs" c="dimmed" truncate title={s.act || undefined} style={{ minWidth: 0 }}>{s.cwd && `${s.cwd} · `}<Text span c={`${COLOR[s.state]}.5`} fw={600}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
-        {/* 세션 이름: 상태줄에 보이고 다른 Claude가 이 세션을 부르는 이름. 제목과 같아도 늘 보이고 누르면 복사한다(같은 자리에서 늘 복사하게) */}
-        {s.sid && s.name && <UnstyledButton component="span" className="hq-name" title="세션 이름(다른 Claude가 부르는 이름). 누르면 복사" onClick={async () => { if (await copyName(s.name)) flashName() }}> · @{s.name}{named && <Text span c="teal.4" ff="inherit"> ✓ 복사됨</Text>}</UnstyledButton>}
-        {s.act && <Text span ff="monospace" c={`${COLOR.working}.5`}> · {s.act}</Text>}</Text>
-      <SessionInfo s={s} />
     </Group>
   </Box>
 }

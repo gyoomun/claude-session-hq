@@ -188,7 +188,7 @@ function Pick({ kind, pid, web, tip, color, children }: { kind: 'mode' | 'model'
   // 권한 모드는 Shift+Tab을 보내고 서버가 화면이 바뀐 것을 확인할 때까지(최대 1.5초) 돌아가는 표시를 보인다.
   // Mantine Loader는 작고 이 맥의 '동작 줄이기'에서 안 보여서, 동작 줄이기와 상관없이 도는 hq-spin을 쓴다(index.css)
   useEffect(() => { setBusy(false) }, [children])
-  const body = <Group gap={6} wrap="nowrap" style={{ flex: 'none' }}><Text size="sm" fw={600} c={color} style={{ whiteSpace: 'nowrap' }}>{children}</Text>{busy && <span className="hq-spin" />}</Group>
+  const body = <Group gap={6} wrap="nowrap" style={{ flex: 'none' }}><Text size="xs" fw={600} c={color} style={{ whiteSpace: 'nowrap' }}>{children}</Text>{busy && <span className="hq-spin" />}</Group>
   if (!web) return <Box title={tip}>{body}</Box>
   return <UnstyledButton disabled={busy} onClick={async () => {
     setBusy(true)
@@ -207,7 +207,6 @@ export function SessionInfo({ s }: { s: Session }) {
     {s.mode && MODE[s.mode] && <Pick kind="mode" pid={s.pid} web={s.host === 'web'} tip={`권한 모드: ${s.mode} (누르면 다음 모드로)`} color={MODE[s.mode][1] === 'dimmed' ? 'gray.4' : MODE[s.mode][1]}>{MODE[s.mode][0]}</Pick>}
     {s.model && <Pick kind="model" pid={s.pid} web={s.host === 'web'} tip={`모델 ${s.model} (누르면 터미널에서 /model)`} color="gray.3">{modelName(s.model)}</Pick>}
     {s.model && s.effort && <Pick kind="effort" pid={s.pid} web={s.host === 'web'} tip={`effort ${s.effort} (누르면 터미널에서 /effort)`} color="gray.5">{s.effort}</Pick>}
-    <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">대화</Text><KeyRec area="chat" /></Group>
   </Group>
 }
 // 머리의 '중단' 버튼이 대화 칸의 중단(보낸 말 되살리기 포함)을 부른다. 대화 칸이 없으면(터미널 보기) Esc만 보낸다

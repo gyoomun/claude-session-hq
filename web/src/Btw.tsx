@@ -42,7 +42,7 @@ export function BtwTab({ S, s }: { S: Snapshot; s: Session }) {
       </Stack>
     </ScrollArea>
     <Box p="sm" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
-      <Textarea autosize minRows={2} maxRows={6} value={q} onChange={e => setQ(e.currentTarget.value)} placeholder="btw로 물어보기 · Enter 묻기 · Shift+Enter 줄바꿈" aria-label="btw 질문"
+      <Textarea autosize minRows={2} maxRows={6} value={q} onChange={e => setQ(e.currentTarget.value)} placeholder="Enter 묻기 · Shift+Enter 줄바꿈" aria-label="btw 질문"
         onKeyDown={e => {
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask() }
           else if (e.key === 'ArrowUp' && !q) { e.preventDefault(); view.current?.focus() } // 비었으면 위의 지난 답으로 올라가 ↑↓로 스크롤
