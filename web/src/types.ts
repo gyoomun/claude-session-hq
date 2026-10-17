@@ -17,6 +17,7 @@ export interface Session {
   task: string
   host: 'web' | 'orca' | ''
   tmux: string
+  forkOf?: string // 포크본이면 원본 대화 ID(서버 db.forks)
   pin: PinItem[] // Claude 핀보드(대화 기록의 마지막 상태)
   model: string // 마지막 답을 만든 모델 ID(claude-opus-5-5 등). 아직 답이 없으면 ''
   effort: string // 그 답의 effort(low·medium·high·xhigh·max)

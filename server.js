@@ -34,7 +34,7 @@ const TERM_ENV = {
 };
 
 /* 저장소: 업무, 세션 배치, 확인 시각, 웹 세션 목록(재부팅 뒤 복구용) */
-let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, usageShare: {}, pins: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
+let db = { tasks: [], assign: {}, seen: {}, web: [], layout: {}, rooms: {}, favs: { mode: 'auto', items: [] }, usageShare: {}, forks: {}, pins: {}, btw: {}, memos: {}, closed: [], claudeArgs: ['--dangerously-skip-permissions'], nextId: 1 };
 try { db = { ...db, ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch {}
 // 세션별 한도 추정은 한도 종류(5시간·주간)마다 따로 둔다. 예전 모양(대화 ID가 바로 키)은 창이 지나면 버려지는 값이라 옮기지 않는다
 db.usageShare = { five_hour: db.usageShare.five_hour || {}, seven_day: db.usageShare.seven_day || {} };
@@ -298,6 +298,7 @@ function scan() {
       }
       const w = db.web.find(x => x.name === where.tmux);
       if (w && w.sid !== s.sessionId) { w.sid = s.sessionId; dirty = true; }
+      if (w?.forkOf && s.sessionId !== w.forkOf && !db.forks[s.sessionId]) { db.forks[s.sessionId] = w.forkOf; favBelow(s.sessionId, w.forkOf); dirty = true; }
     }
     if (!(s.sessionId in db.seen)) {
       const at = s.statusUpdatedAt || s.startedAt || now;
@@ -331,7 +332,7 @@ function scan() {
       // 권한 모드와 뒤에서 도는 작업: 웹 세션은 Claude Code 화면 맨 아래 줄을 읽는다(모드를 바꾸면 바로 보인다), 아니면 대화 기록의 마지막 모드
       mode: (where.tmux && footers.get(where.tmux)?.mode) || t.mode || '', bg: (where.tmux && footers.get(where.tmux)?.bg) || { shells: 0, agents: [] }, task: db.assign[s.sessionId] || '',
       pin: db.pins[s.sessionId] ? pinItems(db.pins[s.sessionId].text) : [],
-      host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '',
+      host: where.tmux ? 'web' : where.orca ? 'orca' : '', tmux: where.tmux || '', forkOf: db.forks[s.sessionId] || '',
     };
   });
   // 웹 세션이 스스로 끝났으면(/exit 등) 목록에서 뺀다. 다시 띄우지 않는다
@@ -362,6 +363,8 @@ function scan() {
   if (keep.length !== db.closed.length) { db.closed = keep; dirty = true; }
   // 닫힌 세션의 확인 기록은 지운다. 웹 세션은 다시 뜨는 중일 수 있으니 남긴다
   for (const sid of Object.keys(db.seen)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid)) { delete db.seen[sid]; dirty = true; }
+  // 포크 관계는 다시 열 수 있는 동안(최근 닫힌 세션)만 둔다
+  for (const sid of Object.keys(db.forks)) if (!ids.has(sid) && !db.web.some(w => w.sid === sid) && !db.closed.some(c => c.sid === sid)) { delete db.forks[sid]; dirty = true; }
   if (dirty) save();
   firstScan = false;
   checkLogin();
@@ -734,6 +737,17 @@ async function checkLogin() {
   }
 }
 
+/* 포크본을 즐겨찾기의 원본 바로 밑에 넣는다(원본이 즐겨찾기에 있을 때만). 자동 정렬은 배열 순서가 보이는 순서, 자유 배치는 원본 아래 가장 가까운 빈 칸 */
+function favBelow(sid, origin) {
+  const items = db.favs.items, i = items.findIndex(x => x.sid === origin);
+  if (i < 0 || items.some(x => x.sid === sid)) return;
+  const used = new Set(items.map(x => x.slot));
+  let slot = items[i].slot + 1;
+  while (used.has(slot)) slot++;
+  if (db.favs.mode === 'free') items.push({ sid, slot });
+  else items.splice(i + 1, 0, { sid, slot });
+}
+
 let migrating = false;
 const userClosed = new Set(); // 사용자가 '세션 종료'로 닫은 대화: 기록은 남기되 경고(quiet)는 띄우지 않는다
 // HQ 밖(Orca·iTerm 등)에서 돈 세션도 경고하지 않는다: 사용자가 일부러 끈 것이다. 경고는 HQ tmux 세션이 한꺼번에 꺼지는 사고만 알린다
@@ -841,8 +855,10 @@ const routes = {
     const extra = [...(fork ? ['--resume', fork, '--fork-session'] : []), ...(label ? ['--name', label] : []), ...(prompt ? [prompt] : [])];
     const name = newName();
     await startTmux(name, cwd, [...db.claudeArgs, ...extra]);
-    db.web.push({ name, cwd, args: db.claudeArgs, sid: '', createdAt: Date.now() });
-    if (b.task) pendingAssign.set(name, b.task);
+    db.web.push({ name, cwd, args: db.claudeArgs, sid: '', createdAt: Date.now(), ...(fork ? { forkOf: fork } : {}) });
+    // 포크본은 원본과 같은 업무에 넣는다(목록에서 원본 바로 밑에 붙으려면 같은 묶음이어야 한다)
+    const assignTo = b.task || (fork && db.assign[fork]);
+    if (assignTo) pendingAssign.set(name, assignTo);
     return name;
   },
   'session/migrate': b => migrateOne(+b.pid),

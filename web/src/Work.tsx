@@ -4,7 +4,7 @@ import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Paper, Scroll
 import { api, toast, useNow } from './store'
 import { pick, setUI, setView, useUI } from './ui'
 import type { Session, Snapshot } from './types'
-import { COLOR, LABEL, Since, bySt, cssColor, sessOf } from './util'
+import { COLOR, LABEL, Since, bySt, cssColor, sessOf, withForks } from './util'
 import { AssignSelect } from './parts'
 import { TerminalView } from './Terminal'
 import { ChatView, bgCount, bgText, copyName, useFlash } from './Chat'
@@ -323,7 +323,7 @@ export function WorkView({ S }: { S: Snapshot }) {
   const favs = favSids(S), inFav = new Set(favs)
   // 즐겨찾기에 넣은 세션은 목록에서 빠지고, 빼면 원래 업무 묶음의 원래 순서 자리로 돌아간다
   // 즐겨찾기로 간 세션은 원래 업무 자리에 흐린 줄(FavGhost)로 남는다(어느 업무 것인지, 어디로 갔는지 보이게). 순회·끌기에는 넣지 않는다
-  const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, all: sessOf(S, t) })), { id: '', name: '미배치', all: S.sessions.filter(s => !s.task).sort(bySt) }]
+  const groups = [...S.tasks.map(t => ({ id: t.id, name: t.name, all: withForks(sessOf(S, t)) })), { id: '', name: '미배치', all: withForks(S.sessions.filter(s => !s.task).sort(bySt)) }]
     .map(g => ({ ...g, ss: g.all.filter(x => !inFav.has(x.sid)), favs: g.all.filter(x => inFav.has(x.sid)) }))
   const s = S.sessions.find(x => x.sid === ui.sel)
   // 새 세션을 여는 동안 쓸 빈 세션. 뜰 때의 상태(첫 지시가 있으면 작업중, 없으면 내 차례)와 폴더를 미리 안다

@@ -20,6 +20,15 @@ const RANK: Record<string, number> = { approval: 0, myturn: 1, working: 2, compa
 // 나를 기다리는 것이 위로, 기다린 지 오래된 것이 먼저. 쉬는 것은 최근 것이 먼저
 export const bySt = (a: Session, b: Session) =>
   RANK[a.state] - RANK[b.state] || (a.state === 'idle' ? b.since - a.since : a.since - b.since)
+// 포크본은 원본 바로 밑에 둔다(원본이 같은 목록에 있을 때). 포크의 포크도 그 밑으로 이어진다. 나머지 순서는 그대로
+export function withForks(list: Session[]) {
+  const has = new Set(list.map(s => s.sid)), kids = new Map<string, Session[]>()
+  const child = (s: Session) => !!s.forkOf && has.has(s.forkOf)
+  for (const s of list) if (child(s)) kids.set(s.forkOf!, [...kids.get(s.forkOf!) || [], s])
+  const out: Session[] = [], put = (s: Session) => { out.push(s); for (const k of kids.get(s.sid) || []) put(k) }
+  for (const s of list) if (!child(s)) put(s)
+  return out
+}
 export const waiting = (s: Session) => s.state === 'myturn' || s.state === 'approval'
 
 export function fmt(ms: number) {
