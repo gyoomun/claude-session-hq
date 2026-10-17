@@ -337,7 +337,7 @@ const Messages = memo(function Messages({ items, detail }: { items: Item[]; deta
     {all.length > list.length && <Button size="xs" variant="subtle" color="gray" onClick={() => { all.forEach(it => seen.current?.add(idOf(it))); setLimit(l => l + PAGE) }}>이전 대화 더 보기 ({all.length - list.length}개 남음)</Button>}
     {list.map(it => Array.isArray(it) ? <ToolGroup key={it[0].id} tools={it} results={results} cls={cls(it)} />
       : it.t === 'user' ? <Box key={it.id} className="hq-say me"><Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><UserText text={it.text} /></Text></Box>
-      : it.t === 'peer' ? <Box key={it.id} className={'hq-say peer' + cls(it)}><Text size="xs" c="dimmed" fw={700} mb={4}>{it.name || '다른 세션'}</Text><Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><UserText text={it.text} /></Text></Box>
+      : it.t === 'peer' ? <Box key={it.id} className={'hq-say peer' + cls(it)}><Text size="xs" c="dimmed" mb={4}>{it.name || '다른 세션'}</Text><Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><UserText text={it.text} /></Text></Box>
       : it.t === 'assistant' ? <Box key={it.id} className={'hq-say' + cls(it)}><Md text={it.text} /></Box>
       : it.t === 'notice' ? <div key={it.id} className={'hq-notice' + cls(it)}><IconPlayerStopFilled size={11} /> {it.text}</div>
       : <Tool key={it.id} it={it} result={results.get(it.toolId)} cls={cls(it)} />)}
