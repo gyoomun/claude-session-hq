@@ -8,7 +8,7 @@ Claude Code 세션 여러 개를 브라우저 한 화면에서 보고, 그 안�
 - 서버는 launchd(`dev.gyoomun.claude-session-hq`)가 Homebrew Node로 띄운다. 주소는 http://127.0.0.1:7420
 - `server.js`를 고친 뒤: `launchctl kickstart -k gui/$(id -u)/dev.gyoomun.claude-session-hq`. 웹 세션은 tmux에서 돌므로 서버를 재시작해도 끊기지 않는다
 - 화면은 `web/`(Vite + React + Mantine, TypeScript)이고 서버는 빌드 결과 `dist/`를 내준다. 화면을 고친 뒤: `npm run typecheck && npm run build` 후 브라우저 새로고침(서버 재시작 불필요). 바로바로 보면서 고치려면 `npm run dev`(5173, API는 7420으로 넘김)
-- 열려 있는 화면은 데이터만 2초마다 받고 화면 코드는 새로고침해야 바뀐다. 그래서 상태에 `build`(dist/index.html 시각)를 실어 보내고, 화면이 자기보다 새 빌드를 보면 위에 '새 버전이 나왔습니다 [새로고침]'을 띄운다
+- 열려 있는 화면은 데이터만 2초마다 받고 화면 코드는 새로고침해야 바뀐다. 그래서 상태에 `build`(dist/index.html 시각)를 실어 보내고, 화면이 자기보다 새 빌드를 보면 '새 버전이 나왔습니다 [새로고침]' 토스트를 띄운다(닫을 때까지 남고, 닫은 뒤 또 새 빌드가 나오면 다시 뜬다)
 - 로그인 화면 `public/login.html`은 빌드 없이 그대로 내주는 단독 페이지다
 - 의존성: `npm install`(launchd와 같은 Node로 깔아야 node-pty가 맞는다). 설치·제거: `node scripts/install.js` / `--uninstall`. 로그: `~/.claude/board/server.log`
 - 실험은 `PORT=7499 node server.js`로 따로 띄운다. 데이터 파일과 tmux 소켓은 같이 쓰므로 시험 세션·업무는 지운다

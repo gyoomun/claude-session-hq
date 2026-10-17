@@ -59,13 +59,16 @@ function Notices({ S }: { S: Snapshot }) {
   const recent = S.closed.filter(c => !c.quiet && Date.now() - c.closedAt < 30 * 60e3)
   const [busy, setBusy] = useState(false)
   // 화면을 연 뒤에 새 빌드가 나왔으면 새로고침하라고 알린다(데이터는 2초마다 오지만 화면 코드는 새로고침해야 바뀐다)
-  const build = useRef(S.build)
-  const stale = !!(S.build && build.current && S.build !== build.current)
+  // 토스트로 띄우고, 닫은 뒤에 또 새 빌드가 나오면 다시 띄운다
+  const build = useRef(S.build), shown = useRef(S.build)
+  useEffect(() => {
+    if (!S.build || !build.current || S.build === build.current || S.build === shown.current) return
+    shown.current = S.build
+    notifications.show({ id: 'hq-new-build', color: 'indigo', autoClose: false, title: '새 버전이 나왔습니다',
+      message: <Group justify="space-between" gap="sm" wrap="nowrap"><Text size="sm">새로고침하면 바뀐 화면이 보입니다.</Text>
+        <Button size="xs" onClick={() => location.reload()}>새로고침</Button></Group> })
+  }, [S.build])
   return <>
-    {stale && <Alert color="indigo" variant="light" p="xs">
-      <Group justify="space-between" gap="sm"><Text size="sm">새 버전이 나왔습니다. 새로고침하면 바뀐 화면이 보입니다.</Text>
-        <Button size="xs" onClick={() => location.reload()}>새로고침</Button></Group>
-    </Alert>}
     {orca.length > 0 && <Alert color="yellow" variant="light" p="xs">
       <Group justify="space-between" gap="sm">
         <Text size="sm">Orca 안에서 도는 세션이 {orca.length}개 있습니다. <b>Orca를 끄면 이 세션들도 같이 꺼집니다.</b> 웹으로 옮기면 Orca와 상관없이 계속 돕니다.{S.migrating && ' 옮기는 중…'}</Text>
