@@ -202,7 +202,8 @@ function Pick({ kind, pid, web, tip, color, children }: { kind: 'mode' | 'model'
 }
 // 세션 머리 상태줄 오른쪽: 대화 영역 단축키·뒤 작업·권한 모드·모델·effort(전에는 입력칸 아래 줄이었다. 줄을 없애려고 올렸다: 사용자 요청)
 export function SessionInfo({ s }: { s: Session }) {
-  return <Group gap={14} wrap="nowrap" style={{ flex: 'none' }}>
+  return <Group gap={14} wrap="nowrap" style={{ minWidth: 0, overflow: 'hidden' }}>
+    {s.cwd && <Text size="xs" c="dimmed" truncate title={s.cwd} style={{ flex: 'none', maxWidth: '50%' }}>{s.cwd}</Text>}
     {bgCount(s) > 0 && <Text size="xs" c="teal.4" title={bgText(s)} style={{ whiteSpace: 'nowrap' }}>뒤 작업 {[s.bg.shells && `셸 ${s.bg.shells}`, s.bg.agents.length && `에이전트 ${s.bg.agents.length}`].filter(Boolean).join(' · ')}</Text>}
     {s.mode && MODE[s.mode] && <Pick kind="mode" pid={s.pid} web={s.host === 'web'} tip={`권한 모드: ${s.mode} (누르면 다음 모드로)`} color={MODE[s.mode][1] === 'dimmed' ? 'gray.4' : MODE[s.mode][1]}>{MODE[s.mode][0]}</Pick>}
     {s.model && <Pick kind="model" pid={s.pid} web={s.host === 'web'} tip={`모델 ${s.model} (누르면 터미널에서 /model)`} color="gray.3">{modelName(s.model)}</Pick>}
