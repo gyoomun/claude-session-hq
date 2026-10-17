@@ -76,7 +76,7 @@ function Notices({ S }: { S: Snapshot }) {
     </Alert>}
     {recent.length >= 2 && <Alert color="red" variant="light" p="xs">
       <Group justify="space-between" gap="sm">
-        <Text size="sm">최근 30분 안에 세션 {recent.length}개가 닫혔습니다(Orca 종료 등). 대화는 남아 있어서 웹에서 같은 옵션으로 다시 열 수 있습니다.</Text>
+        <Text size="sm">최근 30분 안에 웹 세션 {recent.length}개가 닫혔습니다. 대화는 남아 있어서 웹에서 같은 옵션으로 다시 열 수 있습니다.</Text>
         <Group gap={6}>
           <Button size="xs" color="red" loading={busy} onClick={async () => {
             setBusy(true); const r = await api<string[]>('session/reopen', { sids: recent.map(c => c.sid) }); setBusy(false)

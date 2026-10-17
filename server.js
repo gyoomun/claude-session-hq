@@ -282,7 +282,7 @@ let firstScan = true;
 function pushFeed(e) { feed.unshift(e); if (feed.length > 300) feed.length = 300; }
 function scan() {
   const now = Date.now();
-  const live = liveSessions();
+  const live = liveSessions().filter(s => s.cwd !== LOGIN_DIR); // 계정 줄로 띄운 로그인 claude는 세션이 아니다(목록·닫힌 기록에 넣지 않는다)
   loadHandles(live.map(s => s.pid));
   loadOrcaTitles(now);
   loadWorktrees(now);
@@ -352,7 +352,7 @@ function scan() {
     pushFeed({ at: now, sid, title: was?.title || sid, task: db.assign[sid] || '', from: st, to: 'closed' });
     // 최근 닫힌 세션: Orca가 꺼지는 등으로 한꺼번에 사라져도 웹에서 같은 명령으로 다시 열 수 있게 남긴다
     if (was && !restarting.has(sid)) {
-      db.closed = [{ sid, title: was.title, dir: was.dir, cwd: was.cwd, args: argsByPid.get(was.pid) || [], host: was.host, state: was.state, closedAt: now, quiet: userClosed.delete(sid) },
+      db.closed = [{ sid, title: was.title, dir: was.dir, cwd: was.cwd, args: argsByPid.get(was.pid) || [], host: was.host, state: was.state, closedAt: now, quiet: userClosed.delete(sid) || was.host !== 'web' },
         ...db.closed.filter(c => c.sid !== sid)].slice(0, 60);
       dirty = true;
     }
@@ -736,6 +736,7 @@ async function checkLogin() {
 
 let migrating = false;
 const userClosed = new Set(); // 사용자가 '세션 종료'로 닫은 대화: 기록은 남기되 경고(quiet)는 띄우지 않는다
+// HQ 밖(Orca·iTerm 등)에서 돈 세션도 경고하지 않는다: 사용자가 일부러 끈 것이다. 경고는 HQ tmux 세션이 한꺼번에 꺼지는 사고만 알린다
 const restarting = new Set(); // 다시 띄우는 중인 대화: 잠깐 사라져도 '최근 닫힌 세션'에 넣지 않는다
 const keepSince = new Map(); // 다시 띄운 세션의 sid -> 끄기 전 { state, since }
 let notice = null; // 화면에 한 번 띄울 알림 { text, color, at } (모두 재시작이 끝났을 때 등)
