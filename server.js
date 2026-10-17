@@ -151,7 +151,7 @@ function toolLine(h) {
 function askOf(h) {
   if (!h.input) return { tool: h.tool, what: toolLine(h), why: '' };
   const i = h.input;
-  if (h.tool === 'AskUserQuestion' && i.questions) return { tool: h.tool, what: '', why: '', questions: i.questions.map(q => ({ question: q.question, header: q.header, options: (q.options || []).map(o => ({ label: o.label, description: o.description })) })) };
+  if (h.tool === 'AskUserQuestion' && i.questions) return { tool: h.tool, what: '', why: '', questions: i.questions.map(q => ({ question: q.question, header: q.header, multiSelect: q.multiSelect, options: (q.options || []).map(o => ({ label: o.label, description: o.description })) })) };
   return { tool: h.tool.replace(/^mcp__(.+?)__/, '$1:'), what: clip(i.command || i.file_path || i.url || i.pattern || i.query || JSON.stringify(i, null, 2), 4000), why: i.description || '' };
 }
 

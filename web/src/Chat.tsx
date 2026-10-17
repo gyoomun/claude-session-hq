@@ -192,7 +192,7 @@ function useDraft(sid: string) {
 type Draft = ReturnType<typeof useDraft>
 
 // 입력칸 아래 권한 모드·모델·effort: 누르면 권한 모드는 다음 모드로 돌고, 모델·effort는 터미널 화면으로 바꿔 /model·/effort 창을 띄운다(고르고 확인은 사용자가)
-function Pick({ kind, pid, web, tip, color, children }: { kind: 'mode' | 'model' | 'effort'; pid: number; web: boolean; tip: string; color: string; children: string }) {
+function Pick({ kind, sid, pid, web, tip, color, children }: { kind: 'mode' | 'model' | 'effort'; sid: string; pid: number; web: boolean; tip: string; color: string; children: string }) {
   const [busy, setBusy] = useState(false)
   // 권한 모드는 Shift+Tab을 보내고 서버가 화면이 바뀐 것을 확인할 때까지(최대 1.5초) 돌아가는 표시를 보인다.
   // Mantine Loader는 작고 이 맥의 '동작 줄이기'에서 안 보여서, 동작 줄이기와 상관없이 도는 hq-spin을 쓴다(index.css)
@@ -203,7 +203,7 @@ function Pick({ kind, pid, web, tip, color, children }: { kind: 'mode' | 'model'
     setBusy(true)
     const r = await api('session/menu', { pid, kind })
     if (!r || kind !== 'mode') setBusy(false)
-    if (r && kind !== 'mode') openMenuView(pid)
+    if (r && kind !== 'mode') openMenuView(sid, pid)
     if (r && kind === 'mode') setTimeout(() => setBusy(false), 1500) // 화면이 안 바뀌어도 풀어 준다
   }} title={tip} className="hq-item" p="2px 6px" m="-2px -6px" style={{ borderRadius: 6, flex: 'none' }}>
     {body}
@@ -214,9 +214,9 @@ export function SessionInfo({ s }: { s: Session }) {
   return <Group gap={14} wrap="nowrap" style={{ minWidth: 0, overflow: 'hidden' }}>
     {s.cwd && <Text size="xs" c="dimmed" truncate title={s.cwd} style={{ flex: 'none', maxWidth: '50%' }}>{s.cwd}</Text>}
     {bgCount(s) > 0 && <Text size="xs" c="teal.4" title={bgText(s)} style={{ whiteSpace: 'nowrap' }}>뒤 작업 {[s.bg.shells && `셸 ${s.bg.shells}`, s.bg.agents.length && `에이전트 ${s.bg.agents.length}`].filter(Boolean).join(' · ')}</Text>}
-    {s.mode && MODE[s.mode] && <Pick kind="mode" pid={s.pid} web={s.host === 'web'} tip={`권한 모드: ${s.mode} (누르면 다음 모드로)`} color={MODE[s.mode][1] === 'dimmed' ? 'gray.4' : MODE[s.mode][1]}>{MODE[s.mode][0]}</Pick>}
-    {s.model && <Pick kind="model" pid={s.pid} web={s.host === 'web'} tip={`모델 ${s.model} (누르면 터미널에서 /model)`} color="gray.3">{modelName(s.model)}</Pick>}
-    {s.model && s.effort && <Pick kind="effort" pid={s.pid} web={s.host === 'web'} tip={`effort ${s.effort} (누르면 터미널에서 /effort)`} color="gray.5">{s.effort}</Pick>}
+    {s.mode && MODE[s.mode] && <Pick kind="mode" sid={s.sid} pid={s.pid} web={s.host === 'web'} tip={`권한 모드: ${s.mode} (누르면 다음 모드로)`} color={MODE[s.mode][1] === 'dimmed' ? 'gray.4' : MODE[s.mode][1]}>{MODE[s.mode][0]}</Pick>}
+    {s.model && <Pick kind="model" sid={s.sid} pid={s.pid} web={s.host === 'web'} tip={`모델 ${s.model} (누르면 터미널에서 /model)`} color="gray.3">{modelName(s.model)}</Pick>}
+    {s.model && s.effort && <Pick kind="effort" sid={s.sid} pid={s.pid} web={s.host === 'web'} tip={`effort ${s.effort} (누르면 터미널에서 /effort)`} color="gray.5">{s.effort}</Pick>}
   </Group>
 }
 // 머리의 '중단' 버튼이 대화 칸의 중단(보낸 말 되살리기 포함)을 부른다. 대화 칸이 없으면(터미널 보기) Esc만 보낸다
@@ -277,7 +277,6 @@ function Composer({ s, d, history, onSent }: {
         <Group gap={6} wrap="wrap">
           {question.options.map((o, n) => <Button key={n} size="xs" variant="default" title={o.description} onClick={() => key(String(n + 1))}>{n + 1} · {o.label}</Button>)}
         </Group>
-        {(s.ask?.questions?.length || 0) > 1 && <Text size="xs" c="dimmed">질문이 {s.ask!.questions!.length}개입니다. 나머지는 터미널 보기에서 답합니다</Text>}
       </Stack>}
       {s.state === 'approval' && !question && <Group gap={6} wrap="wrap">
         <Text size="sm" c="red.4" fw={600}>실행 허락을 기다립니다</Text>

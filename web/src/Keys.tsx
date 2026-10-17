@@ -71,12 +71,12 @@ export function focusArea(area: Area): boolean {
 
 // 영역 단축키: 작업 보기(F1)의 영역으로 옮긴다. 다른 보기면 작업 보기로 넘어간 뒤 옮긴다
 export function useAreaKeys() {
-  const { keys, settings, view } = useUI()
+  const { keys, settings, views, sel } = useUI()
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (recording || settings || e.isComposing) return
       // 터미널·UI 전환(터미널에 글을 쓰는 중에도 먹도록 capture에서 먼저 가로챈다)
-      if (keys.view && sameKey(e, keys.view)) { e.preventDefault(); e.stopPropagation(); setView(view === 'term' ? 'chat' : 'term'); return }
+      if (keys.view && sameKey(e, keys.view)) { e.preventDefault(); e.stopPropagation(); if (sel) setView(sel, views[sel] ? 'chat' : 'term'); return }
       const hit = AREAS.find(([a]) => keys[a] && sameKey(e, keys[a]!))
       if (!hit) return
       e.preventDefault(); e.stopPropagation()
@@ -84,7 +84,7 @@ export function useAreaKeys() {
     }
     addEventListener('keydown', on, true)
     return () => removeEventListener('keydown', on, true)
-  }, [keys, settings, view])
+  }, [keys, settings, views, sel])
 }
 
 // 영역 안에서: Esc는 대화 입력칸으로 돌아간다(Claude를 멈추지 않는다). 목록·즐겨찾기는 ↑↓·Home·End로 옮기고 Enter로 열고 입력칸으로 가며, ⌘C는 세션 이름 복사.

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Modal, Paper, ScrollArea, SegmentedControl, Skeleton, Stack, Text, UnstyledButton } from '@mantine/core'
 import { api, toast, useNow } from './store'
-import { pick, setUI, setView, useUI } from './ui'
+import { pick, setUI, setView, useUI, viewOf } from './ui'
 import type { Closed, Session, Snapshot } from './types'
 import { COLOR, D, H, LABEL, M, Since, bySt, hhmm, cssColor, sessOf, withForks } from './util'
 import { TerminalView } from './Terminal'
@@ -124,7 +124,7 @@ function Head({ S, s }: { S: Snapshot; s: Session }) {
       </Stack>
       <Group gap={6}>
                 <Button size="xs" variant="subtle" color="gray" onClick={() => setUI({ openSess: s.sid })}>정보</Button>
-        {s.host === 'web' && <ViewToggle />}
+        {s.host === 'web' && <ViewToggle s={s} />}
         {/* 중단: 늘 같은 자리에 두고 일하는 중에만 켠다(사용자 요청). Esc와 같다 */}
         {s.host === 'web' && <Button size="xs" variant={busy ? 'filled' : 'outline'} color={busy ? COLOR.working : 'gray'} disabled={!busy || !s.sid} onClick={() => stopSession(s)}>중단 (Esc)</Button>}
         {s.state === 'myturn' && <Button size="xs" variant="outline" color="sage" onClick={() => api('seen', { sid: s.sid })}>알겠어, 쉬어</Button>}
@@ -194,10 +194,10 @@ function ItemSkeleton({ state, since }: { state: Session['state']; since: number
 // 새 세션을 여는 동안: 진짜 세션 화면을 빈 세션(ghost)으로 그리고 손만 못 대게 막는다(inert. disabled로 막으면 버튼 모양·크기가 바뀌어 뜰 때 움찔한다).
 // 폴더·상태·버튼·칸 제목·입력칸은 그대로 보이고, 아직 모르는 제목·핀·대화만 반짝인다. 배치가 같아 세션이 뜰 때 튀지 않는다
 // 머리 버튼 줄의 중단 왼쪽: 대화 화면(UI)과 터미널(Claude Code 화면 그대로) 바꾸기. 단축키는 옆 ⌨로 정한다(처음 ⌥T, 환경설정 '단축키'에도 있다). 웹 세션만(터미널을 띄울 수 있어서)
-function ViewToggle() {
+function ViewToggle({ s }: { s: Session }) {
   const ui = useUI()
   return <Group gap={4} wrap="nowrap">
-    <SegmentedControl size="xs" value={ui.view} onChange={v => setView(v as 'chat' | 'term')} data={[{ label: 'UI', value: 'chat' }, { label: '터미널', value: 'term' }]} />
+    <SegmentedControl size="xs" value={viewOf(ui, s)} onChange={v => setView(s.sid, v as 'chat' | 'term')} data={[{ label: 'UI', value: 'chat' }, { label: '터미널', value: 'term' }]} />
     <KeyRec area="view" />
   </Group>
 }
@@ -211,7 +211,7 @@ function SessionArea({ S, s }: { S: Snapshot; s: Session }) {
     <Split key={ui.layoutKey} orientation="horizontal" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged} style={{ flex: 1, minHeight: 0 }}>
       <Panel id="chat" minSize={360}>
         <Box h="100%" style={{ minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          {s.sid && s.host === 'web' && ui.view === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.tmux || s.pid} s={s} detail={ui.detail} />}
+          {s.sid && s.host === 'web' && viewOf(ui, s) === 'term' ? <Box style={{ flex: 1, minHeight: 0 }}><TerminalView key={s.tmux} name={s.tmux} /></Box> : <ChatView key={s.tmux || s.pid} s={s} detail={ui.detail} />}
         </Box>
       </Panel>
       <Separator className="hq-split-vline" />

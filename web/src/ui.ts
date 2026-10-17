@@ -1,6 +1,7 @@
 // 화면 상태(보기, 고른 세션, 열린 서랍·창). 보기는 주소 끝(#work 등)에 남겨 브라우저·마우스 뒤로가기로 돌아간다
 import { useSyncExternalStore } from 'react'
 import { api, burst } from './store'
+import type { Session } from './types'
 
 export const TOAST_POS = ['top-left', 'top-center', 'top-right', 'right-center', 'bottom-right', 'bottom-center', 'bottom-left', 'left-center'] as const
 export type ToastPos = typeof TOAST_POS[number]
@@ -36,7 +37,7 @@ interface UI {
   brief: boolean
   settings: boolean
   settingsPage: string // 환경설정 창을 열 때 보일 분류(''이면 맨 위)
-  view: 'chat' | 'term' // 웹 세션을 대화 화면으로 볼지, 터미널(Claude Code 화면 그대로)로 볼지
+  views: Record<string, 'term'> // 터미널(Claude Code 화면 그대로)로 보는 세션(sid). 없으면 대화 화면(UI). 세션마다 따로 기억한다(사용자 요청)
   detail: boolean // 작업 과정(도구 사용)을 하나하나 볼지, 한 줄로 접어 볼지
   motion: 'system' | 'on' // 움직임: 컴퓨터의 '동작 줄이기'를 따를지, 항상 켤지
   toast: ToastPos // 알림(토스트)이 뜨는 자리: 네 꼭짓점과 네 변의 가운데
@@ -55,7 +56,7 @@ const clampSlim = (v: number) => Math.round(Math.min(110, Math.max(52, v)))
 let ui: UI = {
   mode: hashMode() || (get('hq-mode') as Mode) || 'work', sel: get('hq-sel') || '', closeFor: '', pendingSel: '', pendingTask: '', pendingCwd: '', pendingFav: '', pendingWorking: false,
   openTask: null, openSess: null, newFor: null, addTask: false, brief: false,
-  settings: false, settingsPage: '', view: get('hq-view') === 'term' ? 'term' : 'chat', detail: get('hq-detail') === '1', sideTab: get('hq-sidetab') === 'btw' ? 'btw' : 'memo', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system', quick: get('hq-quick') || QUICK, slim: get('hq-slim') === '1', sideW: clampSide(Number(get('hq-sidew')) || SIDE_W), slimW: clampSlim(Number(get('hq-slimw')) || SLIM_W),
+  settings: false, settingsPage: '', views: (() => { try { return JSON.parse(get('hq-views') || '{}') } catch { return {} } })(), detail: get('hq-detail') === '1', sideTab: get('hq-sidetab') === 'btw' ? 'btw' : 'memo', layoutKey: 0, keys: (() => { try { return { ...DEFAULT_KEYS, ...JSON.parse(get('hq-keys') || '{}') } } catch { return DEFAULT_KEYS } })(), toast: ((TOAST_POS as readonly string[]).includes(get('hq-toast') || '') ? get('hq-toast') : 'bottom-right') as ToastPos, motion: get('hq-motion') === 'on' ? 'on' : 'system', quick: get('hq-quick') || QUICK, slim: get('hq-slim') === '1', sideW: clampSide(Number(get('hq-sidew')) || SIDE_W), slimW: clampSlim(Number(get('hq-slimw')) || SLIM_W),
 }
 history.replaceState(null, '', '#' + ui.mode)
 const subs = new Set<() => void>()
@@ -86,13 +87,21 @@ export function pickNew(tmux: string, o: { task?: string; cwd?: string; working?
   burst()
   setMode('work')
 }
-export function setView(v: UI['view']) { disarm(); set('hq-view', v); setUI({ view: v }) }
+export function setView(sid: string, v: 'chat' | 'term') {
+  disarm()
+  const views = { ...ui.views }
+  if (v === 'term') views[sid] = 'term'; else delete views[sid]
+  set('hq-views', JSON.stringify(views)); setUI({ views })
+}
+// 화면에서 답할 수 없는 질문(한 번에 여러 개, 여러 개 고르기)이 오면 그 세션만 그동안 터미널로 보인다. 답하면 원래 보기로 돌아간다
+const termOnly = (s: Session) => s.state === 'approval' && !!s.ask?.questions && (s.ask.questions.length > 1 || s.ask.questions.some(q => q.multiSelect))
+export const viewOf = (u: UI, s: Session) => termOnly(s) || u.views[s.sid] ? 'term' : 'chat'
 // 터미널 보기로 /model·/effort 창을 띄운 뒤, 창이 모두 닫혀 보통 입력칸으로 돌아오면(effort는 Enter 뒤에 확인 창이 한 번 더 뜬다) 대화 화면으로 되돌린다.
 // 키가 아니라 서버가 화면을 보고 판단한다. 창이 한 번 보인 뒤에만 닫힘으로 친다. 이미 터미널 보기였으면 그대로 두고, 사용자가 먼저 보기를 바꾸면 되돌리지 않는다
 let menuTimer = 0
-export function openMenuView(pid: number) {
-  if (ui.view === 'term') return
-  setView('term')
+export function openMenuView(sid: string, pid: number) {
+  if (ui.views[sid]) return
+  setView(sid, 'term')
   let seenOpen = false
   const t0 = Date.now()
   menuTimer = window.setInterval(async () => {
@@ -100,7 +109,7 @@ export function openMenuView(pid: number) {
     const r = await api<boolean>('session/prompt-ready', { pid })
     if (!menuTimer || !r) return
     if (!r.result) seenOpen = true
-    else if (seenOpen) { disarm(); setTimeout(() => setView('chat'), 200) }
+    else if (seenOpen) { disarm(); setTimeout(() => setView(sid, 'chat'), 200) }
   }, 400)
 }
 function disarm() { clearInterval(menuTimer); menuTimer = 0 }
