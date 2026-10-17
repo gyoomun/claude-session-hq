@@ -222,55 +222,69 @@ export function SessionInfo({ s }: { s: Session }) {
 // 머리의 '중단' 버튼이 대화 칸의 중단(보낸 말 되살리기 포함)을 부른다. 대화 칸이 없으면(터미널 보기) Esc만 보낸다
 const stopper = { pid: 0, fn: () => {} }
 export const stopSession = (s: Session) => stopper.pid === s.pid ? stopper.fn() : api('term/key', { pid: s.pid, key: 'esc' })
-// 질문마다 한 줄: 번호·머리·질문, 그 옆에 선택지. 질문 하나에 하나만 고르기는 고르면 바로 답한다.
-// 그 밖(질문 여러 개, 여러 개 고르기)은 골라 두고 [보내기]로 한꺼번에 넣는다. 서버가 키를 넣다 어긋나면 멈추고 터미널 보기로 바꾼다
-// 키보드(되감기 창처럼, 나타나면 여기로 포커스가 온다): ↑↓·Tab 질문 · ←→ 선택지 · 숫자 바로 · Space·Enter 고르기(하나만 고르기는 다음 질문으로) · 맨 아래 [보내기]에서 Enter
+// Claude가 고르라고 낸 질문(AskUserQuestion). 되감기 창과 같은 모양으로 입력칸 자리에 뜬다: 질문마다 머리 줄, 그 아래 선택지 줄.
+// 질문 하나에 하나만 고르기는 고르면 바로 답한다. 그 밖(질문 여러 개, 여러 개 고르기)은 골라 두고 맨 아래 '보내기'로 한꺼번에 넣는다.
+// 서버가 키를 넣다 어긋나면 멈추고 터미널 보기로 바꾼다. 키: ↑↓ 고르기 · Tab 다음 질문 · 숫자 바로 · Enter·Space 정하기
 type Question = NonNullable<NonNullable<Session['ask']>['questions']>[number]
-function Questions({ s, questions }: { s: Session; questions: Question[] }) {
+function QuestionPanel({ s, questions }: { s: Session; questions: Question[] }) {
   const [picks, setPicks] = useState<number[][]>(() => questions.map(() => []))
   const [busy, setBusy] = useState(false)
-  const [cur, setCur] = useState(0) // 지금 질문. questions.length면 [보내기]
-  const [opt, setOpt] = useState(0) // 지금 질문 안의 선택지
+  const [at, setAt] = useState(0)
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => { root.current?.focus() }, [])
   const instant = questions.length === 1 && !questions[0].multiSelect
   const ready = !picks.some(p => !p.length)
+  // 줄: 질문별 선택지들, 그리고 (한꺼번에 보낼 때) 보내기
+  const rows = [...questions.flatMap((q, i) => q.options.map((_, j) => ({ q: i, n: j + 1 }))), ...(instant ? [] : [{ q: -1, n: 0 }])]
+  const first = (i: number) => i >= questions.length ? rows.length - 1 : rows.findIndex(r => r.q === i)
   const send = async (all: number[][]) => {
     setBusy(true)
     const r = await api('term/answer', { pid: s.pid, questions: questions.map((q, i) => ({ question: q.question, multi: !!q.multiSelect, count: q.options.length, picks: all[i] })) })
     if (!r) setView(s.sid, 'term')
     setBusy(false)
   }
-  const go = (i: number) => { setCur(Math.max(0, Math.min(instant ? 0 : questions.length, i))); setOpt(0) }
   const pick = (i: number, n: number) => {
     const next = picks.map((p, j) => j !== i ? p : questions[i].multiSelect ? (p.includes(n) ? p.filter(x => x !== n) : [...p, n]) : [n])
-    setPicks(next); setCur(i); setOpt(n - 1)
+    setPicks(next)
     if (instant) send(next)
-    else if (!questions[i].multiSelect) go(i + 1)
+    else if (!questions[i].multiSelect) setAt(first(i + 1))
+    else setAt(first(i) + n - 1)
   }
+  const choose = (k: number) => { const r = rows[k]; if (!r) return; if (r.q < 0) { if (ready) send(picks) } else pick(r.q, r.n) }
   const key = (e: React.KeyboardEvent) => {
     if (e.nativeEvent.isComposing || busy) return
-    const k = e.key, q = questions[cur] as Question | undefined
-    if (k === 'ArrowUp' || (k === 'Tab' && e.shiftKey)) go(cur - 1)
-    else if (k === 'ArrowDown' || k === 'Tab') go(cur + 1)
-    else if (q && (k === 'ArrowLeft' || k === 'ArrowRight')) setOpt(o => Math.max(0, Math.min(q.options.length - 1, o + (k === 'ArrowLeft' ? -1 : 1))))
-    else if (q && /^[1-9]$/.test(k) && +k <= q.options.length) pick(cur, +k)
-    else if (q && (k === ' ' || k === 'Enter')) pick(cur, opt + 1)
-    else if (!q && k === 'Enter') { if (ready) send(picks) }
+    const k = e.key, q = rows[at]?.q ?? 0
+    if (k === 'ArrowUp' || k === 'ArrowDown') setAt(i => Math.max(0, Math.min(rows.length - 1, i + (k === 'ArrowUp' ? -1 : 1))))
+    else if (k === 'Tab') setAt(first(Math.max(0, (q < 0 ? questions.length : q) + (e.shiftKey ? -1 : 1))))
+    else if (k === 'Home' || k === 'End') setAt(k === 'Home' ? 0 : rows.length - 1)
+    else if (/^[1-9]$/.test(k) && q >= 0 && +k <= questions[q].options.length) pick(q, +k)
+    else if (k === 'Enter' || k === ' ') choose(at)
     else return
     e.preventDefault(); e.stopPropagation()
   }
   const hint = (keys: string[], what: string) => <Group gap={4} wrap="nowrap">{keys.map(x => <Kbd key={x} size="xs">{x}</Kbd>)}<Text size="xs" c="dimmed">{what}</Text></Group>
-  return <Stack gap={6} ref={root} tabIndex={-1} onKeyDown={key} className="hq-questions" style={{ outline: 'none' }}>
-    {questions.map((q, i) => <Group key={i} gap={6} wrap="wrap" className={'hq-q-row' + (i === cur ? ' on' : '')}>
-      <Text size="sm" c="red.4" fw={600}>{i + 1}. {q.header ? q.header + ' ' : ''}{q.question}</Text>
-      {q.options.map((o, j) => <Button key={j} size="xs" disabled={busy} className={i === cur && j === opt ? 'hq-q-opt on' : 'hq-q-opt'} variant={picks[i].includes(j + 1) ? 'filled' : 'default'} title={o.description} onClick={() => pick(i, j + 1)}>{j + 1} · {o.label}</Button>)}
-    </Group>)}
-    <Group gap="md" wrap="wrap">
-      {!instant && <Button size="xs" color="teal" className={cur === questions.length ? 'hq-q-opt on' : 'hq-q-opt'} loading={busy} disabled={!ready} onClick={() => send(picks)}>보내기</Button>}
-      {hint(['↑', '↓'], '질문')}{hint(['←', '→'], '선택지')}{hint(['1~' + Math.max(...questions.map(q => q.options.length))], '바로')}{hint(['Enter'], '고르기')}
+  const row = (k: number, body: React.ReactNode) => <Group key={k} gap={8} wrap="nowrap" className={'hq-rewind-row' + (k === at ? ' on' : '')} onMouseEnter={() => setAt(k)} onClick={() => !busy && choose(k)}>
+    <Text size="sm" w={12} c="indigo.4" style={{ flex: 'none' }}>{k === at ? '❯' : ''}</Text>{body}
+  </Group>
+  return <Paper p="sm" className="hq-rewind hq-in" ref={root} tabIndex={-1} onKeyDown={key} style={{ outline: 'none' }}>
+    <Group justify="space-between" mb={8} wrap="nowrap">
+      <Text size="sm" fw={600}>질문</Text>
+      <Group gap="md" wrap="nowrap">{hint(['↑', '↓'], '고르기')}{questions.length > 1 && hint(['Tab'], '다음 질문')}{hint(['1~' + Math.max(...questions.map(q => q.options.length))], '바로')}{hint(['Enter'], busy ? '보내는 중…' : '정하기')}</Group>
     </Group>
-  </Stack>
+    <Box className="hq-rewind-list">
+      {questions.map((q, i) => <Box key={i} mb={6}>
+        <Text size="sm" fw={600} px={8} py={2}>{i + 1}. {q.header && <Text span c="indigo.3" fw={600}>{q.header} </Text>}<Text span fw={400}>{q.question}</Text></Text>
+        {q.options.map((o, j) => {
+          const on = picks[i].includes(j + 1)
+          return row(first(i) + j, <>
+            <Text size="sm" c={on ? 'teal.4' : undefined} style={{ flex: 'none' }}>{j + 1}. {q.multiSelect ? (on ? '[✔] ' : '[ ] ') : ''}{o.label}{!q.multiSelect && on ? ' ✔' : ''}</Text>
+            {o.description && <Text size="xs" c="dimmed" truncate style={{ minWidth: 0 }}>{o.description}</Text>}
+          </>)
+        })}
+      </Box>)}
+      {!instant && row(rows.length - 1, <Text size="sm" fw={600} c={ready ? 'teal.4' : 'dimmed'}>보내기</Text>)}
+    </Box>
+  </Paper>
 }
 
 function Composer({ s, d, history, onSent }: {
@@ -291,8 +305,7 @@ function Composer({ s, d, history, onSent }: {
     return true
   }
   // 세션을 고르면(누르기·Ctrl+Tab·다른 데서 열기) 바로 칠 수 있게 입력칸에 커서를 둔다
-  // 질문이 떠 있으면 포커스는 질문(Questions)이 가져간다(키보드로 고르게)
-  useEffect(() => { if (!(s.state === 'approval' && s.ask?.questions)) box.current?.focus({ preventScroll: true }) }, [s.sid])
+  useEffect(() => { box.current?.focus({ preventScroll: true }) }, [s.sid])
   const shown = imgs.filter(i => text.includes(tok(i.n))) // 표시를 지운 이미지·글은 보내지 않는다
   const shownPastes = pastes.filter(p => text.includes(ptok(p)))
   const send = async () => {
@@ -320,11 +333,9 @@ function Composer({ s, d, history, onSent }: {
   }
   const key = (k: string) => api('term/key', { pid: s.pid, key: k })
   const place = (len: number, at: number) => requestAnimationFrame(() => box.current?.setSelectionRange(at + len, at + len))
-  // Claude가 고르라고 낸 질문(AskUserQuestion)도 허락 요청으로 온다. 허용/거부가 아니라 질문과 선택지를 보인다
-  const questions = s.ask?.questions
+  const questions = s.ask?.questions // 질문이면 입력칸 대신 QuestionPanel이 뜬다
   return <Paper p="sm">
     <Stack gap={8}>
-      {s.state === 'approval' && questions && <Questions key={JSON.stringify(questions)} s={s} questions={questions} />}
       {s.state === 'approval' && !questions && <Group gap={6} wrap="wrap">
         <Text size="sm" c="red.4" fw={600}>실행 허락을 기다립니다</Text>
         <Button size="xs" color="teal" onClick={() => key('1')}>1 · 허용</Button>
@@ -546,7 +557,7 @@ export function ChatView({ s, detail }: { s: Session; detail: boolean }) {
     {/* 되감기는 터미널처럼 입력칸 자리에서 고른다(입력칸에 쓰던 글은 그대로 남는다) */}
     {/* next-steps-multi 플러그인의 제안을 참고로만 보인다(누르기 없음: 사용자 요청) */}
     {s.host && !rewind && s.state !== 'working' && s.state !== 'compact' && !!s.next?.length && <Text size="xs" c="dimmed" px="md" pt={6}>{s.next!.join(' / ')}</Text>}
-    {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : <Composer s={s} d={draft} history={history} onSent={(x, req) => {
+    {!s.host ? <NoInput s={s} /> : rewind ? <RewindPanel s={s} onClose={() => setRewind(false)} onDone={rewound} /> : s.state === 'approval' && s.ask?.questions ? <QuestionPanel key={JSON.stringify(s.ask.questions)} s={s} questions={s.ask.questions} /> : <Composer s={s} d={draft} history={history} onSent={(x, req) => {
       sent.current = x; sending.current = req; setSentAt(x.at); setPending(x); stick.current = true
       req.then(ok => { if (ok) poke.current(); else { sent.current = null; setPending(null) } })
     }} />}
