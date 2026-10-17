@@ -1,6 +1,6 @@
 // 화면 상태(보기, 고른 세션, 열린 서랍·창). 보기는 주소 끝(#work 등)에 남겨 브라우저·마우스 뒤로가기로 돌아간다
 import { useSyncExternalStore } from 'react'
-import { burst } from './store'
+import { api, burst } from './store'
 
 export const TOAST_POS = ['top-left', 'top-center', 'top-right', 'right-center', 'bottom-right', 'bottom-center', 'bottom-left', 'left-center'] as const
 export type ToastPos = typeof TOAST_POS[number]
@@ -83,20 +83,23 @@ export function pickNew(tmux: string, o: { task?: string; cwd?: string; working?
   setMode('work')
 }
 export function setView(v: UI['view']) { disarm(); set('hq-view', v); setUI({ view: v }) }
-// 터미널 보기로 /model·/effort 창을 띄운 뒤, 창을 닫는 키(Enter·Esc·s)가 눌리면 대화 화면으로 되돌린다. 이미 터미널 보기였으면 그대로 둔다.
-// 사용자가 먼저 보기를 직접 바꾸면 되돌리지 않는다
-let menuReturn: ((e: KeyboardEvent) => void) | null = null
-export function openMenuView() {
+// 터미널 보기로 /model·/effort 창을 띄운 뒤, 창이 모두 닫혀 보통 입력칸으로 돌아오면(effort는 Enter 뒤에 확인 창이 한 번 더 뜬다) 대화 화면으로 되돌린다.
+// 키가 아니라 서버가 화면을 보고 판단한다. 창이 한 번 보인 뒤에만 닫힘으로 친다. 이미 터미널 보기였으면 그대로 두고, 사용자가 먼저 보기를 바꾸면 되돌리지 않는다
+let menuTimer = 0
+export function openMenuView(pid: number) {
   if (ui.view === 'term') return
   setView('term')
-  menuReturn = e => {
-    if (!['Enter', 'Escape', 's', 'S'].includes(e.key)) return
-    setTimeout(() => setView('chat'), 300) // 창이 닫히는 것까지 잠깐 보이게
-    disarm()
-  }
-  addEventListener('keydown', menuReturn, true)
+  let seenOpen = false
+  const t0 = Date.now()
+  menuTimer = window.setInterval(async () => {
+    if (Date.now() - t0 > 10 * 60e3) return disarm()
+    const r = await api<boolean>('session/prompt-ready', { pid })
+    if (!menuTimer || !r) return
+    if (!r.result) seenOpen = true
+    else if (seenOpen) { disarm(); setTimeout(() => setView('chat'), 200) }
+  }, 400)
 }
-function disarm() { if (menuReturn) removeEventListener('keydown', menuReturn, true); menuReturn = null }
+function disarm() { clearInterval(menuTimer); menuTimer = 0 }
 // 지금 모양(펼침·접힘)의 폭을 바꾼다. 두 폭은 따로 남는다
 export function setSideW(v: number, save = false) {
   if (ui.slim) { v = clampSlim(v); if (save) set('hq-slimw', String(v)); setUI({ slimW: v }) }

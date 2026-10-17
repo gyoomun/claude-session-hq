@@ -1067,6 +1067,8 @@ const routes = {
     await sleep(300);
     await tmux(['send-keys', '-t', name, 'Enter']);
   },
+  // /model·/effort 창(과 effort의 확인 창)이 닫혀 보통 입력칸으로 돌아왔는지. 화면이 대화 보기로 돌아갈 때를 알아내는 데 쓴다
+  'session/prompt-ready': async b => promptReady(webPane(b.pid).name),
   // 세션 이름 바꾸기: 그 세션에 Claude Code의 /rename을 쳐 넣는다. 세션 이름(상태줄, 다른 Claude가 부르는 이름)과
   // 대화 제목이 함께 바뀌고, 화면 제목은 대화 기록의 custom-title을 따라 바뀐다
   'session/rename': async b => {
@@ -1279,6 +1281,13 @@ async function inputBox(name) {
   const at = plain[a + 1]?.indexOf('❯\u00a0') ?? -1;
   if (at < 0 || raw[a + 1].slice(raw[a + 1].indexOf('❯\u00a0') + 2).startsWith('\x1b[2m')) return '';
   return plain.slice(a + 1, b).map((l, i) => i ? l.replace(/^  /, '') : l.slice(at + 2)).join('\n').trim();
+}
+// Claude Code의 보통 입력칸(❯ 뒤가 NBSP)이 맨 아래에 떠 있나. /model·/effort 창과 확인 창(❯ 1. …)이 떠 있으면 false
+async function promptReady(name) {
+  const plain = (await tmux(['capture-pane', '-p', '-t', name])).split('\n');
+  const borders = plain.map((l, i) => /^─{20,}(?: .+ ─+)?$/.test(l.trim()) ? i : -1).filter(i => i >= 0);
+  if (borders.length < 2) return false;
+  return (plain[borders[borders.length - 2] + 1] || '').includes('❯\u00a0');
 }
 // 보내기(Enter). 이미지를 붙여넣은 바로 뒤의 Enter는 Claude Code가 버릴 때가 있어(글은 입력칸에 남는다) 입력칸이 빌 때까지 다시 누른다.
 // 끝내 안 가면 입력칸을 비우고 실패로 돌려준다(웹이 입력칸에 되살리므로, 남겨 두면 다음 말에 붙는다)
