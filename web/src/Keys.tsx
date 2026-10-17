@@ -17,7 +17,7 @@ let recording = false // 녹화 중에는 다른 단축키(F1~F4, 영역 키)가
 export const isRecording = () => recording
 const MODS = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']
 // 이미 쓰는 키: F1~F4 보기 전환, Cmd/Ctrl+T 새 세션, Ctrl+Tab 순회, Esc·Enter
-const reserved = (c: Combo) => /^F[1-4]$/.test(c.code) || ((c.meta || c.ctrl) && c.code === 'KeyT') || (c.ctrl && c.code === 'Tab') || ['Escape', 'Enter', 'Tab'].includes(c.code)
+const reserved = (c: Combo) => /^F[1-4]$/.test(c.code) || ((c.meta || c.ctrl) && (c.code === 'KeyT' || c.code === 'Comma')) || (c.ctrl && c.code === 'Tab') || ['Escape', 'Enter', 'Tab'].includes(c.code)
 
 // 영역 이름 옆: 지금 키와 녹화 버튼. 누르고 키를 누르면 정해진다. Esc 취소, ⌫ 지우기
 export function KeyRec({ area }: { area: KeyId }) {

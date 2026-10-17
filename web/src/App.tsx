@@ -128,7 +128,7 @@ function Sidebar({ S }: { S: Snapshot }) {
     <Box style={{ flex: 1 }} />
     <LanAddress S={S} slim={slim} />
     <Clock slim={slim} />
-    {item('settings', IconSettings, '환경설정', () => setUI({ settings: true }))}
+    {item('settings', IconSettings, '환경설정', () => setUI({ settings: true }), { kbd: '⌘,' })}
     {item('slim', slim ? IconLayoutSidebarLeftExpand : IconLayoutSidebarLeftCollapse, slim ? '사이드바 펼치기' : '사이드바 접기', () => setSlim(!slim))}
   </Stack>
   </div>
@@ -197,6 +197,8 @@ export function App() {
       if (isRecording()) return // 단축키를 녹화하는 중
       // Cmd+T(윈도우는 Ctrl+T): 새 세션. 브라우저·터미널에서 새 탭 열던 손버릇 그대로. 크롬 일반 탭에서는 크롬이 먼저 가져가고, 앱 창에서는 여기로 온다
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') { e.preventDefault(); e.stopPropagation(); setUI({ newFor: '' }); return }
+      // Cmd+,(윈도우는 Ctrl+,): 환경설정. 맥 앱의 설정 여는 키 그대로(사용자 요청)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.code === 'Comma') { e.preventDefault(); e.stopPropagation(); setUI({ settings: true }); return }
       // Cmd+W(윈도우는 Ctrl+W): 고른 웹 세션의 종료 확인 창. 확인 버튼에 포커스가 있어 스페이스바로 종료한다
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'w') {
         e.preventDefault(); e.stopPropagation()
