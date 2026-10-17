@@ -4,7 +4,7 @@ import { ActionIcon, Badge, Box, Button, HoverCard, Group, Loader, Modal, Paper,
 import { api, toast, useNow } from './store'
 import { pick, setUI, setView, useUI } from './ui'
 import type { Closed, Session, Snapshot } from './types'
-import { COLOR, D, LABEL, Since, bySt, hhmm, cssColor, sessOf, withForks } from './util'
+import { COLOR, D, H, LABEL, M, Since, bySt, hhmm, cssColor, sessOf, withForks } from './util'
 import { TerminalView } from './Terminal'
 import { ChatView, SessionInfo, bgCount, bgText, copyName, stopSession, useFlash } from './Chat'
 import { SidePanel, hasMemo } from './Memo'
@@ -32,9 +32,14 @@ function Item({ s, on, memo, boot }: { s: Session; on: boolean; memo: boolean; b
       <Box style={{ flex: 1 }} />
       {bgCount(s) > 0 && <Text size="xs" c="teal.4" style={{ flex: 'none' }} title={bgText(s)}>뒤 {bgCount(s)}</Text>}
       {s.host !== 'web' && <Badge size="xs" variant="outline" color="gray" style={{ flex: 'none' }}>{s.host === 'orca' ? 'Orca' : '외부'}</Badge>}
-      <Box className="hq-rowend"><Text size="xs" c="dimmed" className="hq-rowtime"><Since t={s.since} short /></Text><CopyName name={s.name} /></Box>
+      <Box className="hq-rowend"><RowTime t={s.since} /><CopyName name={s.name} /></Box>
     </Group>
   </UnstyledButton>
+}
+// 줄 끝 지난 시간: 최근일수록 밝게(15분 미만은 밝고 굵게, 2시간 넘으면 흐리게). 점이 상태 색을 쓰므로 색상 대신 밝기만 바꾼다
+function RowTime({ t }: { t: number }) {
+  const age = useNow() - t, recent = age < 15 * M
+  return <Text size="xs" className="hq-rowtime" c={recent ? undefined : 'dimmed'} fw={recent ? 600 : undefined} style={{ opacity: age > 2 * H ? .4 : undefined }}><Since t={t} short /></Text>
 }
 const bootOf = (S: Snapshot, sid: string) => S.reboot?.items.find(x => x.sid === sid)?.phase
 const limitEnd = (S: Snapshot, kind: string) => Date.parse(S.usage?.limits.find(l => l.kind === kind)?.resetsAt || '') || 0
