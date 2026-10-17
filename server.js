@@ -1334,7 +1334,9 @@ const routes = {
     const send = k => tmux(['send-keys', '-t', t, k]);
     const screen = async (ms = 300) => { await sleep(ms); return (await tmux(['capture-pane', '-p', '-t', t])).split('\n').map(l => l.trimEnd()); };
     const fail = why => new Error(`답을 넣다 멈췄습니다(${why}). 터미널 보기에서 이어서 답해 주세요`);
-    const showing = (lines, q) => lines.some(l => l.trim() === q.question.trim());
+    // 질문이 하나면 앞에 │ 막대가 붙고, 길면 여러 줄로 접힌다. 공백·막대를 빼고 화면 전체에서 찾는다
+    const flat = x => x.replace(/[\s│]/g, '');
+    const showing = (lines, q) => flat(lines.join('')).includes(flat(q.question));
     const checks = lines => new Map(lines.map(l => l.match(/^\s*(?:❯\s*)?(\d)\.\s\[(✔| )\]/)).filter(Boolean).map(m => [+m[1], m[2] === '✔']));
     // 커서는 화면 맨 아래의 ❯ 줄이다(위쪽 대화 기록에도 내가 보낸 말이 ❯로 남아 있다)
     const cursor = lines => (lines.findLast(l => /^\s*❯/.test(l)) || '').replace(/^\s*❯\s*/, '');
