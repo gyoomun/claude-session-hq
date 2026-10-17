@@ -8,6 +8,7 @@ import { IconAccessPoint, IconCalendar, IconKeyboard, IconLayoutColumns, IconMai
 import { api, toast } from './store'
 import { ACTIONS, AREAS, DEFAULT_KEYS, TOAST_POS, type ToastPos, resetLayout, setKeys, setDetail, setMotion, setToast, setUI, useUI } from './ui'
 import type { Snapshot } from './types'
+import { COLOR, hhmm } from './util'
 import { AccessPanel } from './Modals'
 import { KeyRec, isRecording } from './Keys'
 
@@ -19,7 +20,7 @@ const PAGES = [
   { id: 'keys', name: '단축키', icon: IconKeyboard, words: '단축키 키보드 영역 세션 목록 즐겨찾기 대화 핀 메모 btw 녹화 F1 F2 F3 F4 Ctrl Tab Cmd T Esc 되감기 터미널 UI 전환 화면' },
   { id: 'calendar', name: '일정', icon: IconCalendar, words: '일정 캘린더 구글 연차 반차 휴가 회사 iCal 다시 읽기' },
   { id: 'mail', name: '메일', icon: IconMail, words: '메일 이메일 Gmail 지메일 받은편지함 앱 비밀번호 다시 읽기' },
-  { id: 'session', name: '세션', icon: IconRefresh, words: '모두 재시작 웹 세션 CLAUDE.md zshrc' },
+  { id: 'session', name: '세션', icon: IconRefresh, words: '모두 재시작 웹 세션 CLAUDE.md zshrc 모든 대화 기록 지난 대화 다시 열기 찾기' },
   { id: 'access', name: '접속', icon: IconAccessPoint, words: '사내망 접속 인증 메일 로그인 기기 끊기 로그아웃' },
 ] as const
 
@@ -66,6 +67,40 @@ function RestartAll({ S }: { S: Snapshot }) {
     const r = await api<number>('session/restart')
     if (r) toast(`웹 세션 ${r.result}개를 다시 띄웁니다. 대화는 그대로 이어집니다.`)
   }}>{confirm ? `한 번 더 누르면 ${n}개 재시작` : `모두 재시작 (${n}개)`}</Button>
+}
+
+// 이 맥에 남은 대화 기록 전부(닫힌 세션 목록을 비웠거나 HQ 밖에서 쓴 대화도). 자주 보는 것이 아니라서 누를 때만 읽는다(사용자 결정).
+// 줄을 누르면 바로 연다. 연 줄은 '열림'으로만 바뀌고 창은 그대로 둔다(닫힌 세션 탭과 같다)
+interface Hist { sid: string; title: string; cwd: string; at: number; open: boolean }
+function History() {
+  const [list, setList] = useState<Hist[] | null>(null), [busy, setBusy] = useState(false), [f, setF] = useState('')
+  const [opened, setOpened] = useState<string[]>([])
+  const load = async () => { setBusy(true); const r = await api<Hist[]>('history/list'); setBusy(false); if (r) setList(r.result) }
+  const shown = (list || []).filter(h => hit(f, h.title + ' ' + h.cwd))
+  return <Stack gap={6}>
+    <Row label="대화 기록" help={list ? `${list.length}개 · 열려 있는 것 ${list.filter(h => h.open).length}개` : '이 맥에 남은 대화 전부를 불러옵니다(닫힌 세션 목록을 비웠거나 HQ 밖에서 쓴 대화도)'}>
+      <Button size="xs" variant="default" loading={busy} onClick={load}>{list ? '다시 불러오기' : '불러오기'}</Button>
+    </Row>
+    {list && <>
+      <TextInput size="xs" leftSection={<IconSearch size={14} />} placeholder="제목·폴더로 찾기" value={f} onChange={e => setF(e.currentTarget.value)} />
+      <Stack gap={0}>
+        {shown.map(h => {
+          const on = h.open || opened.includes(h.sid)
+          return <UnstyledButton key={h.sid} className="hq-item" p="6px 10px" style={{ borderRadius: 6 }} title={on ? '열려 있음' : '눌러서 다시 열기'}
+            onClick={async () => { if (on) return; setOpened(o => [...o, h.sid]); if (!await api('session/resume', { sid: h.sid })) setOpened(o => o.filter(x => x !== h.sid)) }}>
+            <Group gap={8} wrap="nowrap" justify="space-between">
+              <Stack gap={0} style={{ minWidth: 0 }}>
+                <Text size="sm" truncate c={on ? undefined : 'dimmed'} fw={on ? 600 : undefined}>{h.title}</Text>
+                <Text size="xs" c="dimmed" truncate>{h.cwd}</Text>
+              </Stack>
+              <Text size="xs" c={on ? `${COLOR.myturn}.5` : 'dimmed'} fw={on ? 600 : undefined} style={{ flex: 'none' }}>{on ? '열림' : `${new Date(h.at).getMonth() + 1}. ${new Date(h.at).getDate()}. ${hhmm(h.at)}`}</Text>
+            </Group>
+          </UnstyledButton>
+        })}
+        {!shown.length && <Text size="xs" c="dimmed" px={10}>찾는 대화가 없습니다</Text>}
+      </Stack>
+    </>}
+  </Stack>
 }
 
 function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (p: Partial<Draft>) => void; ui: Draft }) {
@@ -154,9 +189,12 @@ function Page({ id, S, d, set, ui }: { id: string; S: Snapshot; d: Draft; set: (
       </Section>
     </>
   }
-  if (id === 'session') return <Section title="웹 세션">
-    <Row label="모두 재시작" help="전역 CLAUDE.md·.zshrc를 바꾼 뒤. 웹 세션을 모두 끄고 같은 대화로 다시 띄웁니다(일하는 중이어도 끊습니다)"><RestartAll S={S} /></Row>
-  </Section>
+  if (id === 'session') return <>
+    <Section title="웹 세션">
+      <Row label="모두 재시작" help="전역 CLAUDE.md·.zshrc를 바꾼 뒤. 웹 세션을 모두 끄고 같은 대화로 다시 띄웁니다(일하는 중이어도 끊습니다)"><RestartAll S={S} /></Row>
+    </Section>
+    <Section title="모든 대화"><History /></Section>
+  </>
   return <AccessPanel S={S} />
 }
 

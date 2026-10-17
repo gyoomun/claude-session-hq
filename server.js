@@ -61,6 +61,7 @@ function liveSessions() {
 
 /* 대화 기록에서 제목, 마지막 지시, 마지막 답을 읽는다. 파일이 바뀔 때만 끝부분을 다시 읽는다. */
 const tcache = new Map();
+const hcache = new Map(); // 모든 대화 목록(history/list)용: 파일 → {mtime, title, cwd}
 function findTranscript(s) {
   const guess = path.join(PROJ_DIR, s.cwd.replace(/[^A-Za-z0-9]/g, '-'), s.sessionId + '.jsonl');
   if (fs.existsSync(guess)) return guess;
@@ -935,6 +936,32 @@ const routes = {
     return names;
   },
   'session/quiet-closed': b => { for (const c of db.closed) if ((b.sids || []).includes(c.sid)) c.quiet = true; },
+  // 환경설정의 '모든 대화': 이 맥에 남은 대화 기록 전부(HQ의 닫힌 세션 목록을 비워도, HQ 밖에서 쓴 대화도 나온다). 누를 때만 읽는다
+  'history/list': () => {
+    const out = [], live = new Map(snapshot.sessions.map(s => [s.sid, s]));
+    for (const d of fs.readdirSync(PROJ_DIR)) {
+      let names; try { names = fs.readdirSync(path.join(PROJ_DIR, d)); } catch { continue; }
+      for (const n of names) {
+        if (!n.endsWith('.jsonl')) continue;
+        const file = path.join(PROJ_DIR, d, n), sid = n.slice(0, -6);
+        let st; try { st = fs.statSync(file); } catch { continue; }
+        let c = hcache.get(file);
+        if (!c || c.mtime !== st.mtimeMs) {
+          // ponytail: 파일마다 끝 1MB만 읽는다. 제목 줄이 그보다 앞에만 있으면 첫 내 말로 대신한다
+          const info = {}; scanLines(readTail(file, st.size, 1e6), info);
+          let first = '';
+          if (!info.title && !info.custom) { const m = readTail(file, Math.min(st.size, 65536), 65536).match(/"type":"user"[^\n]*?"content":"((?:[^"\\]|\\.){1,200})/); if (m) try { first = JSON.parse(`"${m[1]}"`) } catch {} if (first.startsWith('<')) first = '' }
+          const cwd = readTail(file, Math.min(st.size, 65536), 65536).match(/"cwd":"((?:[^"\\]|\\.)*)"/);
+          c = { mtime: st.mtimeMs, title: info.custom || info.title || first || info.lastPrompt || '(제목 없음)', cwd: cwd ? JSON.parse(`"${cwd[1]}"`) : '' };
+          hcache.set(file, c);
+        }
+        if (!st.size || c.cwd === LOGIN_DIR) continue; // 로그인 claude는 세션이 아니다
+        const s = live.get(sid);
+        out.push({ sid, title: s?.title || c.title, cwd: c.cwd.replace(HOME, '~'), at: st.mtimeMs, open: !!s });
+      }
+    }
+    return out.sort((a, b) => b.at - a.at);
+  },
   'session/forget-closed': b => { db.closed = b.sid ? db.closed.filter(x => x.sid !== b.sid) : []; },
   'session/resume': async b => {
     // 닫힌 대화를 웹에서 다시 연다. 보통 웹 안의 Claude가 대화 기록을 뒤져 찾은 뒤 이 API를 부른다(skills/hq-open)
