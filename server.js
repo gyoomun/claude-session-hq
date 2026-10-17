@@ -455,6 +455,7 @@ const parseLines = text => text.split('\n').flatMap(l => { if (!l) return []; tr
 
 /* 커밋 조율 장부(`/api/edits`): 저장소의 커밋 안 한 파일마다 어느 세션이 Edit·Write로 고쳤는지.
    떠 있는 세션(하위 에이전트 포함)만 보고, 그 파일의 마지막 커밋 뒤에 고친 것만 센다. Bash로 고친 파일은 모른다(sessions가 빈다) */
+const commitLocks = new Map(); // 저장소 → { sid, name, at }
 const editCache = new Map(); // 기록 파일 → { size, edits: [{ file, at }] }, 늘어난 만큼만 읽는다
 const realOf = f => { try { return fs.realpathSync(f); } catch { return f; } };
 function editsIn(file) {
@@ -480,10 +481,12 @@ function editsIn(file) {
   return c.edits;
 }
 const git = (cwd, args) => new Promise((ok, no) => execFile('git', ['-C', cwd, ...args], { timeout: 8000, maxBuffer: 16e6 }, (e, out) => e ? no(new Error(String(e.message).split('\n')[0])) : ok(out)));
+async function repoRoot(cwd) {
+  if (!path.isAbsolute(String(cwd || ''))) throw new Error('cwd는 절대 경로여야 합니다');
+  return realOf((await git(cwd, ['rev-parse', '--show-toplevel'])).trim());
+}
 async function edits(params) {
-  const cwd = params.get('cwd') || '';
-  if (!path.isAbsolute(cwd)) throw new Error('cwd는 절대 경로여야 합니다');
-  const root = realOf((await git(cwd, ['rev-parse', '--show-toplevel'])).trim());
+  const root = await repoRoot(params.get('cwd'));
   const parts = (await git(root, ['status', '--porcelain', '-z', '--untracked-files=all'])).split('\0');
   const dirty = [];
   for (let i = 0; i < parts.length; i++) {
@@ -1083,6 +1086,19 @@ const routes = {
     return expand(new Date(from), new Date(to));
   },
   'btw/clear': b => { delete db.btw[b.sid]; },
+  // 커밋 잠금(skills/hq-commit): 같은 저장소에서 두 세션이 동시에 올리고(add) 커밋하면 남이 올린 것까지 들어간다. 저장소마다 하나.
+  // 2분 지나면 풀린 것으로 본다(잡은 Claude가 중간에 죽어도 막히지 않게). 메모리에만 둔다
+  'commit/lock': async b => {
+    const root = await repoRoot(b.cwd), held = commitLocks.get(root);
+    if (held && held.sid !== b.sid && Date.now() - held.at < 120e3) return { ok: false, root, holder: held.name, since: held.at };
+    const s = snapshot.sessions.find(x => x.sid === b.sid);
+    commitLocks.set(root, { sid: b.sid, name: s ? s.name : String(b.sid || ''), at: Date.now() });
+    return { ok: true, root };
+  },
+  'commit/unlock': async b => {
+    const root = await repoRoot(b.cwd);
+    if (commitLocks.get(root)?.sid === b.sid) commitLocks.delete(root);
+  },
   // 세션 메모: 세션마다 글 하나. 내가 화면의 큰 칸에서 고치거나, 내가 시킬 때 Claude가 한 줄 덧붙인다(skills/hq-memo). 대화 ID에 붙어 있어 닫았다 다시 열어도 남는다
   'memo/set': b => {
     const sid = memoSid(b), text = String(b.text ?? '').slice(0, 20000);
