@@ -61,6 +61,7 @@ function liveSessions() {
 
 /* 대화 기록에서 제목, 마지막 지시, 마지막 답을 읽는다. 파일이 바뀔 때만 끝부분을 다시 읽는다. */
 const tcache = new Map();
+const workSince = new Map(); // sid -> { since: 이번 일 시작 시각, last: 마지막으로 일하는 중으로 본 시각 }
 const hcache = new Map(); // 모든 대화 목록(history/list)용: 파일 → {mtime, title, cwd}
 function findTranscript(s) {
   const guess = path.join(PROJ_DIR, s.cwd.replace(/[^A-Za-z0-9]/g, '-'), s.sessionId + '.jsonl');
@@ -110,7 +111,7 @@ function scanLines(text, info) {
         if (/^Pinboard (now:|is empty\.)/.test(r)) info.pin = { text: r, at: Date.parse(d.timestamp) || 0 };
       }
       const t = textOf(d.message?.content).trim();
-      if (t && !t.startsWith('<') && !t.startsWith('[Request interrupted')) info.lastPrompt = t;
+      if (t && !t.startsWith('<') && !t.startsWith('[Request interrupted')) { info.lastPrompt = t; info.promptAt = Date.parse(d.timestamp) || 0; }
     }
   }
 }
@@ -324,6 +325,12 @@ function scan() {
     const kept = db.keepSince[s.sessionId];
     if (kept && kept.state === state && since < kept.at + 60e3) since = kept.since;
     else if (kept && !restarting.has(s.sessionId)) { delete db.keepSince[s.sessionId]; dirty = true; }
+    // 일을 마치자마자(15초 안) 사용자가 말하지 않았는데 다시 일하면(뒤 작업 끝남 알림 등으로 Claude가 스스로 이어 간 것) 같은 일로 보고 처음 시각을 둔다
+    const w = workSince.get(s.sessionId);
+    if (state === 'working') {
+      if (w && since > w.since && since - w.last < 15e3 && !((t.promptAt || 0) >= since - 5e3)) since = w.since;
+      workSince.set(s.sessionId, { since, last: now });
+    }
     // 핀보드는 Claude 프로세스 메모리에만 있어 다시 띄우면 Claude 쪽은 비워진다. 화면에는 마지막 보드를 저장해 두고 계속 보인다
     if (t.pin && (!db.pins[s.sessionId] || t.pin.at > db.pins[s.sessionId].at)) { db.pins[s.sessionId] = { text: t.pin.text, at: t.pin.at }; dirty = true; }
     const toolNow = h && h.at >= (s.statusUpdatedAt || 0) - 2000 && /^(PreToolUse|PostToolUse|PermissionRequest)$/.test(h.event);
