@@ -16,21 +16,21 @@ import { Group as Split, Panel, Separator, useDefaultLayout } from 'react-resiza
 const DRAG = 'application/x-hq-sid'
 const dragging = (e: React.DragEvent) => e.dataTransfer.types.includes(DRAG)
 let dragSid = '' // 끄는 중에는 dataTransfer 값을 읽을 수 없어서(놓을 때만 된다) 따로 둔다. 제 자리는 빈 칸으로 본다
-function Item({ s, on, memo, clamp }: { s: Session; on: boolean; memo: boolean; clamp?: boolean }) {
+// 한 줄: 상태는 점 색으로만 보인다(글자 없음, 사용자 요청). 끝의 지난 시간은 올리면 이름 복사 버튼으로 바뀐다
+function Item({ s, on, memo }: { s: Session; on: boolean; memo: boolean }) {
   // 고른 세션은 목록에서 보이게 스크롤한다(새로고침·Ctrl+Tab·다른 데서 열기). 고른 순간에만 해서, 손으로 스크롤한 목록을 되돌리지 않는다
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (on) ref.current?.scrollIntoView({ block: 'nearest' }) }, [on])
-  return <UnstyledButton ref={ref} data-on={on} data-name={s.name} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="7px 8px" w="100%" className="hq-item"
+  return <UnstyledButton ref={ref} data-on={on} data-name={s.name} draggable onDragStart={e => { dragSid = s.sid; e.dataTransfer.setData(DRAG, s.sid); e.dataTransfer.effectAllowed = 'move' }} onClick={() => pick(s.sid)} p="5px 4px" w="100%" className="hq-item"
     style={{ borderRadius: 8, background: on ? 'var(--mantine-color-indigo-light)' : undefined, boxShadow: on ? 'inset 0 0 0 1px var(--mantine-color-indigo-5)' : undefined }}>
-    <Group gap={8} wrap="nowrap" align="flex-start">
-      <Box w={8} h={8} mt={6} className={'hq-dot' + (s.state === 'working' || s.state === 'compact' ? ' busy' : '')} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} />
-      <Stack gap={0} style={{ minWidth: 0, flex: 1 }}>
-        <Text size="sm" className="hq-wrap" lh={1.35} lineClamp={clamp ? 2 : undefined} title={clamp ? s.title : undefined}>{s.title}{memo && <IconPinFilled size={12} style={{ marginLeft: 4, verticalAlign: -1, color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}</Text>
-        <Text size="xs" c="dimmed"><Text span c={`${COLOR[s.state]}.5`}>{LABEL[s.state]}</Text> <Since t={s.since} suf="째" />
-          {bgCount(s) > 0 && <Text span c="teal.4" title={bgText(s)}> · 뒤 작업 {bgCount(s)}</Text>}
-          {s.host !== 'web' && <Badge size="xs" variant="outline" color="gray" ml={6}>{s.host === 'orca' ? 'Orca' : '외부'}</Badge>}</Text>
-      </Stack>
-      <CopyName name={s.name} />
+    <Group gap={6} wrap="nowrap">
+      <Box w={8} h={8} className={'hq-dot' + (s.state === 'working' || s.state === 'compact' ? ' busy' : '')} style={{ borderRadius: 2, flex: 'none', background: cssColor(s.state) }} title={LABEL[s.state]} />
+      <Text size="sm" lh={1.35} truncate title={s.title} style={{ minWidth: 0 }}>{s.title}</Text>
+      {memo && <IconPinFilled size={12} style={{ flex: 'none', color: 'var(--mantine-color-orange-4)' }} aria-label="메모 있음" />}
+      <Box style={{ flex: 1 }} />
+      {bgCount(s) > 0 && <Text size="xs" c="teal.4" style={{ flex: 'none' }} title={bgText(s)}>뒤 {bgCount(s)}</Text>}
+      {s.host !== 'web' && <Badge size="xs" variant="outline" color="gray" style={{ flex: 'none' }}>{s.host === 'orca' ? 'Orca' : '외부'}</Badge>}
+      <Box className="hq-rowend"><Text size="xs" c="dimmed" className="hq-rowtime"><Since t={s.since} short /></Text><CopyName name={s.name} /></Box>
     </Group>
   </UnstyledButton>
 }
@@ -176,10 +176,10 @@ function ClosedList({ S, held, onOpen }: { S: Snapshot; held: Closed[]; onOpen: 
 
 // 새 세션을 여는 동안(Claude가 뜨는 데 2~3초) 목록에서 그 세션이 들어갈 자리
 function ItemSkeleton({ state, since }: { state: Session['state']; since: number }) {
-  return <Group gap={8} wrap="nowrap" align="flex-start" p="7px 8px">
-    <Box w={8} h={8} mt={6} className="hq-dot" style={{ borderRadius: 2, flex: 'none', background: cssColor(state) }} />
-    <Stack gap={0} style={{ flex: 1, minWidth: 0 }}><Text component="div" size="sm" lh={1.35}><Skeleton h="0.9em" w="80%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>
-      <Text size="xs" c="dimmed"><Text span c={`${COLOR[state]}.5`}>{LABEL[state]}</Text> <Since t={since} suf="째" /></Text></Stack>
+  return <Group gap={6} wrap="nowrap" p="5px 4px">
+    <Box w={8} h={8} className="hq-dot" style={{ borderRadius: 2, flex: 'none', background: cssColor(state) }} />
+    <Text component="div" size="sm" lh={1.35} style={{ flex: 1 }}><Skeleton h="0.9em" w="80%" display="inline-block" style={{ verticalAlign: 'middle' }} /></Text>
+    <Text size="xs" c="dimmed" style={{ flex: 'none' }}><Since t={since} short /></Text>
   </Group>
 }
 // 새 세션을 여는 동안: 진짜 세션 화면을 빈 세션(ghost)으로 그리고 손만 못 대게 막는다(inert. disabled로 막으면 버튼 모양·크기가 바뀌어 뜰 때 움찔한다).
@@ -266,7 +266,7 @@ function FavGhost({ s, on }: { s: Session; on: boolean }) {
 
 // 즐겨찾기 칸. 비어 있어도 칸은 늘 있다(끌어다 놓을 자리).
 // 자동 정렬: 넣은 순서대로 위부터 빈틈없이, 놓은 높이에 끼워 넣는다. 자유 배치: 바탕화면 아이콘처럼 원하는 높이의 칸(SLOT)에 놓고, 찬 칸이면 가장 가까운 빈 칸으로 간다(겹치지 않는다)
-const SLOT = 66 // 자유 배치의 칸 높이. 제목은 두 줄까지 보이고 넘치면 잘라 칸을 넘지 않는다
+const SLOT = 32 // 자유 배치의 칸 높이. 항목이 한 줄이라 그 높이에 맞춘다
 type Fav = Snapshot['favs']['items'][number]
 export const favSids = (S: Snapshot) => {
   const live = new Set(S.sessions.map(s => s.sid)), f = S.favs || { mode: 'auto', items: [] }
@@ -328,7 +328,7 @@ function Favs({ S, sel, ghost }: { S: Snapshot; sel: string; ghost: Session | nu
           ? <>
               {hover !== null && <Box className="hq-fav-ghost" style={{ top: hover * SLOT, height: SLOT }} />}
               {live.map(x => <Box key={x.sid} data-fav={x.sid} pos="absolute" left={0} right={0} className="hq-slide" style={{ top: x.slot * SLOT, height: SLOT }}>
-                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} clamp />
+                <Item s={byId.get(x.sid)!} on={x.sid === sel} memo={hasMemo(S, x.sid)} />
               </Box>)}
               {favGhost && (() => {
                 // 서버 favBelow와 같은 칸: 그 세션 바로 아래부터 비어 있는 칸

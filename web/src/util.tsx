@@ -41,9 +41,14 @@ export function fmt(ms: number) {
   const d = Math.floor(h / 24)
   return d + '일' + (h % 24 ? ' ' + (h % 24) + '시간' : '')
 }
-export function Since({ t, suf = '' }: { t: number; suf?: string }) {
+// 목록 한 줄 끝에 쓰는 짧은 시간: 가장 큰 단위 하나만(1일 8시간 → 1일)
+export function fmtShort(ms: number) {
+  const m = Math.floor(Math.max(0, ms) / M)
+  return m < 1 ? '<1분' : m < 60 ? m + '분' : m < 1440 ? Math.floor(m / 60) + '시간' : Math.floor(m / 1440) + '일'
+}
+export function Since({ t, suf = '', short }: { t: number; suf?: string; short?: boolean }) {
   const n = useNow()
-  return <>{fmt(n - t) + suf}</>
+  return <>{(short ? fmtShort : fmt)(n - t) + suf}</>
 }
 export const hhmm = (t: number) => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
 export const base = (p: string) => String(p || '').split('/').pop() || p
