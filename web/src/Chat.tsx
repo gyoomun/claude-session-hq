@@ -272,14 +272,12 @@ function Composer({ s, d, history, onSent }: {
   const question = s.ask?.questions?.[0]
   return <Paper p="sm">
     <Stack gap={8}>
-      {s.state === 'approval' && question && <Stack gap={6}>
+      {s.state === 'approval' && question && <Group gap={6} wrap="wrap">
         <Text size="sm" c="red.4" fw={600}>{question.header ? question.header + ' · ' : ''}{question.question}</Text>
-        {hardQuestion(s) ? <Group gap={6}>
-          <Button size="xs" variant="default" onClick={() => setView(s.sid, 'term')}>터미널에서 답하기</Button>
-        </Group> : <Group gap={6} wrap="wrap">
-          {question.options.map((o, n) => <Button key={n} size="xs" variant="default" title={o.description} onClick={() => key(String(n + 1))}>{n + 1} · {o.label}</Button>)}
-        </Group>}
-      </Stack>}
+        {hardQuestion(s)
+          ? <Button size="xs" variant="default" onClick={() => setView(s.sid, 'term')}>터미널에서 답하기</Button>
+          : question.options.map((o, n) => <Button key={n} size="xs" variant="default" title={o.description} onClick={() => key(String(n + 1))}>{n + 1} · {o.label}</Button>)}
+      </Group>}
       {s.state === 'approval' && !question && <Group gap={6} wrap="wrap">
         <Text size="sm" c="red.4" fw={600}>실행 허락을 기다립니다</Text>
         <Button size="xs" color="teal" onClick={() => key('1')}>1 · 허용</Button>
